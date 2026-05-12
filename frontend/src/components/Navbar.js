@@ -53,26 +53,16 @@ function Navbar() {
       </Link>
 
       <div style={styles.links}>
-        <Link
-          to="/"
-          style={{
-            ...styles.link,
-            ...(isActive('/') ? styles.activeLink : {})
-          }}
-        >
-          Dashboard
+        <Link to="/"        style={{...styles.link, ...(isActive('/') ? styles.activeLink : {})}}>
+           Dashboard
         </Link>
-        <Link
-          to="/new-scan"
-          style={{
-            ...styles.link,
-            ...(isActive('/new-scan') ? styles.activeLink : {})
-          }}
-        >
-          New Scan
+        <Link to="/new-scan" style={{...styles.link, ...(isActive('/new-scan') ? styles.activeLink : {})}}>
+            New Scan
+        </Link>
+        <Link to="/pricing"  style={{...styles.link, ...(isActive('/pricing') ? styles.activeLink : {})}}>
+          Pricing
         </Link>
       </div>
-
       <div>
         <span style={styles.badge}>v1.0.0</span>
       </div>

@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import NewScan from './pages/NewScan';
 import Results from './pages/Results';
+import Pricing from './pages/Pricing';
 import './App.css';
 
 function App() {
@@ -13,9 +14,10 @@ function App() {
         <Navbar />
         <div className="main-content">
           <Routes>
-            <Route path="/"           element={<Dashboard />} />
-            <Route path="/new-scan"   element={<NewScan />} />
+            <Route path="/"            element={<Dashboard />} />
+            <Route path="/new-scan"    element={<NewScan />} />
             <Route path="/results/:id" element={<Results />} />
+            <Route path="/pricing"     element={<Pricing />} />
           </Routes>
         </div>
       </div>
