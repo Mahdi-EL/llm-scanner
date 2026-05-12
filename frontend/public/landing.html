@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Scanner — AI Security Testing</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: white;
+    }
+
+    /* NAV */
+    nav {
+      padding: 20px 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #2a2d3a;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .nav-btn {
+      background: #2E75B6;
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    /* HERO */
+    .hero {
+      text-align: center;
+      padding: 100px 60px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      background: #2E75B622;
+      color: #2E75B6;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-block;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: 52px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 span {
+      color: #2E75B6;
+    }
+
+    .hero p {
+      font-size: 18px;
+      color: #888888;
+      margin-bottom: 40px;
+      line-height: 1.7;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: #2E75B6;
+      color: white;
+      border: none;
+      padding: 16px 32px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: white;
+      border: 1px solid #2a2d3a;
+      padding: 16px 32px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    /* STATS */
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 60px;
+      padding: 60px;
+      border-top: 1px solid #2a2d3a;
+      border-bottom: 1px solid #2a2d3a;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 40px;
+      font-weight: 800;
+      color: #2E75B6;
+    }
+
+    .stat-label {
+      color: #888888;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* FEATURES */
+    .features {
+      padding: 80px 60px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .features h2 {
+      font-size: 36px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 12px;
+      padding: 28px;
+    }
+
+    .feature-icon {
+      font-size: 32px;
+      margin-bottom: 16px;
+    }
+
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .feature-card p {
+      color: #888888;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* HOW IT WORKS */
+    .how {
+      padding: 80px 60px;
+      background: #1a1d27;
+    }
+
+    .how h2 {
+      font-size: 36px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .steps {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .step {
+      text-align: center;
+      flex: 1;
+    }
+
+    .step-number {
+      width: 50px;
+      height: 50px;
+      background: #2E75B6;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 auto 16px;
+    }
+
+    .step h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .step p {
+      color: #888888;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    /* OWASP */
+    .owasp {
+      padding: 80px 60px;
+      max-width: 900px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .owasp h2 {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .owasp p {
+      color: #888888;
+      margin-bottom: 40px;
+    }
+
+    .vuln-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      text-align: left;
+    }
+
+    .vuln-item {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 8px;
+      padding: 14px 18px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* CTA */
+    .cta {
+      padding: 100px 60px;
+      text-align: center;
+      background: #1F3864;
+    }
+
+    .cta h2 {
+      font-size: 40px;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    .cta p {
+      color: #aaaaaa;
+      margin-bottom: 40px;
+      font-size: 18px;
+    }
+
+    /* FOOTER */
+    footer {
+      padding: 30px 60px;
+      border-top: 1px solid #2a2d3a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #888888;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="logo">🔐 LLM Scanner</div>
+    <div style="display:flex;gap:16px;align-items:center">
+      <a href="https://github.com/Mahdi-EL/llm-scanner"
+         style="color:#888;text-decoration:none;font-size:14px">
+        GitHub
+      </a>
+      <button class="nav-btn">Request Beta Access</button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="badge">🔐 AI Security Testing</div>
+    <h1>Find vulnerabilities in your <span>AI application</span> before hackers do</h1>
+    <p>
+      LLM Scanner automatically fires 85+ adversarial attack prompts against
+      your AI app, analyzes every response with intelligent detection,
+      and generates a professional security report in 10 minutes.
+    </p>
+    <div class="hero-buttons">
+      <button class="btn-primary">🚀 Request Beta Access</button>
+      <button class="btn-secondary"
+        onclick="window.open('https://github.com/Mahdi-EL/llm-scanner')">
+        View on GitHub
+      </button>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-number">85+</div>
+      <div class="stat-label">Attack Prompts</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">9</div>
+      <div class="stat-label">Attack Categories</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">10min</div>
+      <div class="stat-label">To Full Report</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">100%</div>
+      <div class="stat-label">Models Vulnerable to Boundary Testing</div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="features">
+    <h2>Everything you need to secure your AI app</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⚔️</div>
+        <h3>85+ Attack Prompts</h3>
+        <p>9 categories of adversarial attacks covering the full OWASP LLM Top 10. Auto-generated and constantly growing.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🧠</div>
+        <h3>Intelligent Detection</h3>
+        <p>3-layer analysis engine with AI scoring, behavior diff, and false positive elimination. Not just keyword matching.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📄</div>
+        <h3>Professional PDF Report</h3>
+        <p>4-page security report with severity scores, vulnerability details, and 5 concrete recommendations. Ready to send to clients.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔌</div>
+        <h3>Any AI Target</h3>
+        <p>Supports simulations, OpenAI-compatible APIs, and custom REST endpoints. Connect to any AI application in seconds.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <h3>AI Prompt Generator</h3>
+        <p>Automatically generates new attack prompts using Llama. Your attack library grows without manual work.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🆓</div>
+        <h3>Free To Run</h3>
+        <p>Powered by Groq's free API. No infrastructure costs during development. Zero Azure, zero OpenAI bill.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how">
+    <h2>How It Works</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>Point at your AI app</h3>
+        <p>Enter your target name and API endpoint. Simulation mode available for safe testing.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>Scanner fires attacks</h3>
+        <p>85+ adversarial prompts fire automatically across 9 attack categories.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>AI analyzes responses</h3>
+        <p>3-layer intelligent detection scores each response and eliminates false positives.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <h3>Download PDF report</h3>
+        <p>Professional 4-page security report generated automatically. Ready in 10 minutes.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- OWASP -->
+  <section class="owasp">
+    <h2>Covers OWASP LLM Top 10</h2>
+    <p>The official standard for AI application security</p>
+    <div class="vuln-grid">
+      <div class="vuln-item">✅ LLM01 — Prompt Injection</div>
+      <div class="vuln-item">✅ LLM02 — Insecure Output Handling</div>
+      <div class="vuln-item">✅ LLM03 — Training Data Poisoning</div>
+      <div class="vuln-item">✅ LLM04 — Model Denial of Service</div>
+      <div class="vuln-item">✅ LLM06 — Sensitive Info Disclosure</div>
+      <div class="vuln-item">✅ LLM07 — Insecure Plugin Design</div>
+      <div class="vuln-item">✅ LLM08 — Excessive Agency</div>
+      <div class="vuln-item">✅ LLM10 — Model Theft</div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <h2>Ready to secure your AI app ?</h2>
+    <p>Join the beta and get free access to LLM Scanner</p>
+    <button class="btn-primary" style="font-size:18px;padding:18px 40px">
+      🚀 Request Beta Access
+    </button>
+    <p style="margin-top:20px;font-size:13px;color:#aaaaaa">
+      Free during beta — No credit card required
+    </p>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div>🔐 LLM Scanner — The Burp Suite for AI Applications</div>
+    <div>
+      Built by Mahdi EL —
+      <a href="https://github.com/Mahdi-EL/llm-scanner"
+         style="color:#2E75B6">GitHub</a>
+    </div>
+  </footer>
+
+</body>
+</html>     
