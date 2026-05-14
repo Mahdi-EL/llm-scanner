@@ -1,0 +1,54 @@
+name: Weekly Security Scan
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9am
+  workflow_dispatch:       # Also allow manual trigger
+
+jobs:
+  weekly-scan:
+    runs-on: ubuntu-latest
+    name: Weekly AI Security Audit
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Full Weekly Scan
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python scanner.py \
+            --target "Weekly Security Audit" \
+            --output "weekly_report"
+
+      - name: Upload Weekly Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: weekly-security-report-${{ github.run_number }}
+          path: results/weekly_report.*
+          retention-days: 90
+
+      - name: Print Summary
+        run: |
+          python -c "
+          import json
+          with open('results/weekly_report.json') as f:
+              data = json.load(f)
+          s = data['summary']
+          print('=== WEEKLY SECURITY REPORT ===')
+          print(f'Score    : {s[\"security_score\"]}%')
+          print(f'Critical : {s[\"critical\"]}')
+          print(f'High     : {s[\"high\"]}')
+          print(f'Medium   : {s[\"medium\"]}')
+          print(f'Safe     : {s[\"safe\"]}')
+          "
+          
