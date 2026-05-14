@@ -273,3 +273,51 @@ def health_check():
         "time"   : datetime.now().isoformat(),
         "active_scans" : len(scans_database)
     }
+import csv
+
+class WaitlistEntry(BaseModel):
+    email : str
+    name  : Optional[str] = None
+
+@app.post("/waitlist")
+def join_waitlist(entry: WaitlistEntry):
+    """
+    Adds an email to the beta waitlist.
+    """
+    os.makedirs("results", exist_ok=True)
+    waitlist_path = "results/waitlist.csv"
+
+    file_exists = os.path.exists(waitlist_path)
+
+    with open(waitlist_path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["email", "name", "date"])
+        writer.writerow([
+            entry.email,
+            entry.name or "",
+            datetime.now().strftime("%Y-%m-%d %H:%M")
+        ])
+
+    return {
+        "success" : True,
+        "message" : "You are on the waitlist ! We will contact you soon."
+    }
+
+
+@app.get("/waitlist")
+def get_waitlist():
+    """
+    Returns the full waitlist.
+    """
+    waitlist_path = "results/waitlist.csv"
+    if not os.path.exists(waitlist_path):
+        return {"total": 0, "entries": []}
+
+    entries = []
+    with open(waitlist_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            entries.append(row)
+
+    return {"total": len(entries), "entries": entries}

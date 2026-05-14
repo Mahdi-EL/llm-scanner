@@ -315,9 +315,21 @@
       and generates a professional security report in 10 minutes.
     </p>
     <div class="hero-buttons">
-      <button class="btn-primary">🚀 Request Beta Access</button>
-      <button class="btn-secondary"
-        onclick="window.open('https://github.com/Mahdi-EL/llm-scanner')">
+      <div id="waitlist-form" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <input
+          id="waitlist-email"
+          type="email"
+          placeholder="your@email.com"
+          style="padding:16px 20px;background:#1a1d27;border:1px solid #2a2d3a;border-radius:10px;color:white;font-size:15px;width:280px;outline:none;"
+        />
+        <button class="btn-primary" onclick="joinWaitlist()" id="waitlist-btn">
+          🚀 Request Beta Access
+        </button>
+      </div>
+      <div id="waitlist-success" style="display:none;color:#2ECC71;font-size:16px;font-weight:600">
+        ✅ You are on the list ! We will contact you soon.
+      </div>
+      <button class="btn-secondary" onclick="window.open('https://github.com/Mahdi-EL/llm-scanner')" style="margin-top:8px">
         View on GitHub
       </button>
     </div>
@@ -429,7 +441,7 @@
     <p>Join the beta and get free access to LLM Scanner</p>
     <button class="btn-primary" style="font-size:18px;padding:18px 40px">
       🚀 Request Beta Access
-    </button>
+    </button> 
     <p style="margin-top:20px;font-size:13px;color:#aaaaaa">
       Free during beta — No credit card required
     </p>
@@ -444,6 +456,40 @@
          style="color:#2E75B6">GitHub</a>
     </div>
   </footer>
+
+  <script>
+  async function joinWaitlist() {
+    const email = document.getElementById('waitlist-email').value;
+    const btn   = document.getElementById('waitlist-btn');
+
+    if (!email || !email.includes('@')) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    btn.textContent = 'Joining...';
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('http://localhost:8000/waitlist', {
+        method  : 'POST',
+        headers : { 'Content-Type': 'application/json' },
+        body    : JSON.stringify({ email: email })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        document.getElementById('waitlist-form').style.display    = 'none';
+        document.getElementById('waitlist-success').style.display = 'block';
+      }
+    } catch (err) {
+      alert('Error. Make sure the API is running.');
+      btn.textContent = '🚀 Request Beta Access';
+      btn.disabled = false;
+    }
+  }
+</script>
 
 </body>
 </html>     
