@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import hashlib
 import os
 import json
 import uuid
@@ -26,7 +26,11 @@ SECRET_KEY      = os.getenv("SECRET_KEY", "llmscanner-secret-key-change-in-produ
 ALGORITHM       = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
-pwd_context     = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(plain, hashed):
+    return hashlib.sha256(plain.encode()).hexdigest() == hashed
 limiter         = Limiter(key_func=get_remote_address)
 
 # ── App Setup ─────────────────────────────────────────────────
@@ -56,7 +60,7 @@ scans_database = {}
 users_database = {
     "admin": {
         "username"       : "admin",
-        "hashed_password": pwd_context.hash("admin123"),
+        "hashed_password": hash_password("admin123"),
         "scans_count"    : 0
     }
 }
@@ -200,7 +204,7 @@ def login(request: Request, user_login: UserLogin):
     """
     user = users_database.get(user_login.username)
 
-    if not user or not pwd_context.verify(
+    if not user or not verify_password(
         user_login.password, user["hashed_password"]
     ):
         raise HTTPException(
