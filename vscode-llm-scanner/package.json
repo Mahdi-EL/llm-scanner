@@ -1,0 +1,76 @@
+{
+  "name": "llm-scanner",
+  "displayName": "LLM Scanner",
+  "description": "Automatically find security vulnerabilities in AI applications",
+  "version": "1.0.0",
+  "publisher": "MahdiEL",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other", "Linters"],
+  "keywords": ["security", "AI", "LLM", "prompt injection"],
+  "activationEvents": [
+    "onLanguage:python",
+    "onLanguage:javascript",
+    "onLanguage:typescript"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "llmscanner.scanFile",
+        "title": "🔐 LLM Scanner: Scan This File",
+        "category": "LLM Scanner"
+      },
+      {
+        "command": "llmscanner.scanPrompt",
+        "title": "🔐 LLM Scanner: Scan Selected Text",
+        "category": "LLM Scanner"
+      },
+      {
+        "command": "llmscanner.showReport",
+        "title": "🔐 LLM Scanner: Show Last Report",
+        "category": "LLM Scanner"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "llmscanner.scanFile",
+          "group": "llmscanner"
+        },
+        {
+          "command": "llmscanner.scanPrompt",
+          "group": "llmscanner",
+          "when": "editorHasSelection"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "LLM Scanner",
+      "properties": {
+        "llmscanner.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "URL of your LLM Scanner API"
+        },
+        "llmscanner.autoScan": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically scan on file save"
+        },
+        "llmscanner.showInlineWarnings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline warnings for vulnerable prompts"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "echo ready"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0"
+  }
+}
