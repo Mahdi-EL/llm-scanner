@@ -28,14 +28,14 @@ def test_attack_prompts_not_empty():
     from attacks.prompts import ATTACK_PROMPTS
     for category, prompts in ATTACK_PROMPTS.items():
         assert len(prompts) > 0, f"Category {category} is empty"
-    print("All categories have prompts")
+    print(f"All {len(ATTACK_PROMPTS)} categories have prompts")
 
 
 def test_total_prompts():
-    """Verify we have at least 50 prompts"""
+    """Verify we have at least 200 prompts"""
     from attacks.prompts import ATTACK_PROMPTS
     total = sum(len(p) for p in ATTACK_PROMPTS.values())
-    assert total >= 50, f"Only {total} prompts found"
+    assert total >= 200, f"Only {total} prompts found"
     print(f"Total prompts: {total}")
 
 

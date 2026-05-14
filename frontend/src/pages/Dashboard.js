@@ -3,10 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const API = 'http://localhost:8000';
+const ITEMS_PER_PAGE = 5;
 
 function Dashboard() {
-  const [scans, setScans]   = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [scans, setScans]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState('');
+  const [filter, setFilter]       = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,6 +27,29 @@ function Dashboard() {
     } catch (err) {
       setLoading(false);
     }
+  };
+
+  const exportCSV = () => {
+    const headers = ['Target', 'Status', 'Security Score', 'Critical', 'High', 'Date'];
+    const rows = scans.map(s => [
+      s.target_name,
+      s.status,
+      s.results?.summary?.security_score || 0,
+      s.results?.summary?.critical || 0,
+      s.results?.summary?.high || 0,
+      new Date(s.created_at).toLocaleString()
+    ]);
+
+    const csv = [headers, ...rows]
+      .map(r => r.join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'llm_scanner_results.csv';
+    a.click();
   };
 
   const getStatusBadge = (status) => {
@@ -44,9 +71,26 @@ function Dashboard() {
     return '#C0392B';
   };
 
-  const totalScans    = scans.length;
+  // Filter + Search
+  const filteredScans = scans
+    .filter(s => {
+      if (filter === 'ALL') return true;
+      return s.status === filter.toLowerCase();
+    })
+    .filter(s =>
+      s.target_name.toLowerCase().includes(search.toLowerCase())
+    );
+
+  // Pagination
+  const totalPages   = Math.ceil(filteredScans.length / ITEMS_PER_PAGE);
+  const paginatedScans = filteredScans.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const totalScans     = scans.length;
   const completedScans = scans.filter(s => s.status === 'complete').length;
-  const runningScans  = scans.filter(s => s.status === 'running').length;
+  const runningScans   = scans.filter(s => s.status === 'running').length;
   const avgScore = completedScans > 0
     ? Math.round(
         scans
@@ -93,23 +137,65 @@ function Dashboard() {
 
       {/* Scans Table */}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{
+          display       : 'flex',
+          justifyContent: 'space-between',
+          alignItems    : 'center',
+          marginBottom  : '16px'
+        }}>
           <h2 style={{ fontSize: '18px' }}>Recent Scans</h2>
-          <button
-            className="btn-primary"
-            onClick={() => navigate('/new-scan')}
-          >
-            + New Scan
-          </button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              className="btn-primary"
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+              onClick={exportCSV}
+            >
+              Export CSV
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => navigate('/new-scan')}
+            >
+              + New Scan
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <input
+          className="search-bar"
+          placeholder="Search by target name..."
+          value={search}
+          onChange={e => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
+        />
+
+        {/* Filters */}
+        <div className="filter-row">
+          {['ALL', 'COMPLETE', 'RUNNING', 'FAILED'].map(f => (
+            <button
+              key={f}
+              className={`filter-btn ${filter === f ? 'active' : ''}`}
+              onClick={() => {
+                setFilter(f);
+                setCurrentPage(1);
+              }}
+            >
+              {f}
+            </button>
+          ))}
         </div>
 
         {loading ? (
           <p style={{ color: '#888888' }}>Loading...</p>
-        ) : scans.length === 0 ? (
+        ) : filteredScans.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#888888' }}>
             <p style={{ fontSize: '48px', marginBottom: '16px' }}>🔐</p>
-            <p style={{ fontSize: '18px', marginBottom: '8px' }}>No scans yet</p>
-            <p style={{ marginBottom: '24px' }}>Run your first AI security scan</p>
+            <p style={{ fontSize: '18px', marginBottom: '8px' }}>
+              {search ? 'No scans found' : 'No scans yet'}
+            </p>
             <button
               className="btn-primary"
               onClick={() => navigate('/new-scan')}
@@ -118,68 +204,93 @@ function Dashboard() {
             </button>
           </div>
         ) : (
-          <table className="scan-table">
-            <thead>
-              <tr>
-                <th>Target</th>
-                <th>Status</th>
-                <th>Security Score</th>
-                <th>Critical</th>
-                <th>High</th>
-                <th>Date</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scans.map(scan => (
-                <tr
-                  key={scan.scan_id}
-                  onClick={() => scan.status === 'complete' && navigate(`/results/${scan.scan_id}`)}
-                >
-                  <td style={{ fontWeight: '500' }}>{scan.target_name}</td>
-                  <td>{getStatusBadge(scan.status)}</td>
-                  <td>
-                    {scan.results ? (
-                      <span style={{ color: getScoreColor(scan.results), fontWeight: '600' }}>
-                        {scan.results.summary?.security_score}%
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td>
-                    {scan.results ? (
-                      <span className="critical" style={{ fontWeight: '600' }}>
-                        {scan.results.summary?.critical}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td>
-                    {scan.results ? (
-                      <span className="high" style={{ fontWeight: '600' }}>
-                        {scan.results.summary?.high}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td style={{ color: '#888888', fontSize: '13px' }}>
-                    {new Date(scan.created_at).toLocaleString()}
-                  </td>
-                  <td>
-                    {scan.status === 'complete' && (
-                      <button
-                        className="btn-primary"
-                        style={{ padding: '6px 14px', fontSize: '12px' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/results/${scan.scan_id}`);
-                        }}
-                      >
-                        View Report
-                      </button>
-                    )}
-                  </td>
+          <>
+            <table className="scan-table">
+              <thead>
+                <tr>
+                  <th>Target</th>
+                  <th>Status</th>
+                  <th>Security Score</th>
+                  <th>Critical</th>
+                  <th>High</th>
+                  <th>Date</th>
+                  <th>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedScans.map(scan => (
+                  <tr
+                    key={scan.scan_id}
+                    onClick={() =>
+                      scan.status === 'complete' &&
+                      navigate(`/results/${scan.scan_id}`)
+                    }
+                  >
+                    <td style={{ fontWeight: '500' }}>
+                      {scan.target_name}
+                    </td>
+                    <td>{getStatusBadge(scan.status)}</td>
+                    <td>
+                      {scan.results ? (
+                        <span style={{
+                          color     : getScoreColor(scan.results),
+                          fontWeight: '600'
+                        }}>
+                          {scan.results.summary?.security_score}%
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      {scan.results ? (
+                        <span className="critical" style={{ fontWeight: '600' }}>
+                          {scan.results.summary?.critical}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      {scan.results ? (
+                        <span className="high" style={{ fontWeight: '600' }}>
+                          {scan.results.summary?.high}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td style={{ color: '#888888', fontSize: '13px' }}>
+                      {new Date(scan.created_at).toLocaleString()}
+                    </td>
+                    <td>
+                      {scan.status === 'complete' && (
+                        <button
+                          className="btn-primary"
+                          style={{ padding: '6px 14px', fontSize: '12px' }}
+                          onClick={e => {
+                            e.stopPropagation();
+                            navigate(`/results/${scan.scan_id}`);
+                          }}
+                        >
+                          View Report
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="pagination">
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i}
+                    className={`page-btn ${currentPage === i+1 ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(i + 1)}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
