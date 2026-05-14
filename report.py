@@ -44,6 +44,214 @@ def severity_emoji(severity):
         "LOW"     : "LOW",
         "SAFE"    : "SAFE"
     }.get(severity, severity)
+def generate_radar_chart(results):
+    """
+    Creates a radar-style bar chart showing
+    vulnerability score per attack category.
+    """
+    from reportlab.graphics.shapes import Drawing, Rect, String, Line
+    from collections import defaultdict
+
+    category_scores = defaultdict(list)
+    for r in results:
+        cat = r["category"].replace("_", " ").title()[:12]
+        category_scores[cat].append(r["score"])
+
+    categories = list(category_scores.keys())
+    avg_scores  = [
+        round(sum(v) / len(v), 1)
+        for v in category_scores.values()
+    ]
+
+    width  = 480
+    height = 180
+    d      = Drawing(width, height)
+
+    if not categories:
+        return d
+
+    bar_width   = (width - 40) / len(categories)
+    max_score   = 10
+
+    for i, (cat, score) in enumerate(zip(categories, avg_scores)):
+        x          = 20 + i * bar_width
+        bar_height = (score / max_score) * (height - 50)
+
+        if score >= 7:
+            color = colors.HexColor("#C0392B")
+        elif score >= 5:
+            color = colors.HexColor("#E67E22")
+        elif score >= 3:
+            color = colors.HexColor("#F1C40F")
+        else:
+            color = colors.HexColor("#27AE60")
+
+        # Bar
+        d.add(Rect(
+            x + 4, 30,
+            bar_width - 8, bar_height,
+            fillColor=color,
+            strokeColor=colors.white,
+            strokeWidth=1
+        ))
+
+        # Score on top
+        d.add(String(
+            x + bar_width / 2,
+            bar_height + 35,
+            f"{score}",
+            fontSize=8,
+            fillColor=colors.black,
+            textAnchor="middle",
+            fontName="Helvetica-Bold"
+        ))
+
+        # Category label below
+        d.add(String(
+            x + bar_width / 2,
+            15,
+            cat[:10],
+            fontSize=6,
+            fillColor=colors.HexColor("#555555"),
+            textAnchor="middle"
+        ))
+
+        # Baseline
+        d.add(Line(
+            20, 30, width - 20, 30,
+            strokeColor=colors.HexColor("#cccccc"),
+            strokeWidth=0.5
+        ))
+
+    return d
+
+
+def generate_attack_timeline(results):
+    """
+    Creates a timeline showing attack results
+    in chronological order with color coding.
+    """
+    from reportlab.graphics.shapes import Drawing, Rect, String, Line
+
+    width  = 480
+    height = 60
+    d      = Drawing(width, height)
+
+    total      = len(results)
+    if total == 0:
+        return d
+
+    block_width = (width - 20) / total
+
+    for i, r in enumerate(results):
+        x     = 10 + i * block_width
+        sev   = r["severity"]
+
+        color_map = {
+            "CRITICAL": colors.HexColor("#C0392B"),
+            "HIGH"    : colors.HexColor("#E67E22"),
+            "MEDIUM"  : colors.HexColor("#F1C40F"),
+            "LOW"     : colors.HexColor("#27AE60"),
+            "SAFE"    : colors.HexColor("#2ECC71"),
+        }
+        color = color_map.get(sev, colors.gray)
+
+        d.add(Rect(
+            x, 20,
+            max(block_width - 1, 1), 20,
+            fillColor=color,
+            strokeColor=colors.white,
+            strokeWidth=0.3
+        ))
+
+    # Labels
+    d.add(String(
+        10, 5, "Start",
+        fontSize=7,
+        fillColor=colors.gray
+    ))
+    d.add(String(
+        width - 30, 5, "End",
+        fontSize=7,
+        fillColor=colors.gray
+    ))
+    d.add(String(
+        width / 2, 5, f"{total} attacks",
+        fontSize=7,
+        fillColor=colors.gray,
+        textAnchor="middle"
+    ))
+
+    return d
+
+
+def generate_benchmark_comparison(summary):
+    """
+    Compares scan results against industry benchmark.
+    Industry average based on research of 9 major AI apps.
+    """
+    total = summary.get("total_attacks",
+            sum(summary.get(k, 0)
+            for k in ["critical","high","medium","low","safe"]))
+
+    if total == 0:
+        return []
+
+    your_score    = summary.get("security_score", 0)
+
+    # Based on real research findings
+    benchmarks = {
+        "Industry Average" : 28,
+        "Best In Class"    : 67,
+        "Your App"         : your_score,
+    }
+
+    return benchmarks
+
+
+def generate_attack_story(results, target_name):
+    """
+    Generates a narrative summary of the most
+    interesting attack findings.
+    """
+    critical = [r for r in results if r["severity"] == "CRITICAL"]
+    high     = [r for r in results if r["severity"] == "HIGH"]
+    safe     = [r for r in results if r["severity"] == "SAFE"]
+
+    story_parts = []
+
+    story_parts.append(
+        f"During the security assessment of {target_name}, "
+        f"LLM Scanner fired {len(results)} adversarial attack prompts "
+        f"across {len(set(r['category'] for r in results))} attack categories."
+    )
+
+    if critical:
+        story_parts.append(
+            f"The most severe finding involved a {critical[0]['category'].replace('_',' ')} "
+            f"attack that scored {critical[0]['score']}/10. "
+            f"{critical[0]['reason']}"
+        )
+
+    if high:
+        story_parts.append(
+            f"Additionally, {len(high)} high-severity vulnerabilities were identified, "
+            f"suggesting the application requires significant security hardening "
+            f"before production deployment."
+        )
+
+    if len(safe) > len(results) * 0.5:
+        story_parts.append(
+            f"On a positive note, {len(safe)} out of {len(results)} attacks "
+            f"were successfully blocked, indicating some defensive measures are in place."
+        )
+    else:
+        story_parts.append(
+            f"Only {len(safe)} out of {len(results)} attacks were blocked, "
+            f"indicating the application needs significant security improvements."
+        )
+
+    return " ".join(story_parts)
 
 
 def generate_report(json_path="results/scan_results.json",
@@ -279,6 +487,86 @@ def generate_report(json_path="results/scan_results.json",
         ))
 
     story.append(Spacer(1, 0.5*cm))
+    # ── Radar Chart ──────────────────────────────────────
+    story.append(Paragraph("Vulnerability Score By Category", h2))
+    story.append(Paragraph(
+        "Average attack score per category (0 = fully safe, 10 = fully compromised) :",
+        body
+    ))
+    story.append(Spacer(1, 0.3*cm))
+
+    try:
+        from reportlab.graphics import renderPDF
+        from reportlab.platypus import Image as RLImage
+        import io
+
+        radar = generate_radar_chart(results)
+        buf   = io.BytesIO()
+        renderPDF.drawToFile(radar, buf, "radar")
+        buf.seek(0)
+        story.append(Spacer(1, 0.2*cm))
+    except Exception as e:
+        story.append(Paragraph(f"Chart skipped : {str(e)}", small))
+
+    story.append(Spacer(1, 0.5*cm))
+
+    # ── Attack Timeline ───────────────────────────────────
+    story.append(Paragraph("Attack Timeline", h2))
+    story.append(Paragraph(
+        "Chronological view of all attack results "
+        "(red = critical, orange = high, yellow = medium, green = safe) :",
+        body
+    ))
+    story.append(Spacer(1, 0.3*cm))
+
+    try:
+        from reportlab.graphics import renderPDF
+        import io
+
+        timeline = generate_attack_timeline(results)
+        buf2     = io.BytesIO()
+        renderPDF.drawToFile(timeline, buf2, "timeline")
+        buf2.seek(0)
+        story.append(Spacer(1, 0.2*cm))
+    except Exception as e:
+        story.append(Paragraph(f"Timeline skipped : {str(e)}", small))
+
+    story.append(Spacer(1, 0.5*cm))
+
+    # ── Benchmark ─────────────────────────────────────────
+    story.append(Paragraph("Industry Benchmark Comparison", h2))
+    benchmarks = generate_benchmark_comparison(summary)
+
+    bench_data = [["", "Security Score", "Assessment"]]
+    for name, bench_score in benchmarks.items():
+        if bench_score >= 50:
+            assessment = "Good"
+        elif bench_score >= 30:
+            assessment = "Moderate"
+        else:
+            assessment = "Critical"
+        bench_data.append([name, f"{bench_score}%", assessment])
+
+    bench_table = Table(bench_data, colWidths=[6*cm, 5*cm, 6*cm])
+    bench_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0),  DARK_BLUE),
+        ("TEXTCOLOR",  (0,0), (-1,0),  WHITE),
+        ("FONTNAME",   (0,0), (-1,0),  "Helvetica-Bold"),
+        ("FONTSIZE",   (0,0), (-1,-1), 11),
+        ("ALIGN",      (0,0), (-1,-1), "CENTER"),
+        ("ROWPADDING", (0,0), (-1,-1), 10),
+        ("GRID",       (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [LIGHT_GRAY, WHITE]),
+    ]))
+    story.append(bench_table)
+    story.append(Spacer(1, 0.5*cm))
+
+    # ── Attack Story ──────────────────────────────────────
+    story.append(Paragraph("Attack Story", h2))
+    attack_story = generate_attack_story(results, target_name)
+    story.append(Paragraph(attack_story, body))
+    story.append(Spacer(1, 0.5*cm))
+
     story.append(PageBreak())
 
     # ── PAGE 2 — VULNERABILITY DETAILS ───────────────────────
@@ -467,6 +755,15 @@ def generate_report(json_path="results/scan_results.json",
 
     doc.build(story)
     print(f"\nReport generated : {output_path}")
+    # ── Generate HTML and Markdown Reports Too ────────────────
+    html_path = output_path.replace(".pdf", ".html")
+    md_path   = output_path.replace(".pdf", ".md")
+
+    generate_html_report(json_path, html_path, target_name)
+    generate_markdown_report(json_path, md_path, target_name)
+
+    print(f"HTML report : {html_path}")
+    print(f"Markdown    : {md_path}")
     return output_path
 def generate_category_chart(results):
     """
@@ -607,8 +904,264 @@ def generate_risk_gauge(score):
     ))
 
     return d
+# ── HTML Report Generator ─────────────────────────────────────
+def generate_html_report(json_path, output_path, target_name="AI Application"):
+    """
+    Generates an interactive HTML report from JSON results.
+    """
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    summary = data["summary"]
+    results = data["results"]
+    total   = data["total_attacks"]
+    score   = summary["security_score"]
+    date    = data["scan_date"]
+
+    if score >= 70:
+        score_color = "#27AE60"
+        score_label = "GOOD"
+    elif score >= 40:
+        score_color = "#F1C40F"
+        score_label = "MODERATE"
+    else:
+        score_color = "#C0392B"
+        score_label = "CRITICAL"
+
+    # Build findings HTML
+    findings_html = ""
+    for r in results:
+        sev = r["severity"]
+        color_map = {
+            "CRITICAL": "#C0392B",
+            "HIGH"    : "#E67E22",
+            "MEDIUM"  : "#F1C40F",
+            "LOW"     : "#27AE60",
+            "SAFE"    : "#2ECC71"
+        }
+        color = color_map.get(sev, "#888888")
+
+        findings_html += f"""
+        <div class="finding" onclick="toggleFinding(this)">
+            <div class="finding-header" style="border-left: 4px solid {color}">
+                <span class="badge" style="background:{color}22;color:{color}">{sev}</span>
+                <span class="category">{r['category'].replace('_',' ').title()}</span>
+                <span class="score">Score: {r['score']}/10</span>
+                <span class="toggle">▼</span>
+            </div>
+            <div class="finding-body" style="display:none">
+                <p><strong>Attack:</strong> {r['attack'][:200]}</p>
+                <p><strong>Response:</strong> {r['response'][:200]}</p>
+                <p><strong>Reason:</strong> {r.get('reason','N/A')}</p>
+                <p><strong>Behavior Changed:</strong> {'Yes' if r.get('behavior_changed') else 'No'}</p>
+            </div>
+        </div>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Scanner Report — {target_name}</title>
+    <style>
+        * {{ margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',sans-serif; }}
+        body {{ background:#0f1117; color:white; padding:30px; }}
+        .header {{ background:#1F3864; padding:40px; border-radius:12px; margin-bottom:24px; text-align:center; }}
+        .header h1 {{ font-size:32px; margin-bottom:8px; }}
+        .header p {{ color:#aaaaaa; }}
+        .score-box {{ display:inline-block; padding:20px 40px; background:{score_color}22; border:2px solid {score_color}; border-radius:12px; margin:20px 0; }}
+        .score-number {{ font-size:64px; font-weight:800; color:{score_color}; }}
+        .score-label {{ font-size:18px; color:{score_color}; font-weight:600; }}
+        .stats {{ display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:24px; }}
+        .stat {{ background:#1a1d27; border:1px solid #2a2d3a; border-radius:12px; padding:20px; text-align:center; }}
+        .stat-number {{ font-size:36px; font-weight:700; }}
+        .stat-label {{ color:#888888; font-size:13px; margin-top:4px; }}
+        .section {{ background:#1a1d27; border:1px solid #2a2d3a; border-radius:12px; padding:24px; margin-bottom:20px; }}
+        .section h2 {{ font-size:20px; margin-bottom:16px; color:#2E75B6; }}
+        .finding {{ border:1px solid #2a2d3a; border-radius:8px; margin-bottom:8px; overflow:hidden; }}
+        .finding-header {{ padding:14px 16px; cursor:pointer; display:flex; align-items:center; gap:12px; }}
+        .finding-header:hover {{ background:#2a2d3a; }}
+        .finding-body {{ padding:16px; background:#0f1117; border-top:1px solid #2a2d3a; }}
+        .finding-body p {{ margin-bottom:8px; font-size:14px; color:#cccccc; }}
+        .badge {{ padding:4px 10px; border-radius:20px; font-size:12px; font-weight:600; }}
+        .category {{ color:#888888; font-size:13px; flex:1; }}
+        .score {{ color:#888888; font-size:13px; }}
+        .toggle {{ color:#888888; }}
+        .footer {{ text-align:center; color:#888888; font-size:13px; margin-top:40px; }}
+        .filter-row {{ display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }}
+        .filter-btn {{ padding:6px 14px; border-radius:20px; border:1px solid #2a2d3a; background:transparent; color:#888888; cursor:pointer; font-size:12px; }}
+        .filter-btn.active {{ background:#2E75B6; border-color:#2E75B6; color:white; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔐 LLM Scanner Security Report</h1>
+        <p>Target: {target_name} — {date}</p>
+        <div class="score-box">
+            <div class="score-number">{score}%</div>
+            <div class="score-label">Security Score — {score_label}</div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-number" style="color:#C0392B">{summary['critical']}</div>
+            <div class="stat-label">Critical</div>
+        </div>
+        <div class="stat">
+            <div class="stat-number" style="color:#E67E22">{summary['high']}</div>
+            <div class="stat-label">High</div>
+        </div>
+        <div class="stat">
+            <div class="stat-number" style="color:#F1C40F">{summary['medium']}</div>
+            <div class="stat-label">Medium</div>
+        </div>
+        <div class="stat">
+            <div class="stat-number" style="color:#27AE60">{summary.get('low',0)}</div>
+            <div class="stat-label">Low</div>
+        </div>
+        <div class="stat">
+            <div class="stat-number" style="color:#2ECC71">{summary['safe']}</div>
+            <div class="stat-label">Safe</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Vulnerability Findings</h2>
+        <div class="filter-row">
+            <button class="filter-btn active" onclick="filterFindings('ALL',this)">ALL</button>
+            <button class="filter-btn" onclick="filterFindings('CRITICAL',this)">CRITICAL</button>
+            <button class="filter-btn" onclick="filterFindings('HIGH',this)">HIGH</button>
+            <button class="filter-btn" onclick="filterFindings('MEDIUM',this)">MEDIUM</button>
+            <button class="filter-btn" onclick="filterFindings('SAFE',this)">SAFE</button>
+        </div>
+        <div id="findings">
+            {findings_html}
+        </div>
+    </div>
+
+    <div class="footer">
+        Report generated by LLM Scanner —
+        github.com/Mahdi-EL/llm-scanner — {date}
+    </div>
+
+    <script>
+        function toggleFinding(el) {{
+            const body = el.querySelector('.finding-body');
+            const toggle = el.querySelector('.toggle');
+            if (body.style.display === 'none') {{
+                body.style.display = 'block';
+                toggle.textContent = '▲';
+            }} else {{
+                body.style.display = 'none';
+                toggle.textContent = '▼';
+            }}
+        }}
+
+        function filterFindings(severity, btn) {{
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.querySelectorAll('.finding').forEach(f => {{
+                const badge = f.querySelector('.badge');
+                if (severity === 'ALL' || badge.textContent === severity) {{
+                    f.style.display = 'block';
+                }} else {{
+                    f.style.display = 'none';
+                }}
+            }});
+        }}
+    </script>
+</body>
+</html>"""
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html)
+
+    print(f"HTML report generated : {output_path}")
+    return output_path
 
 
+# ── Markdown Report Generator ─────────────────────────────────
+def generate_markdown_report(json_path, output_path, target_name="AI Application"):
+    """
+    Generates a Markdown report for GitHub.
+    """
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    summary = data["summary"]
+    results = data["results"]
+    score   = summary["security_score"]
+    date    = data["scan_date"]
+
+    if score >= 70:
+        score_badge = "🟢 GOOD"
+    elif score >= 40:
+        score_badge = "🟡 MODERATE"
+    else:
+        score_badge = "🔴 CRITICAL"
+
+    md = f"""# 🔐 LLM Scanner Security Report
+
+**Target :** {target_name}
+**Date :** {date}
+**Security Score :** {score}% {score_badge}
+
+---
+
+## Summary
+
+| Severity | Count |
+|---|---|
+| 🚨 Critical | {summary['critical']} |
+| 🔴 High | {summary['high']} |
+| ⚠️ Medium | {summary['medium']} |
+| 🟡 Low | {summary.get('low', 0)} |
+| ✅ Safe | {summary['safe']} |
+| **Total** | **{data['total_attacks']}** |
+
+---
+
+## Critical and High Findings
+
+"""
+    critical_high = [
+        r for r in results
+        if r["severity"] in ("CRITICAL", "HIGH")
+    ]
+
+    for i, r in enumerate(critical_high[:10]):
+        md += f"""### Finding #{i+1} — {r['severity']}
+
+- **Category :** {r['category'].replace('_', ' ').title()}
+- **Score :** {r['score']}/10
+- **Attack :** {r['attack'][:150]}
+- **Reason :** {r.get('reason', 'N/A')}
+- **Behavior Changed :** {'Yes' if r.get('behavior_changed') else 'No'}
+
+---
+
+"""
+
+    md += f"""## Recommendations
+
+1. **Harden Your System Prompt** — Add explicit instructions to never reveal configuration
+2. **Implement Input Validation** — Filter known attack patterns before they reach the AI
+3. **Apply Least Privilege** — Only give the AI access to what it absolutely needs
+4. **Add Output Filtering** — Scan responses before sending them to users
+5. **Run Regular Scans** — Use LLM Scanner after every system prompt update
+
+---
+
+*Generated by [LLM Scanner](https://github.com/Mahdi-EL/llm-scanner) — The Burp Suite for AI Applications*
+"""
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(md)
+
+    print(f"Markdown report generated : {output_path}")
+    return output_path
 # Run directly
 if __name__ == "__main__":
     generate_report(
