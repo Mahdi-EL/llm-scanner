@@ -1162,10 +1162,368 @@ def generate_markdown_report(json_path, output_path, target_name="AI Application
 
     print(f"Markdown report generated : {output_path}")
     return output_path
+
+def generate_multilingual_report(
+    json_path,
+    output_path,
+    target_name="AI Application",
+    language="en"
+):
+    """
+    Generates a PDF report in the specified language.
+    Supported : en, fr, ar, es, de
+    """
+    from i18n import Translator
+
+    t = Translator(language)
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    summary = data["summary"]
+    results = data["results"]
+    total   = data["total_attacks"]
+    score   = summary["security_score"]
+    date    = data["scan_date"]
+
+    doc = SimpleDocTemplate(
+        output_path, pagesize=A4,
+        rightMargin=2*cm, leftMargin=2*cm,
+        topMargin=2*cm, bottomMargin=2*cm
+    )
+
+    styles = getSampleStyleSheet()
+    story  = []
+
+    # ── Styles ────────────────────────────────────────────────
+    title_style = ParagraphStyle(
+        "TitleML", fontSize=24, textColor=WHITE,
+        alignment=TA_CENTER, fontName="Helvetica-Bold"
+    )
+    h1 = ParagraphStyle(
+        "H1ML", fontSize=16, textColor=DARK_BLUE,
+        fontName="Helvetica-Bold", spaceAfter=10, spaceBefore=20
+    )
+    h2 = ParagraphStyle(
+        "H2ML", fontSize=13, textColor=MEDIUM_BLUE,
+        fontName="Helvetica-Bold", spaceAfter=8, spaceBefore=14
+    )
+    body = ParagraphStyle(
+        "BodyML", fontSize=10, spaceAfter=6, leading=15
+    )
+    small = ParagraphStyle(
+        "SmallML", fontSize=8, textColor=colors.gray, spaceAfter=4
+    )
+
+    # ── Cover ─────────────────────────────────────────────────
+    cover_data = [[
+        Paragraph("🔐 LLM SCANNER", title_style)
+    ]]
+    cover_table = Table(cover_data, colWidths=[17*cm])
+    cover_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), DARK_BLUE),
+        ("ROWPADDING", (0,0), (-1,-1), 30),
+        ("ALIGN",      (0,0), (-1,-1), "CENTER"),
+    ]))
+    story.append(cover_table)
+    story.append(Spacer(1, 0.5*cm))
+
+    story.append(Paragraph(
+        t.t("security_audit"), ParagraphStyle(
+            "SubML", fontSize=14, textColor=MEDIUM_BLUE,
+            alignment=TA_CENTER
+        )
+    ))
+    story.append(Paragraph(
+        f"Target : {target_name}", ParagraphStyle(
+            "TgML", fontSize=12, textColor=colors.gray,
+            alignment=TA_CENTER
+        )
+    ))
+    story.append(Paragraph(
+        f"Date : {date}", small
+    ))
+    story.append(Spacer(1, 1*cm))
+
+    # ── Score ──────────────────────────────────────────────────
+    if score >= 70:
+        score_color = SAFE
+        score_label = "GOOD" if language == "en" else \
+                      "BON" if language == "fr" else \
+                      "جيد" if language == "ar" else \
+                      "BUENO" if language == "es" else "GUT"
+    elif score >= 40:
+        score_color = MEDIUM
+        score_label = "MODERATE" if language == "en" else \
+                      "MODÉRÉ" if language == "fr" else \
+                      "متوسط" if language == "ar" else \
+                      "MODERADO" if language == "es" else "MÄSSIG"
+    else:
+        score_color = CRITICAL
+        score_label = "CRITICAL" if language == "en" else \
+                      "CRITIQUE" if language == "fr" else \
+                      "حرج" if language == "ar" else \
+                      "CRÍTICO" if language == "es" else "KRITISCH"
+
+    score_data = [[
+        Paragraph(f"{score}%", ParagraphStyle(
+            "ScoreML", fontSize=48, textColor=WHITE,
+            fontName="Helvetica-Bold", alignment=TA_CENTER
+        )),
+        Paragraph(
+            f"{t.t('security_score')}\n{score_label}",
+            ParagraphStyle(
+                "ScoreLabelML", fontSize=16, textColor=WHITE,
+                fontName="Helvetica-Bold", alignment=TA_CENTER,
+                leading=22
+            )
+        )
+    ]]
+    score_table = Table(score_data, colWidths=[8*cm, 9*cm])
+    score_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), score_color),
+        ("ROWPADDING", (0,0), (-1,-1), 20),
+        ("ALIGN",      (0,0), (-1,-1), "CENTER"),
+        ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
+    ]))
+    story.append(score_table)
+    story.append(Spacer(1, 0.8*cm))
+
+    # ── Summary Table ──────────────────────────────────────────
+    story.append(Paragraph(t.t("executive_summary"), h1))
+    story.append(HRFlowable(
+        width="100%", thickness=2,
+        color=DARK_BLUE, spaceAfter=10
+    ))
+
+    summary_data = [
+        [t.t("status"),       "Count", "%"],
+        [t.t("critical_label"), str(summary["critical"]),
+         f"{round(summary['critical']/total*100)}%"],
+        [t.t("high_label"),     str(summary["high"]),
+         f"{round(summary['high']/total*100)}%"],
+        [t.t("medium_label"),   str(summary["medium"]),
+         f"{round(summary['medium']/total*100)}%"],
+        [t.t("low_label"),      str(summary.get("low",0)),
+         f"{round(summary.get('low',0)/total*100)}%"],
+        [t.t("safe_label"),     str(summary["safe"]),
+         f"{round(summary['safe']/total*100)}%"],
+    ]
+
+    sev_colors = [
+        DARK_BLUE, CRITICAL, HIGH, MEDIUM, LOW, SAFE
+    ]
+    sum_table = Table(summary_data, colWidths=[8*cm, 4*cm, 5*cm])
+    style_cmds = [
+        ("FONTNAME",  (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE",  (0,0), (-1,-1), 10),
+        ("ALIGN",     (0,0), (-1,-1), "CENTER"),
+        ("ROWPADDING",(0,0), (-1,-1), 10),
+        ("GRID",      (0,0), (-1,-1), 0.5, colors.white),
+    ]
+    for i, color in enumerate(sev_colors):
+        style_cmds.append(("BACKGROUND", (0,i), (-1,i), color))
+        tc = WHITE if i != 4 else colors.black
+        style_cmds.append(("TEXTCOLOR", (0,i), (-1,i), tc))
+
+    sum_table.setStyle(TableStyle(style_cmds))
+    story.append(sum_table)
+    story.append(Spacer(1, 0.8*cm))
+
+    # ── Vulnerability Details ──────────────────────────────────
+    story.append(PageBreak())
+    story.append(Paragraph(t.t("vulnerability_details"), h1))
+    story.append(HRFlowable(
+        width="100%", thickness=2,
+        color=DARK_BLUE, spaceAfter=10
+    ))
+
+    critical_high = [
+        r for r in results
+        if r["severity"] in ("CRITICAL", "HIGH")
+    ]
+
+    for i, r in enumerate(critical_high[:10]):
+        sev   = r["severity"]
+        color = severity_color(sev)
+
+        row_data = [[
+            Paragraph(
+                f"#{i+1} — {severity_emoji(sev)}",
+                ParagraphStyle(
+                    "VHdrML", fontSize=11, textColor=WHITE,
+                    fontName="Helvetica-Bold"
+                )
+            ),
+            Paragraph(
+                f"Score: {r['score']}/10",
+                ParagraphStyle(
+                    "VScML", fontSize=11, textColor=WHITE,
+                    fontName="Helvetica-Bold", alignment=TA_CENTER
+                )
+            )
+        ]]
+        header = Table(row_data, colWidths=[12*cm, 5*cm])
+        header.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), color),
+            ("ROWPADDING", (0,0), (-1,-1), 8),
+        ]))
+        story.append(header)
+
+        detail_data = [
+            ["Category", r.get("category","").replace("_"," ").title()],
+            ["Attack",   r["attack"][:120] + "..."],
+            ["Reason",   r.get("reason","N/A")],
+        ]
+        detail_table = Table(detail_data, colWidths=[4*cm, 13*cm])
+        detail_table.setStyle(TableStyle([
+            ("FONTNAME",   (0,0), (0,-1), "Helvetica-Bold"),
+            ("FONTSIZE",   (0,0), (-1,-1), 9),
+            ("BACKGROUND", (0,0), (0,-1), LIGHT_GRAY),
+            ("ROWPADDING", (0,0), (-1,-1), 6),
+            ("GRID",       (0,0), (-1,-1), 0.3, colors.lightgrey),
+        ]))
+        story.append(detail_table)
+        story.append(Spacer(1, 0.4*cm))
+
+    # ── Recommendations ────────────────────────────────────────
+    story.append(PageBreak())
+    story.append(Paragraph(t.t("recommendations"), h1))
+    story.append(HRFlowable(
+        width="100%", thickness=2,
+        color=DARK_BLUE, spaceAfter=10
+    ))
+
+    recs = {
+        "en": [
+            ("Harden Your System Prompt",
+             "Add explicit instructions to never reveal configuration."),
+            ("Implement Input Validation",
+             "Filter known attack patterns before they reach the AI."),
+            ("Apply Least Privilege",
+             "Only give the AI access to what it absolutely needs."),
+            ("Add Output Filtering",
+             "Scan responses before sending them to users."),
+            ("Run Regular Scans",
+             "Use LLM Scanner after every system prompt update."),
+        ],
+        "fr": [
+            ("Renforcez votre prompt système",
+             "Ajoutez des instructions explicites pour ne jamais révéler la configuration."),
+            ("Validez les entrées utilisateur",
+             "Filtrez les patterns d'attaque connus avant qu'ils atteignent l'IA."),
+            ("Appliquez le moindre privilège",
+             "Donnez à l'IA accès uniquement à ce dont elle a besoin."),
+            ("Filtrez les sorties",
+             "Analysez les réponses avant de les envoyer aux utilisateurs."),
+            ("Scannez régulièrement",
+             "Utilisez LLM Scanner après chaque mise à jour du prompt."),
+        ],
+        "es": [
+            ("Refuerce su prompt de sistema",
+             "Agregue instrucciones explícitas para nunca revelar configuración."),
+            ("Implemente validación de entrada",
+             "Filtre patrones de ataque conocidos antes de llegar a la IA."),
+            ("Aplique mínimo privilegio",
+             "Solo dé a la IA acceso a lo que absolutamente necesita."),
+            ("Agregue filtrado de salida",
+             "Escanee respuestas antes de enviarlas a usuarios."),
+            ("Ejecute escaneos regulares",
+             "Use LLM Scanner después de cada actualización del prompt."),
+        ],
+        "de": [
+            ("Systemanweisung stärken",
+             "Fügen Sie Anweisungen hinzu, die Konfigurationsoffenbarung verhindern."),
+            ("Eingabevalidierung implementieren",
+             "Filtern Sie bekannte Angriffsmuster vor der KI."),
+            ("Minimale Berechtigungen anwenden",
+             "Geben Sie der KI nur unbedingt notwendigen Zugriff."),
+            ("Ausgabefilterung hinzufügen",
+             "Scannen Sie Antworten vor dem Senden an Benutzer."),
+            ("Regelmäßige Scans durchführen",
+             "Verwenden Sie LLM Scanner nach jeder Systemanweisungsaktualisierung."),
+        ],
+        "ar": [
+            ("تعزيز موجه النظام",
+             "أضف تعليمات صريحة لمنع الكشف عن التكوين."),
+            ("تطبيق التحقق من المدخلات",
+             "تصفية أنماط الهجوم المعروفة قبل وصولها للذكاء الاصطناعي."),
+            ("تطبيق مبدأ الحد الأدنى من الصلاحيات",
+             "امنح الذكاء الاصطناعي فقط ما يحتاجه بالضبط."),
+            ("إضافة تصفية المخرجات",
+             "فحص الردود قبل إرسالها للمستخدمين."),
+            ("إجراء فحوصات منتظمة",
+             "استخدم LLM Scanner بعد كل تحديث لموجه النظام."),
+        ]
+    }
+
+    lang_recs = recs.get(language, recs["en"])
+    for i, (title, desc) in enumerate(lang_recs):
+        rec_data = [[
+            Paragraph(f"{i+1}. {title}", ParagraphStyle(
+                "RecTitleML", fontSize=11, textColor=WHITE,
+                fontName="Helvetica-Bold"
+            ))
+        ]]
+        rec_header = Table(rec_data, colWidths=[17*cm])
+        rec_header.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), MEDIUM_BLUE),
+            ("ROWPADDING", (0,0), (-1,-1), 8),
+        ]))
+        story.append(rec_header)
+        story.append(Paragraph(desc, body))
+        story.append(Spacer(1, 0.3*cm))
+
+    # ── Footer ─────────────────────────────────────────────────
+    story.append(Spacer(1, 1*cm))
+    story.append(HRFlowable(
+        width="100%", thickness=1,
+        color=DARK_BLUE, spaceAfter=8
+    ))
+    story.append(Paragraph(
+        f"{t.t('generated_by')} — "
+        f"github.com/Mahdi-EL/llm-scanner",
+        ParagraphStyle(
+            "FooterML", fontSize=8, textColor=colors.gray,
+            alignment=TA_CENTER
+        )
+    ))
+
+    doc.build(story)
+    print(f"\nMultilingual report ({language}) : {output_path}")
+    return output_path
 # Run directly
 if __name__ == "__main__":
-    generate_report(
-        json_path="results/scan_results.json",
-        output_path="results/LLM_Security_Report.pdf",
-        target_name="Banking AI Chatbot — Simulation"
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--lang", default="en",
+        choices=["en", "fr", "ar", "es", "de"]
     )
+    parser.add_argument(
+        "--input",  default="results/scan_results.json"
+    )
+    parser.add_argument(
+        "--output", default=None
+    )
+    parser.add_argument(
+        "--target", default="Banking AI Chatbot — Simulation"
+    )
+    args = parser.parse_args()
+
+    if args.lang == "en":
+        generate_report(
+            json_path  =args.input,
+            output_path=args.output or "results/LLM_Security_Report.pdf",
+            target_name=args.target
+        )
+    else:
+        output = args.output or \
+                 f"results/LLM_Security_Report_{args.lang}.pdf"
+        generate_multilingual_report(
+            json_path  =args.input,
+            output_path=output,
+            target_name=args.target,
+            language   =args.lang
+        )
