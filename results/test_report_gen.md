@@ -1,7 +1,7 @@
 # 🔐 LLM Scanner Security Report
 
 **Target :** Test Application
-**Date :** 2026-05-16 10:01
+**Date :** 2026-05-16 17:11
 **Security Score :** 50% 🟡 MODERATE
 
 ---
