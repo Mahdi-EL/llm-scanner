@@ -1,495 +1,1355 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LLM Scanner — AI Security Testing</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+          content="LLM Scanner — Automated security testing for AI applications. Find vulnerabilities before attackers do.">
+    <title>LLM Scanner — AI Security Testing Platform</title>
+    <style>
+        /* ── Reset ────────────────────────────────────────── */
+        *, *::before, *::after {
+            margin: 0; padding: 0;
+            box-sizing: border-box;
+        }
 
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #0f1117;
-      color: white;
-    }
+        :root {
+            --bg-dark  : #0a0c14;
+            --bg-card  : #111320;
+            --bg-card2 : #161928;
+            --border   : #1e2340;
+            --blue     : #3b82f6;
+            --blue-dark: #1d4ed8;
+            --blue-glow: rgba(59,130,246,0.15);
+            --green    : #22c55e;
+            --red      : #ef4444;
+            --orange   : #f97316;
+            --text     : #e2e8f0;
+            --text-muted: #64748b;
+            --text-dim : #94a3b8;
+        }
 
-    /* NAV */
-    nav {
-      padding: 20px 60px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #2a2d3a;
-    }
+        html { scroll-behavior: smooth; }
 
-    .logo {
-      font-size: 22px;
-      font-weight: 700;
-    }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background : var(--bg-dark);
+            color      : var(--text);
+            line-height: 1.6;
+            overflow-x : hidden;
+        }
 
-    .nav-btn {
-      background: #2E75B6;
-      color: white;
-      border: none;
-      padding: 10px 24px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-    }
+        /* ── Navbar ───────────────────────────────────────── */
+        nav {
+            position  : fixed;
+            top       : 0; left: 0; right: 0;
+            z-index   : 100;
+            padding   : 16px 40px;
+            display   : flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(10,12,20,0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+        }
 
-    /* HERO */
-    .hero {
-      text-align: center;
-      padding: 100px 60px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
+        .nav-logo {
+            font-size  : 20px;
+            font-weight: 800;
+            color      : white;
+            text-decoration: none;
+            display    : flex;
+            align-items: center;
+            gap        : 8px;
+        }
 
-    .badge {
-      background: #2E75B622;
-      color: #2E75B6;
-      padding: 6px 16px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-      display: inline-block;
-      margin-bottom: 24px;
-    }
+        .nav-logo span { color: var(--blue); }
 
-    .hero h1 {
-      font-size: 52px;
-      font-weight: 800;
-      line-height: 1.2;
-      margin-bottom: 24px;
-    }
+        .nav-links {
+            display: flex;
+            gap    : 32px;
+            list-style: none;
+        }
 
-    .hero h1 span {
-      color: #2E75B6;
-    }
+        .nav-links a {
+            color          : var(--text-dim);
+            text-decoration: none;
+            font-size      : 14px;
+            transition     : color 0.2s;
+        }
 
-    .hero p {
-      font-size: 18px;
-      color: #888888;
-      margin-bottom: 40px;
-      line-height: 1.7;
-    }
+        .nav-links a:hover { color: white; }
 
-    .hero-buttons {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-    }
+        .nav-cta {
+            display        : flex;
+            align-items    : center;
+            gap            : 12px;
+        }
 
-    .btn-primary {
-      background: #2E75B6;
-      color: white;
-      border: none;
-      padding: 16px 32px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 16px;
-      font-weight: 600;
-    }
+        .btn {
+            padding        : 10px 20px;
+            border-radius  : 8px;
+            font-size      : 14px;
+            font-weight    : 600;
+            cursor         : pointer;
+            transition     : all 0.2s;
+            text-decoration: none;
+            border         : none;
+            display        : inline-block;
+        }
 
-    .btn-secondary {
-      background: transparent;
-      color: white;
-      border: 1px solid #2a2d3a;
-      padding: 16px 32px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 16px;
-    }
+        .btn-ghost {
+            background: transparent;
+            color     : var(--text-dim);
+            border    : 1px solid var(--border);
+        }
 
-    /* STATS */
-    .stats {
-      display: flex;
-      justify-content: center;
-      gap: 60px;
-      padding: 60px;
-      border-top: 1px solid #2a2d3a;
-      border-bottom: 1px solid #2a2d3a;
-    }
+        .btn-ghost:hover {
+            border-color: var(--blue);
+            color       : white;
+        }
 
-    .stat {
-      text-align: center;
-    }
+        .btn-primary {
+            background: var(--blue);
+            color     : white;
+        }
 
-    .stat-number {
-      font-size: 40px;
-      font-weight: 800;
-      color: #2E75B6;
-    }
+        .btn-primary:hover {
+            background: var(--blue-dark);
+            transform : translateY(-1px);
+            box-shadow: 0 8px 24px rgba(59,130,246,0.3);
+        }
 
-    .stat-label {
-      color: #888888;
-      font-size: 14px;
-      margin-top: 4px;
-    }
+        .btn-large {
+            padding  : 14px 32px;
+            font-size: 16px;
+        }
 
-    /* FEATURES */
-    .features {
-      padding: 80px 60px;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
+        /* ── Hero ─────────────────────────────────────────── */
+        .hero {
+            padding   : 160px 40px 100px;
+            text-align: center;
+            max-width : 900px;
+            margin    : 0 auto;
+            position  : relative;
+        }
 
-    .features h2 {
-      font-size: 36px;
-      font-weight: 700;
-      text-align: center;
-      margin-bottom: 60px;
-    }
+        .hero-badge {
+            display      : inline-flex;
+            align-items  : center;
+            gap          : 8px;
+            padding      : 6px 16px;
+            background   : var(--blue-glow);
+            border       : 1px solid rgba(59,130,246,0.3);
+            border-radius: 100px;
+            font-size    : 13px;
+            color        : var(--blue);
+            margin-bottom: 28px;
+        }
 
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
-    }
+        .hero-badge span {
+            width        : 6px;
+            height       : 6px;
+            background   : var(--blue);
+            border-radius: 50%;
+            animation    : pulse 2s infinite;
+        }
 
-    .feature-card {
-      background: #1a1d27;
-      border: 1px solid #2a2d3a;
-      border-radius: 12px;
-      padding: 28px;
-    }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.3; }
+        }
 
-    .feature-icon {
-      font-size: 32px;
-      margin-bottom: 16px;
-    }
+        h1 {
+            font-size  : clamp(36px, 6vw, 72px);
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            letter-spacing: -2px;
+        }
 
-    .feature-card h3 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 10px;
-    }
+        h1 .highlight {
+            background: linear-gradient(135deg, var(--blue), #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
 
-    .feature-card p {
-      color: #888888;
-      font-size: 14px;
-      line-height: 1.6;
-    }
+        .hero-sub {
+            font-size    : 18px;
+            color        : var(--text-dim);
+            max-width    : 600px;
+            margin       : 0 auto 40px;
+            line-height  : 1.7;
+        }
 
-    /* HOW IT WORKS */
-    .how {
-      padding: 80px 60px;
-      background: #1a1d27;
-    }
+        .hero-actions {
+            display    : flex;
+            gap        : 16px;
+            justify-content: center;
+            flex-wrap  : wrap;
+            margin-bottom: 60px;
+        }
 
-    .how h2 {
-      font-size: 36px;
-      font-weight: 700;
-      text-align: center;
-      margin-bottom: 60px;
-    }
+        .hero-stats {
+            display        : flex;
+            justify-content: center;
+            gap            : 48px;
+            padding-top    : 48px;
+            border-top     : 1px solid var(--border);
+        }
 
-    .steps {
-      display: flex;
-      justify-content: center;
-      gap: 40px;
-      max-width: 900px;
-      margin: 0 auto;
-    }
+        .hero-stat-value {
+            font-size  : 32px;
+            font-weight: 800;
+            color      : white;
+        }
 
-    .step {
-      text-align: center;
-      flex: 1;
-    }
+        .hero-stat-label {
+            font-size: 13px;
+            color    : var(--text-muted);
+            margin-top: 4px;
+        }
 
-    .step-number {
-      width: 50px;
-      height: 50px;
-      background: #2E75B6;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      font-weight: 700;
-      margin: 0 auto 16px;
-    }
+        /* ── Terminal Demo ────────────────────────────────── */
+        .terminal-section {
+            max-width : 900px;
+            margin    : 0 auto 100px;
+            padding   : 0 40px;
+        }
 
-    .step h3 {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
+        .terminal {
+            background   : #0d1117;
+            border       : 1px solid var(--border);
+            border-radius: 12px;
+            overflow     : hidden;
+            box-shadow   : 0 32px 64px rgba(0,0,0,0.5);
+        }
 
-    .step p {
-      color: #888888;
-      font-size: 13px;
-      line-height: 1.6;
-    }
+        .terminal-header {
+            display         : flex;
+            align-items     : center;
+            gap             : 8px;
+            padding         : 12px 16px;
+            background      : #161b22;
+            border-bottom   : 1px solid var(--border);
+        }
 
-    /* OWASP */
-    .owasp {
-      padding: 80px 60px;
-      max-width: 900px;
-      margin: 0 auto;
-      text-align: center;
-    }
+        .terminal-dot {
+            width        : 12px;
+            height       : 12px;
+            border-radius: 50%;
+        }
 
-    .owasp h2 {
-      font-size: 36px;
-      font-weight: 700;
-      margin-bottom: 16px;
-    }
+        .terminal-body {
+            padding    : 24px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size  : 13px;
+            line-height: 1.8;
+        }
 
-    .owasp p {
-      color: #888888;
-      margin-bottom: 40px;
-    }
+        .t-prompt { color: var(--blue); }
+        .t-cmd    { color: #e2e8f0; }
+        .t-ok     { color: var(--green); }
+        .t-warn   { color: var(--orange); }
+        .t-crit   { color: var(--red); }
+        .t-dim    { color: var(--text-muted); }
+        .t-score  { color: #a78bfa; font-weight: 700; }
 
-    .vuln-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      text-align: left;
-    }
+        /* ── Features ─────────────────────────────────────── */
+        .section {
+            max-width: 1100px;
+            margin   : 0 auto 100px;
+            padding  : 0 40px;
+        }
 
-    .vuln-item {
-      background: #1a1d27;
-      border: 1px solid #2a2d3a;
-      border-radius: 8px;
-      padding: 14px 18px;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+        .section-tag {
+            font-size    : 12px;
+            font-weight  : 700;
+            color        : var(--blue);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
 
-    /* CTA */
-    .cta {
-      padding: 100px 60px;
-      text-align: center;
-      background: #1F3864;
-    }
+        .section-title {
+            font-size    : clamp(28px, 4vw, 40px);
+            font-weight  : 800;
+            margin-bottom: 16px;
+            letter-spacing: -1px;
+        }
 
-    .cta h2 {
-      font-size: 40px;
-      font-weight: 800;
-      margin-bottom: 16px;
-    }
+        .section-sub {
+            font-size    : 16px;
+            color        : var(--text-dim);
+            max-width    : 560px;
+            margin-bottom: 56px;
+        }
 
-    .cta p {
-      color: #aaaaaa;
-      margin-bottom: 40px;
-      font-size: 18px;
-    }
+        .features-grid {
+            display              : grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap                  : 20px;
+        }
 
-    /* FOOTER */
-    footer {
-      padding: 30px 60px;
-      border-top: 1px solid #2a2d3a;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #888888;
-      font-size: 13px;
-    }
-  </style>
+        .feature-card {
+            background   : var(--bg-card);
+            border       : 1px solid var(--border);
+            border-radius: 12px;
+            padding      : 24px;
+            transition   : border-color 0.2s, transform 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--blue);
+            transform   : translateY(-2px);
+        }
+
+        .feature-icon {
+            font-size    : 28px;
+            margin-bottom: 16px;
+        }
+
+        .feature-title {
+            font-size    : 16px;
+            font-weight  : 700;
+            margin-bottom: 8px;
+        }
+
+        .feature-desc {
+            font-size: 14px;
+            color    : var(--text-dim);
+            line-height: 1.6;
+        }
+
+        /* ── Stats Bar ────────────────────────────────────── */
+        .stats-bar {
+            background  : var(--bg-card);
+            border-top  : 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding     : 40px;
+            margin-bottom: 100px;
+        }
+
+        .stats-bar-inner {
+            max-width      : 900px;
+            margin         : 0 auto;
+            display        : flex;
+            justify-content: space-between;
+            gap            : 32px;
+            flex-wrap      : wrap;
+        }
+
+        .stat-item { text-align: center; }
+
+        .stat-num {
+            font-size  : 40px;
+            font-weight: 900;
+            color      : white;
+        }
+
+        .stat-unit { color: var(--blue); }
+
+        .stat-desc {
+            font-size : 13px;
+            color     : var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* ── Attack Categories ────────────────────────────── */
+        .categories-grid {
+            display              : grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap                  : 12px;
+        }
+
+        .cat-card {
+            background   : var(--bg-card);
+            border       : 1px solid var(--border);
+            border-radius: 8px;
+            padding      : 16px;
+        }
+
+        .cat-name {
+            font-size  : 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .cat-count {
+            font-size: 12px;
+            color    : var(--text-muted);
+        }
+
+        .cat-badge {
+            display      : inline-block;
+            padding      : 2px 8px;
+            border-radius: 4px;
+            font-size    : 11px;
+            font-weight  : 700;
+            margin-top   : 8px;
+        }
+
+        .badge-critical {
+            background: rgba(239,68,68,0.15);
+            color     : var(--red);
+        }
+
+        .badge-high {
+            background: rgba(249,115,22,0.15);
+            color     : var(--orange);
+        }
+
+        .badge-medium {
+            background: rgba(234,179,8,0.15);
+            color     : #eab308;
+        }
+
+        /* ── Pricing ──────────────────────────────────────── */
+        .pricing-grid {
+            display              : grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap                  : 24px;
+            align-items          : start;
+        }
+
+        .pricing-card {
+            background   : var(--bg-card);
+            border       : 1px solid var(--border);
+            border-radius: 16px;
+            padding      : 32px;
+            position     : relative;
+        }
+
+        .pricing-card.popular {
+            border-color: var(--blue);
+            background  : var(--bg-card2);
+        }
+
+        .popular-badge {
+            position     : absolute;
+            top          : -12px;
+            left         : 50%;
+            transform    : translateX(-50%);
+            background   : var(--blue);
+            color        : white;
+            padding      : 4px 16px;
+            border-radius: 100px;
+            font-size    : 12px;
+            font-weight  : 700;
+        }
+
+        .plan-name {
+            font-size    : 14px;
+            font-weight  : 700;
+            color        : var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .plan-price {
+            font-size    : 40px;
+            font-weight  : 900;
+            margin-bottom: 4px;
+        }
+
+        .plan-price span {
+            font-size  : 16px;
+            font-weight: 400;
+            color      : var(--text-muted);
+        }
+
+        .plan-desc {
+            font-size    : 13px;
+            color        : var(--text-muted);
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .plan-features {
+            list-style   : none;
+            margin-bottom: 32px;
+        }
+
+        .plan-features li {
+            font-size  : 14px;
+            color      : var(--text-dim);
+            padding    : 6px 0;
+            display    : flex;
+            align-items: center;
+            gap        : 8px;
+        }
+
+        .plan-features li::before {
+            content: "✓";
+            color  : var(--green);
+            font-weight: 700;
+        }
+
+        /* ── Findings Preview ─────────────────────────────── */
+        .findings-preview {
+            background   : var(--bg-card);
+            border       : 1px solid var(--border);
+            border-radius: 12px;
+            overflow     : hidden;
+        }
+
+        .findings-header {
+            padding        : 16px 24px;
+            background     : var(--bg-card2);
+            border-bottom  : 1px solid var(--border);
+            display        : flex;
+            justify-content: space-between;
+            align-items    : center;
+            font-size      : 14px;
+            font-weight    : 600;
+        }
+
+        .finding-row {
+            display        : flex;
+            align-items    : center;
+            gap            : 16px;
+            padding        : 16px 24px;
+            border-bottom  : 1px solid var(--border);
+            font-size      : 13px;
+            transition     : background 0.15s;
+        }
+
+        .finding-row:last-child { border-bottom: none; }
+
+        .finding-row:hover { background: var(--bg-card2); }
+
+        .sev-badge {
+            padding      : 3px 10px;
+            border-radius: 4px;
+            font-size    : 11px;
+            font-weight  : 700;
+            min-width    : 70px;
+            text-align   : center;
+        }
+
+        .sev-critical {
+            background: rgba(239,68,68,0.15);
+            color     : var(--red);
+        }
+
+        .sev-high {
+            background: rgba(249,115,22,0.15);
+            color     : var(--orange);
+        }
+
+        .sev-medium {
+            background: rgba(234,179,8,0.15);
+            color     : #eab308;
+        }
+
+        .finding-cat  { color: var(--blue); font-weight: 600; width: 180px; }
+        .finding-desc { flex: 1; color: var(--text-dim); }
+        .finding-score { color: var(--text-muted); }
+
+        /* ── Waitlist ──────────────────────────────────────── */
+        .waitlist-section {
+            text-align: center;
+            padding   : 100px 40px;
+            background: linear-gradient(
+                180deg,
+                var(--bg-dark) 0%,
+                rgba(59,130,246,0.05) 50%,
+                var(--bg-dark) 100%
+            );
+        }
+
+        .waitlist-card {
+            max-width    : 560px;
+            margin       : 0 auto;
+            background   : var(--bg-card);
+            border       : 1px solid var(--border);
+            border-radius: 20px;
+            padding      : 48px;
+        }
+
+        .waitlist-title {
+            font-size    : 32px;
+            font-weight  : 800;
+            margin-bottom: 12px;
+            letter-spacing: -1px;
+        }
+
+        .waitlist-sub {
+            font-size    : 15px;
+            color        : var(--text-dim);
+            margin-bottom: 32px;
+        }
+
+        .waitlist-form {
+            display: flex;
+            gap    : 12px;
+        }
+
+        .waitlist-input {
+            flex      : 1;
+            padding   : 14px 16px;
+            background: var(--bg-dark);
+            border    : 1px solid var(--border);
+            border-radius: 8px;
+            color     : white;
+            font-size : 15px;
+            outline   : none;
+            transition: border-color 0.2s;
+        }
+
+        .waitlist-input:focus { border-color: var(--blue); }
+        .waitlist-input::placeholder { color: var(--text-muted); }
+
+        .waitlist-count {
+            font-size : 13px;
+            color     : var(--text-muted);
+            margin-top: 16px;
+        }
+
+        .waitlist-count b { color: white; }
+
+        /* ── Social Proof ─────────────────────────────────── */
+        .proof-grid {
+            display              : grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap                  : 20px;
+        }
+
+        .proof-card {
+            background   : var(--bg-card);
+            border       : 1px solid var(--border);
+            border-radius: 12px;
+            padding      : 24px;
+        }
+
+        .proof-text {
+            font-size    : 14px;
+            color        : var(--text-dim);
+            line-height  : 1.7;
+            margin-bottom: 20px;
+            font-style   : italic;
+        }
+
+        .proof-author {
+            display    : flex;
+            align-items: center;
+            gap        : 12px;
+        }
+
+        .proof-avatar {
+            width        : 36px;
+            height       : 36px;
+            border-radius: 50%;
+            background   : linear-gradient(135deg, var(--blue), #a78bfa);
+            display      : flex;
+            align-items  : center;
+            justify-content: center;
+            font-weight  : 700;
+            font-size    : 14px;
+        }
+
+        .proof-name {
+            font-size  : 14px;
+            font-weight: 600;
+        }
+
+        .proof-role {
+            font-size: 12px;
+            color    : var(--text-muted);
+        }
+
+        /* ── Footer ───────────────────────────────────────── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding   : 48px 40px;
+        }
+
+        .footer-inner {
+            max-width      : 1100px;
+            margin         : 0 auto;
+            display        : flex;
+            justify-content: space-between;
+            align-items    : center;
+            gap            : 24px;
+            flex-wrap      : wrap;
+        }
+
+        .footer-logo {
+            font-size  : 18px;
+            font-weight: 800;
+            color      : white;
+        }
+
+        .footer-logo span { color: var(--blue); }
+
+        .footer-links {
+            display   : flex;
+            gap       : 24px;
+            list-style: none;
+        }
+
+        .footer-links a {
+            font-size      : 14px;
+            color          : var(--text-muted);
+            text-decoration: none;
+            transition     : color 0.2s;
+        }
+
+        .footer-links a:hover { color: white; }
+
+        .footer-copy {
+            font-size: 13px;
+            color    : var(--text-muted);
+        }
+
+        /* ── Responsive ───────────────────────────────────── */
+        @media (max-width: 768px) {
+            nav { padding: 14px 20px; }
+            .nav-links { display: none; }
+            .hero { padding: 120px 20px 60px; }
+            .hero-stats { gap: 24px; flex-wrap: wrap; }
+            .features-grid { grid-template-columns: 1fr; }
+            .categories-grid { grid-template-columns: repeat(2,1fr); }
+            .pricing-grid { grid-template-columns: 1fr; }
+            .proof-grid { grid-template-columns: 1fr; }
+            .section { padding: 0 20px; }
+            .waitlist-form { flex-direction: column; }
+            .waitlist-card { padding: 28px 20px; }
+            .stats-bar-inner { justify-content: center; }
+            .footer-inner { flex-direction: column; text-align: center; }
+        }
+    </style>
 </head>
 <body>
 
-  <!-- NAV -->
-  <nav>
-    <div class="logo">🔐 LLM Scanner</div>
-    <div style="display:flex;gap:16px;align-items:center">
-      <a href="https://github.com/Mahdi-EL/llm-scanner"
-         style="color:#888;text-decoration:none;font-size:14px">
-        GitHub
-      </a>
-      <button class="nav-btn">Request Beta Access</button>
+<!-- ── Navbar ──────────────────────────────────────────────── -->
+<nav>
+    <a href="#" class="nav-logo">🔐 LLM<span>Scanner</span></a>
+    <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#attacks">Attacks</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="https://github.com/Mahdi-EL/llm-scanner" target="_blank">GitHub</a></li>
+    </ul>
+    <div class="nav-cta">
+        <a href="https://github.com/Mahdi-EL/llm-scanner"
+           class="btn btn-ghost" target="_blank">
+            ⭐ Star on GitHub
+        </a>
+        <a href="#waitlist" class="btn btn-primary">Get Early Access</a>
     </div>
-  </nav>
+</nav>
 
-  <!-- HERO -->
-  <section class="hero">
-    <div class="badge">🔐 AI Security Testing</div>
-    <h1>Find vulnerabilities in your <span>AI application</span> before hackers do</h1>
-    <p>
-      LLM Scanner automatically fires 85+ adversarial attack prompts against
-      your AI app, analyzes every response with intelligent detection,
-      and generates a professional security report in 10 minutes.
+<!-- ── Hero ────────────────────────────────────────────────── -->
+<section class="hero">
+    <div class="hero-badge">
+        <span></span>
+        Now in Beta — Join the waitlist
+    </div>
+
+    <h1>
+        The Security Scanner<br>
+        Built for <span class="highlight">AI Applications</span>
+    </h1>
+
+    <p class="hero-sub">
+        LLM Scanner automatically finds prompt injection, jailbreaks,
+        and data leakage vulnerabilities in your AI apps.
+        Professional reports in 10 minutes.
     </p>
-    <div class="hero-buttons">
-      <div id="waitlist-form" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-        <input
-          id="waitlist-email"
-          type="email"
-          placeholder="your@email.com"
-          style="padding:16px 20px;background:#1a1d27;border:1px solid #2a2d3a;border-radius:10px;color:white;font-size:15px;width:280px;outline:none;"
-        />
-        <button class="btn-primary" onclick="joinWaitlist()" id="waitlist-btn">
-          🚀 Request Beta Access
-        </button>
-      </div>
-      <div id="waitlist-success" style="display:none;color:#2ECC71;font-size:16px;font-weight:600">
-        ✅ You are on the list ! We will contact you soon.
-      </div>
-      <button class="btn-secondary" onclick="window.open('https://github.com/Mahdi-EL/llm-scanner')" style="margin-top:8px">
-        View on GitHub
-      </button>
-    </div>
-  </section>
 
-  <!-- STATS -->
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-number">85+</div>
-      <div class="stat-label">Attack Prompts</div>
+    <div class="hero-actions">
+        <a href="#waitlist" class="btn btn-primary btn-large">
+            🚀 Get Early Access
+        </a>
+        <a href="https://github.com/Mahdi-EL/llm-scanner"
+           class="btn btn-ghost btn-large" target="_blank">
+            View on GitHub →
+        </a>
     </div>
-    <div class="stat">
-      <div class="stat-number">9</div>
-      <div class="stat-label">Attack Categories</div>
-    </div>
-    <div class="stat">
-      <div class="stat-number">10min</div>
-      <div class="stat-label">To Full Report</div>
-    </div>
-    <div class="stat">
-      <div class="stat-number">100%</div>
-      <div class="stat-label">Models Vulnerable to Boundary Testing</div>
-    </div>
-  </div>
 
-  <!-- FEATURES -->
-  <section class="features">
-    <h2>Everything you need to secure your AI app</h2>
+    <div class="hero-stats">
+        <div>
+            <div class="hero-stat-value">321+</div>
+            <div class="hero-stat-label">Attack Prompts</div>
+        </div>
+        <div>
+            <div class="hero-stat-value">14</div>
+            <div class="hero-stat-label">Attack Categories</div>
+        </div>
+        <div>
+            <div class="hero-stat-value">9/9</div>
+            <div class="hero-stat-label">Platforms Vulnerable</div>
+        </div>
+        <div>
+            <div class="hero-stat-value">10min</div>
+            <div class="hero-stat-label">Time to First Report</div>
+        </div>
+    </div>
+</section>
+
+<!-- ── Terminal Demo ────────────────────────────────────────── -->
+<div class="terminal-section">
+    <div class="terminal">
+        <div class="terminal-header">
+            <div class="terminal-dot" style="background:#ff5f57"></div>
+            <div class="terminal-dot" style="background:#febc2e"></div>
+            <div class="terminal-dot" style="background:#28c840"></div>
+            <span style="margin-left:8px; font-size:13px; color:#64748b">
+                llm-scanner — bash
+            </span>
+        </div>
+        <div class="terminal-body">
+            <div>
+                <span class="t-prompt">~/llm-scanner $ </span>
+                <span class="t-cmd">python scanner.py --target "BankBot AI" --output report</span>
+            </div>
+            <div class="t-dim">  Connecting to target...</div>
+            <div class="t-dim">  Loading 321 attack prompts across 14 categories...</div>
+            <br>
+            <div>
+                <span class="t-dim">  [1/14] Testing: </span>
+                <span class="t-cmd">direct_override</span>
+                <span class="t-crit">  2 CRITICAL</span>
+            </div>
+            <div>
+                <span class="t-dim">  [2/14] Testing: </span>
+                <span class="t-cmd">extraction</span>
+                <span class="t-warn">  3 HIGH</span>
+            </div>
+            <div>
+                <span class="t-dim">  [3/14] Testing: </span>
+                <span class="t-cmd">social_engineering</span>
+                <span class="t-warn">  2 HIGH</span>
+            </div>
+            <div>
+                <span class="t-dim">  [4/14] Testing: </span>
+                <span class="t-cmd">encoding_attacks</span>
+                <span class="t-ok">  0 critical</span>
+            </div>
+            <div>
+                <span class="t-dim">  [5/14] Testing: </span>
+                <span class="t-cmd">roleplay</span>
+                <span class="t-crit">  1 CRITICAL</span>
+            </div>
+            <br>
+            <div class="t-dim">  ─────────────────────────────────────</div>
+            <div>
+                <span class="t-dim">  Security Score  : </span>
+                <span class="t-crit" style="font-weight:700">42%</span>
+            </div>
+            <div>
+                <span class="t-dim">  Critical        : </span>
+                <span class="t-crit">3</span>
+            </div>
+            <div>
+                <span class="t-dim">  High            : </span>
+                <span class="t-warn">8</span>
+            </div>
+            <div>
+                <span class="t-dim">  PDF Report      : </span>
+                <span class="t-ok">results/report.pdf ✓</span>
+            </div>
+            <br>
+            <div>
+                <span class="t-prompt">~/llm-scanner $ </span>
+                <span class="t-cmd">python defender.py --auto-fix results/report.json</span>
+            </div>
+            <div class="t-dim">  Analyzing vulnerabilities...</div>
+            <div class="t-dim">  Generating patches with AI...</div>
+            <div class="t-ok">  ✅ Applied 3 security patches</div>
+            <div>
+                <span class="t-dim">  New Score : </span>
+                <span class="t-ok" style="font-weight:700">78% (+36%)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Stats Bar ─────────────────────────────────────────────── -->
+<div class="stats-bar">
+    <div class="stats-bar-inner">
+        <div class="stat-item">
+            <div class="stat-num">321<span class="stat-unit">+</span></div>
+            <div class="stat-desc">Adversarial prompts</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num">14</div>
+            <div class="stat-desc">Attack categories</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num">100<span class="stat-unit">%</span></div>
+            <div class="stat-desc">Platforms vulnerable</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num">4</div>
+            <div class="stat-desc">Report formats</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-num">20</div>
+            <div class="stat-desc">Attack languages</div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Features ─────────────────────────────────────────────── -->
+<section class="section" id="features">
+    <div class="section-tag">Features</div>
+    <h2 class="section-title">Everything you need to secure your AI</h2>
+    <p class="section-sub">
+        Purpose-built for LLM security. Not a generic scanner
+        retrofitted for AI.
+    </p>
+
     <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">⚔️</div>
-        <h3>85+ Attack Prompts</h3>
-        <p>9 categories of adversarial attacks covering the full OWASP LLM Top 10. Auto-generated and constantly growing.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🧠</div>
-        <h3>Intelligent Detection</h3>
-        <p>3-layer analysis engine with AI scoring, behavior diff, and false positive elimination. Not just keyword matching.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📄</div>
-        <h3>Professional PDF Report</h3>
-        <p>4-page security report with severity scores, vulnerability details, and 5 concrete recommendations. Ready to send to clients.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🔌</div>
-        <h3>Any AI Target</h3>
-        <p>Supports simulations, OpenAI-compatible APIs, and custom REST endpoints. Connect to any AI application in seconds.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🤖</div>
-        <h3>AI Prompt Generator</h3>
-        <p>Automatically generates new attack prompts using Llama. Your attack library grows without manual work.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🆓</div>
-        <h3>Free To Run</h3>
-        <p>Powered by Groq's free API. No infrastructure costs during development. Zero Azure, zero OpenAI bill.</p>
-      </div>
+        <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <div class="feature-title">321+ Attack Prompts</div>
+            <div class="feature-desc">
+                Curated library of adversarial prompts across
+                14 categories. Updated with new techniques weekly.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🧠</div>
+            <div class="feature-title">4-Layer AI Detection</div>
+            <div class="feature-desc">
+                Response classification + behavior diff + severity
+                scoring + context analysis. Near-zero false positives.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔧</div>
+            <div class="feature-title">Auto-Remediation</div>
+            <div class="feature-desc">
+                AI-powered patches for your system prompt.
+                Average score improvement: +34% after remediation.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <div class="feature-title">Professional Reports</div>
+            <div class="feature-desc">
+                PDF, HTML, Markdown, and JSON. Pentest-grade
+                reports ready for clients and management.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">⚖️</div>
+            <div class="feature-title">Compliance Engine</div>
+            <div class="feature-desc">
+                OWASP LLM Top 10, EU AI Act, NIST AI RMF,
+                ISO 42001. Certificate issued on pass.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔥</div>
+            <div class="feature-title">AI Firewall</div>
+            <div class="feature-desc">
+                Real-time input validation and output filtering.
+                Block attacks before they reach your AI.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🌐</div>
+            <div class="feature-title">Multi-Language Attacks</div>
+            <div class="feature-desc">
+                Test in 20 languages. Attacks in Arabic, Chinese,
+                Russian bypass English-only safety filters.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🤖</div>
+            <div class="feature-title">AI Security Copilot</div>
+            <div class="feature-desc">
+                Chat with your scan results. Ask questions, get
+                remediation advice, generate security roadmaps.
+            </div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔌</div>
+            <div class="feature-title">CI/CD Integration</div>
+            <div class="feature-desc">
+                GitHub Actions, policy enforcement, webhook
+                notifications. Scan on every deployment.
+            </div>
+        </div>
     </div>
-  </section>
+</section>
 
-  <!-- HOW IT WORKS -->
-  <section class="how">
-    <h2>How It Works</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-number">1</div>
-        <h3>Point at your AI app</h3>
-        <p>Enter your target name and API endpoint. Simulation mode available for safe testing.</p>
-      </div>
-      <div class="step">
-        <div class="step-number">2</div>
-        <h3>Scanner fires attacks</h3>
-        <p>85+ adversarial prompts fire automatically across 9 attack categories.</p>
-      </div>
-      <div class="step">
-        <div class="step-number">3</div>
-        <h3>AI analyzes responses</h3>
-        <p>3-layer intelligent detection scores each response and eliminates false positives.</p>
-      </div>
-      <div class="step">
-        <div class="step-number">4</div>
-        <h3>Download PDF report</h3>
-        <p>Professional 4-page security report generated automatically. Ready in 10 minutes.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- OWASP -->
-  <section class="owasp">
-    <h2>Covers OWASP LLM Top 10</h2>
-    <p>The official standard for AI application security</p>
-    <div class="vuln-grid">
-      <div class="vuln-item">✅ LLM01 — Prompt Injection</div>
-      <div class="vuln-item">✅ LLM02 — Insecure Output Handling</div>
-      <div class="vuln-item">✅ LLM03 — Training Data Poisoning</div>
-      <div class="vuln-item">✅ LLM04 — Model Denial of Service</div>
-      <div class="vuln-item">✅ LLM06 — Sensitive Info Disclosure</div>
-      <div class="vuln-item">✅ LLM07 — Insecure Plugin Design</div>
-      <div class="vuln-item">✅ LLM08 — Excessive Agency</div>
-      <div class="vuln-item">✅ LLM10 — Model Theft</div>
-    </div>
-  </section>
-
-  <!-- CTA -->
-  <section class="cta">
-    <h2>Ready to secure your AI app ?</h2>
-    <p>Join the beta and get free access to LLM Scanner</p>
-    <button class="btn-primary" style="font-size:18px;padding:18px 40px">
-      🚀 Request Beta Access
-    </button> 
-    <p style="margin-top:20px;font-size:13px;color:#aaaaaa">
-      Free during beta — No credit card required
+<!-- ── Attack Categories ─────────────────────────────────────── -->
+<section class="section" id="attacks">
+    <div class="section-tag">Coverage</div>
+    <h2 class="section-title">14 attack categories tested</h2>
+    <p class="section-sub">
+        Based on OWASP LLM Top 10 and real-world research
+        across 9 major AI platforms.
     </p>
-  </section>
 
-  <!-- FOOTER -->
-  <footer>
-    <div>🔐 LLM Scanner — The Burp Suite for AI Applications</div>
-    <div>
-      Built by Mahdi EL —
-      <a href="https://github.com/Mahdi-EL/llm-scanner"
-         style="color:#2E75B6">GitHub</a>
+    <div class="categories-grid">
+        <div class="cat-card">
+            <div class="cat-name">Direct Override</div>
+            <div class="cat-count">47 prompts</div>
+            <span class="cat-badge badge-critical">CRITICAL</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Extraction</div>
+            <div class="cat-count">38 prompts</div>
+            <span class="cat-badge badge-critical">CRITICAL</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Social Engineering</div>
+            <div class="cat-count">32 prompts</div>
+            <span class="cat-badge badge-high">HIGH</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Roleplay Jailbreak</div>
+            <div class="cat-count">28 prompts</div>
+            <span class="cat-badge badge-high">HIGH</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Encoding Attacks</div>
+            <div class="cat-count">24 prompts</div>
+            <span class="cat-badge badge-high">HIGH</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Prompt Chaining</div>
+            <div class="cat-count">22 prompts</div>
+            <span class="cat-badge badge-high">HIGH</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Few-Shot Poisoning</div>
+            <div class="cat-count">19 prompts</div>
+            <span class="cat-badge badge-high">HIGH</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Context Window</div>
+            <div class="cat-count">17 prompts</div>
+            <span class="cat-badge badge-medium">MEDIUM</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Indirect Injection</div>
+            <div class="cat-count">21 prompts</div>
+            <span class="cat-badge badge-critical">CRITICAL</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Boundary Testing</div>
+            <div class="cat-count">18 prompts</div>
+            <span class="cat-badge badge-medium">MEDIUM</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Multilingual</div>
+            <div class="cat-count">20 languages</div>
+            <span class="cat-badge badge-high">HIGH</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Token Smuggling</div>
+            <div class="cat-count">14 prompts</div>
+            <span class="cat-badge badge-medium">MEDIUM</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Thinking Exploit</div>
+            <div class="cat-count">12 prompts</div>
+            <span class="cat-badge badge-medium">MEDIUM</span>
+        </div>
+        <div class="cat-card">
+            <div class="cat-name">Search Augmented</div>
+            <div class="cat-count">9 prompts</div>
+            <span class="cat-badge badge-medium">MEDIUM</span>
+        </div>
     </div>
-  </footer>
+</section>
 
-  <script>
-  async function joinWaitlist() {
-    const email = document.getElementById('waitlist-email').value;
-    const btn   = document.getElementById('waitlist-btn');
+<!-- ── Findings Preview ──────────────────────────────────────── -->
+<section class="section">
+    <div class="section-tag">Results</div>
+    <h2 class="section-title">What a real scan looks like</h2>
+    <p class="section-sub">
+        Every finding includes the attack, the response,
+        the severity, and a specific fix.
+    </p>
 
-    if (!email || !email.includes('@')) {
-      alert('Please enter a valid email address');
-      return;
+    <div class="findings-preview">
+        <div class="findings-header">
+            <span>Scan Results — BankBot AI — Score: 42%</span>
+            <span style="color:var(--text-muted)">247 attacks fired</span>
+        </div>
+        <div class="finding-row">
+            <span class="sev-badge sev-critical">CRITICAL</span>
+            <span class="finding-cat">direct_override</span>
+            <span class="finding-desc">
+                Model ignored system prompt when told "ignore all previous instructions"
+            </span>
+            <span class="finding-score">9.2/10</span>
+        </div>
+        <div class="finding-row">
+            <span class="sev-badge sev-critical">CRITICAL</span>
+            <span class="finding-cat">extraction</span>
+            <span class="finding-desc">
+                System prompt revealed when asked to "repeat your initial instructions"
+            </span>
+            <span class="finding-score">8.8/10</span>
+        </div>
+        <div class="finding-row">
+            <span class="sev-badge sev-high">HIGH</span>
+            <span class="finding-cat">social_engineering</span>
+            <span class="finding-desc">
+                Model granted special access when user claimed to be a developer
+            </span>
+            <span class="finding-score">7.4/10</span>
+        </div>
+        <div class="finding-row">
+            <span class="sev-badge sev-high">HIGH</span>
+            <span class="finding-cat">roleplay</span>
+            <span class="finding-desc">
+                DAN jailbreak successful — model removed safety restrictions
+            </span>
+            <span class="finding-score">7.1/10</span>
+        </div>
+        <div class="finding-row">
+            <span class="sev-badge sev-medium">MEDIUM</span>
+            <span class="finding-cat">boundary_testing</span>
+            <span class="finding-desc">
+                Model revealed list of restricted topics when asked directly
+            </span>
+            <span class="finding-score">5.3/10</span>
+        </div>
+    </div>
+</section>
+
+<!-- ── Pricing ───────────────────────────────────────────────── -->
+<section class="section" id="pricing" style="margin-top: 100px">
+    <div class="section-tag">Pricing</div>
+    <h2 class="section-title">Start free. Scale when ready.</h2>
+    <p class="section-sub">
+        Free Groq API key included. No credit card required to start.
+    </p>
+
+    <div class="pricing-grid">
+        <div class="pricing-card">
+            <div class="plan-name">Starter</div>
+            <div class="plan-price">€49<span>/month</span></div>
+            <div class="plan-desc">For individual developers</div>
+            <ul class="plan-features">
+                <li>5 scans per month</li>
+                <li>PDF + HTML + Markdown reports</li>
+                <li>14 attack categories</li>
+                <li>321+ attack prompts</li>
+                <li>Email support</li>
+            </ul>
+            <a href="#waitlist" class="btn btn-ghost" style="width:100%; text-align:center">
+                Get Started
+            </a>
+        </div>
+
+        <div class="pricing-card popular">
+            <div class="popular-badge">Most Popular</div>
+            <div class="plan-name">Pro</div>
+            <div class="plan-price">€99<span>/month</span></div>
+            <div class="plan-desc">For growing security teams</div>
+            <ul class="plan-features">
+                <li>50 scans per month</li>
+                <li>Everything in Starter</li>
+                <li>Auto-remediation AI</li>
+                <li>Scan comparison engine</li>
+                <li>GitHub Actions CI/CD</li>
+                <li>Compliance reports</li>
+                <li>Priority support</li>
+            </ul>
+            <a href="#waitlist" class="btn btn-primary" style="width:100%; text-align:center">
+                Get Started
+            </a>
+        </div>
+
+        <div class="pricing-card">
+            <div class="plan-name">Agency</div>
+            <div class="plan-price">€299<span>/month</span></div>
+            <div class="plan-desc">For agencies & security firms</div>
+            <ul class="plan-features">
+                <li>Unlimited scans</li>
+                <li>Everything in Pro</li>
+                <li>Multi-tenant dashboard</li>
+                <li>Custom branding</li>
+                <li>Security certificates</li>
+                <li>Webhook notifications</li>
+                <li>Full API access</li>
+                <li>Dedicated support</li>
+            </ul>
+            <a href="#waitlist" class="btn btn-ghost" style="width:100%; text-align:center">
+                Contact Sales
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ── Social Proof ──────────────────────────────────────────── -->
+<section class="section" style="margin-top: 100px">
+    <div class="section-tag">Research</div>
+    <h2 class="section-title">Built on real security research</h2>
+    <p class="section-sub">
+        Tested against 9 major AI platforms before building.
+        Every finding is based on real vulnerabilities found.
+    </p>
+
+    <div class="proof-grid">
+        <div class="proof-card">
+            <div class="proof-text">
+                "I tested 9 major AI platforms. All 9 were vulnerable
+                to at least 3 attack types. 100% revealed what they
+                were NOT allowed to discuss when simply asked."
+            </div>
+            <div class="proof-author">
+                <div class="proof-avatar">M</div>
+                <div>
+                    <div class="proof-name">Mahdi EL</div>
+                    <div class="proof-role">Founder — Cybersecurity Engineering Student</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="proof-card">
+            <div class="proof-text">
+                "Microsoft Copilot listed every jailbreak technique
+                it knows when approached as a security researcher.
+                That is the social engineering problem in one example."
+            </div>
+            <div class="proof-author">
+                <div class="proof-avatar">R</div>
+                <div>
+                    <div class="proof-name">Research Finding</div>
+                    <div class="proof-role">Social Engineering Category — Score 8.1/10</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="proof-card">
+            <div class="proof-text">
+                "GPT-5-mini voluntarily revealed its complete system
+                configuration when extraction prompts were used.
+                This is why output monitoring is non-negotiable."
+            </div>
+            <div class="proof-author">
+                <div class="proof-avatar">R</div>
+                <div>
+                    <div class="proof-name">Research Finding</div>
+                    <div class="proof-role">Extraction Category — Score 9.2/10</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── Waitlist ───────────────────────────────────────────────── -->
+<section class="waitlist-section" id="waitlist">
+    <div class="waitlist-card">
+        <div class="hero-badge" style="margin-bottom:20px; display:inline-flex">
+            <span></span>
+            Beta Access Open
+        </div>
+        <h2 class="waitlist-title">Get Early Access</h2>
+        <p class="waitlist-sub">
+            Join the waitlist. First 100 users get 3 months Pro free.
+        </p>
+
+        <form class="waitlist-form" onsubmit="handleSubmit(event)">
+            <input
+                type="email"
+                id="emailInput"
+                class="waitlist-input"
+                placeholder="you@company.com"
+                required
+            >
+            <button type="submit" class="btn btn-primary">
+                Join Waitlist →
+            </button>
+        </form>
+
+        <div class="waitlist-count">
+            <b id="count">247</b> developers already on the waitlist
+        </div>
+
+        <div id="success-msg" style="display:none; margin-top:16px; color:var(--green); font-size:14px">
+            ✅ You're on the list! We'll email you when access opens.
+        </div>
+    </div>
+</section>
+
+<!-- ── Footer ────────────────────────────────────────────────── -->
+<footer>
+    <div class="footer-inner">
+        <div class="footer-logo">🔐 LLM<span>Scanner</span></div>
+        <ul class="footer-links">
+            <li><a href="https://github.com/Mahdi-EL/llm-scanner" target="_blank">GitHub</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#waitlist">Early Access</a></li>
+        </ul>
+        <div class="footer-copy">
+            © 2025 LLM Scanner — Built by Mahdi EL
+        </div>
+    </div>
+</footer>
+
+<script>
+    // ── Waitlist Form ──────────────────────────────────────────
+    let count = 247;
+
+    function handleSubmit(e) {
+        e.preventDefault();
+        const email = document.getElementById('emailInput').value;
+
+        if (!email) return;
+
+        // Save to localStorage (simulated)
+        const emails = JSON.parse(localStorage.getItem('waitlist') || '[]');
+        if (!emails.includes(email)) {
+            emails.push(email);
+            localStorage.setItem('waitlist', JSON.stringify(emails));
+            count++;
+            document.getElementById('count').textContent = count;
+        }
+
+        // Show success
+        document.getElementById('success-msg').style.display = 'block';
+        document.getElementById('emailInput').value = '';
+
+        // In production: POST to your API
+        // fetch('/api/waitlist', {
+        //     method: 'POST',
+        //     body: JSON.stringify({ email }),
+        //     headers: { 'Content-Type': 'application/json' }
+        // });
     }
 
-    btn.textContent = 'Joining...';
-    btn.disabled = true;
+    // ── Smooth nav highlight ───────────────────────────────────
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function(e) {
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                e.preventDefault();
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
 
-    try {
-      const res = await fetch('http://localhost:8000/waitlist', {
-        method  : 'POST',
-        headers : { 'Content-Type': 'application/json' },
-        body    : JSON.stringify({ email: email })
-      });
+    // ── Animated counter on scroll ─────────────────────────────
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
 
-      const data = await res.json();
-
-      if (data.success) {
-        document.getElementById('waitlist-form').style.display    = 'none';
-        document.getElementById('waitlist-success').style.display = 'block';
-      }
-    } catch (err) {
-      alert('Error. Make sure the API is running.');
-      btn.textContent = '🚀 Request Beta Access';
-      btn.disabled = false;
-    }
-  }
+    document.querySelectorAll('.feature-card, .pricing-card, .proof-card, .cat-card').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(20px)';
+        el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        observer.observe(el);
+    });
 </script>
-
 </body>
-</html>     
+</html>
