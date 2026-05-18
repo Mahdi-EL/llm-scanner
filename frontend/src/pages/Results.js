@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-const API = 'http://localhost:8000';
+import { scansAPI, API_URL } from '../services/api';
 
 function Results() {
   const { id } = useParams();
@@ -20,16 +18,16 @@ function Results() {
 
   const fetchScan = async () => {
     try {
-      const res = await axios.get(`${API}/scan/${id}`);
+      const res = await scansAPI.get(id);
       setScan(res.data);
       setLoading(false);
-    } catch (err) {
+    } catch {
       setLoading(false);
     }
   };
 
   const downloadPDF = () => {
-    window.open(`${API}/download/${id}`, '_blank');
+    window.open(`${API_URL}/download/${id}`, '_blank');
   };
 
   const getScoreColor = (score) => {

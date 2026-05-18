@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-const API = 'http://localhost:8000';
+import { scansAPI } from '../services/api';
 
 function NewScan() {
   const navigate = useNavigate();
@@ -27,17 +25,16 @@ function NewScan() {
 
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/scan`, {
+      const res = await scansAPI.start({
         target_name  : form.target_name,
         target_type  : form.target_type,
         system_prompt: form.system_prompt || null,
         api_url      : form.api_url || null,
         api_key      : form.api_key || null,
       });
-
       navigate(`/results/${res.data.scan_id}`);
-    } catch (err) {
-      alert('Error starting scan. Is the API running ?');
+    } catch {
+      alert('Error starting scan. Is the API running?');
       setLoading(false);
     }
   };

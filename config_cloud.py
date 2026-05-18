@@ -27,10 +27,14 @@ class CloudConfig:
     ENVIRONMENT     = os.getenv("ENVIRONMENT", "development")
     DEBUG           = os.getenv("DEBUG", "false").lower() == "true"
 
+    # Domain
+    APP_DOMAIN      = os.getenv("APP_DOMAIN", "llmscanner.vercel.app")
+    BACKEND_DOMAIN  = os.getenv("BACKEND_DOMAIN", "llm-scanner.up.railway.app")
+
     # CORS
     ALLOWED_ORIGINS = os.getenv(
         "ALLOWED_ORIGINS",
-        "https://llmscanner.com,http://localhost:3000"
+        "https://llmscanner.vercel.app,https://llmscanner.com,http://localhost:3000"
     ).split(",")
 
     # Rate limiting
