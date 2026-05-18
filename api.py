@@ -19,6 +19,7 @@ import uuid
 import csv
 from target import Target
 from scanner import run_full_scan
+from database import DB_PATH
 
 
 # ── Config ────────────────────────────────────────────────────
@@ -49,7 +50,10 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins     =["*"],
+    allow_origins     =os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000"
+    ).split(","),
     allow_credentials =True,
     allow_methods     =["*"],
     allow_headers     =["*"],
@@ -404,7 +408,8 @@ def health_check():
     return {
         "status"            : "healthy",
         "version"           : "2.0.0",
-        "time"              : datetime.now().isoformat(),
+        "environment"       : os.getenv("ENVIRONMENT", "development"),
+        "timestamp"         : datetime.now().isoformat(),
         "active_scans"      : len(scans_database),
         "active_websockets" : len(active_connections),
         "compression"       : "gzip enabled",
@@ -453,3 +458,45 @@ def get_waitlist():
             entries.append(row)
 
     return {"total": len(entries), "entries": entries}
+
+
+# ── Waitlist (SQLite) ─────────────────────────────────────────
+@app.post("/api/waitlist")
+async def join_waitlist_db(email: str):
+    """Adds an email to the SQLite waitlist table."""
+    import sqlite3 as _sqlite3
+    conn = _sqlite3.connect(DB_PATH)
+    c    = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS waitlist (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            email      TEXT UNIQUE NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    try:
+        c.execute(
+            "INSERT INTO waitlist (email, created_at) VALUES (?, ?)",
+            (email, datetime.now().isoformat())
+        )
+        conn.commit()
+        return {"success": True, "message": "Added to waitlist"}
+    except _sqlite3.IntegrityError:
+        return {"success": False, "message": "Already on waitlist"}
+    finally:
+        conn.close()
+
+
+@app.get("/api/waitlist/count")
+def waitlist_count():
+    """Returns the number of emails on the SQLite waitlist."""
+    import sqlite3 as _sqlite3
+    try:
+        conn  = _sqlite3.connect(DB_PATH)
+        c     = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM waitlist")
+        count = c.fetchone()[0]
+        conn.close()
+        return {"count": count}
+    except:
+        return {"count": 0}
