@@ -1293,6 +1293,9 @@
 </footer>
 
 <script>
+    // ── Config ─────────────────────────────────────────────────
+    const API_URL = window.LLM_SCANNER_API || 'https://llm-scanner.up.railway.app';
+
     // ── Waitlist Form ──────────────────────────────────────────
     let count = 247;
 
@@ -1302,7 +1305,7 @@
 
         if (!email) return;
 
-        // Save to localStorage (simulated)
+        // Persist count locally for instant UX
         const emails = JSON.parse(localStorage.getItem('waitlist') || '[]');
         if (!emails.includes(email)) {
             emails.push(email);
@@ -1311,16 +1314,15 @@
             document.getElementById('count').textContent = count;
         }
 
-        // Show success
+        // Show success immediately
         document.getElementById('success-msg').style.display = 'block';
         document.getElementById('emailInput').value = '';
 
-        // In production: POST to your API
-        // fetch('/api/waitlist', {
-        //     method: 'POST',
-        //     body: JSON.stringify({ email }),
-        //     headers: { 'Content-Type': 'application/json' }
-        // });
+        // POST to Railway API
+        fetch(`${API_URL}/api/waitlist?email=${encodeURIComponent(email)}`, {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).catch(() => { /* silent — local count already updated */ });
     }
 
     // ── Smooth nav highlight ───────────────────────────────────
