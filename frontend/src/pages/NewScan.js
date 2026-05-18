@@ -109,18 +109,10 @@ function NewScan() {
           </>
         )}
 
-        <div style={{
-          background: '#0f1117',
-          border: '1px solid #2a2d3a',
-          borderRadius: '8px',
-          padding: '16px',
-          marginBottom: '24px',
-          fontSize: '13px',
-          color: '#888888'
-        }}>
-          ⚡ The scan will fire <strong style={{ color: 'white' }}>85+ attack prompts</strong> across
-          9 categories and generate a professional PDF report automatically.
-          Estimated time : <strong style={{ color: 'white' }}>10-15 minutes</strong>.
+        <div className="scan-info-box">
+          ⚡ The scan will fire <strong>85+ attack prompts</strong> across 9 categories
+          and generate a professional PDF report automatically.
+          Estimated time: <strong>10–15 minutes</strong>.
         </div>
 
         <button
