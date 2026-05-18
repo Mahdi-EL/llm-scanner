@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { scansAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
-const API = 'http://localhost:8000';
 const ITEMS_PER_PAGE = 5;
 
 function Dashboard() {
@@ -12,19 +12,20 @@ function Dashboard() {
   const [filter, setFilter]       = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchScans();
-    const interval = setInterval(fetchScans, 3000);
+    const interval = setInterval(fetchScans, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchScans = async () => {
     try {
-      const res = await axios.get(`${API}/scans`);
+      const res = await scansAPI.list();
       setScans(res.data.scans.reverse());
       setLoading(false);
-    } catch (err) {
+    } catch {
       setLoading(false);
     }
   };

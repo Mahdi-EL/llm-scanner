@@ -20,6 +20,15 @@ import csv
 from target import Target
 from scanner import run_full_scan
 from database import DB_PATH
+from auth_db import (
+    create_user, get_user_by_username, get_user_by_id, get_user_by_email,
+    verify_password as db_verify_password,
+    create_refresh_token, consume_refresh_token,
+    create_reset_token, consume_reset_token,
+    increment_scan_count, update_plan,
+)
+from email_service import send_waitlist_welcome, send_password_reset, send_scan_complete
+from payment import create_checkout_session, handle_webhook, get_plans_public
 
 
 # ── Config ────────────────────────────────────────────────────
@@ -92,6 +101,30 @@ class UserLogin(BaseModel):
 class WaitlistEntry(BaseModel):
     email : str
     name  : Optional[str] = None
+
+
+class UserRegister(BaseModel):
+    username : str
+    email    : str
+    password : str
+
+
+class PasswordResetRequest(BaseModel):
+    email : str
+
+
+class PasswordResetConfirm(BaseModel):
+    token        : str
+    new_password : str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token : str
+
+
+class CheckoutRequest(BaseModel):
+    plan  : str
+    email : str
 
 
 # ── Auth Helpers ──────────────────────────────────────────────
@@ -203,24 +236,39 @@ def home():
 @limiter.limit("10/minute")
 def login(request: Request, user_login: UserLogin):
     """
-    Returns a JWT token for authenticated requests.
-    Default credentials : admin / admin123
+    Returns JWT + refresh token.
+    Default credentials: admin / admin123
     """
-    user = users_database.get(user_login.username)
+    # Try SQLite first, fallback to in-memory for backwards-compat
+    db_user = get_user_by_username(user_login.username)
+    if db_user:
+        if not db_verify_password(user_login.password, db_user["hashed_password"]):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        access_token  = create_access_token({"sub": db_user["id"]})
+        refresh_token = create_refresh_token(db_user["id"])
+        return {
+            "access_token" : access_token,
+            "refresh_token": refresh_token,
+            "token_type"   : "bearer",
+            "expires_in"   : f"{ACCESS_TOKEN_EXPIRE_MINUTES} minutes",
+            "user"         : {
+                "id"      : db_user["id"],
+                "username": db_user["username"],
+                "email"   : db_user.get("email", ""),
+                "plan"    : db_user.get("plan", "free"),
+            }
+        }
 
-    if not user or not verify_password(
-        user_login.password, user["hashed_password"]
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid username or password"
-        )
+    # Legacy in-memory fallback
+    mem_user = users_database.get(user_login.username)
+    if not mem_user or not verify_password(user_login.password, mem_user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
 
     token = create_access_token({"sub": user_login.username})
     return {
         "access_token": token,
         "token_type"  : "bearer",
-        "expires_in"  : f"{ACCESS_TOKEN_EXPIRE_MINUTES} minutes"
+        "expires_in"  : f"{ACCESS_TOKEN_EXPIRE_MINUTES} minutes",
     }
 
 
@@ -480,6 +528,7 @@ async def join_waitlist_db(email: str):
             (email, datetime.now().isoformat())
         )
         conn.commit()
+        send_waitlist_welcome(email)
         return {"success": True, "message": "Added to waitlist"}
     except _sqlite3.IntegrityError:
         return {"success": False, "message": "Already on waitlist"}
@@ -500,3 +549,135 @@ def waitlist_count():
         return {"count": count}
     except:
         return {"count": 0}
+
+
+# ── Auth v2 (SQLite-backed) ───────────────────────────────────
+@app.post("/auth/register")
+@limiter.limit("5/minute")
+def register(request: Request, body: UserRegister):
+    """Creates a new user account."""
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    result = create_user(body.username, body.email, body.password)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    user          = get_user_by_username(body.username)
+    access_token  = create_access_token({"sub": user["id"]})
+    refresh_token = create_refresh_token(user["id"])
+
+    return {
+        "access_token" : access_token,
+        "refresh_token": refresh_token,
+        "token_type"   : "bearer",
+        "user"         : {
+            "id"      : user["id"],
+            "username": user["username"],
+            "email"   : user["email"],
+            "plan"    : user["plan"],
+        }
+    }
+
+
+@app.post("/auth/refresh")
+def refresh_token(body: RefreshRequest):
+    """Issues a new access token using a valid refresh token."""
+    user_id = consume_refresh_token(body.refresh_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    user         = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    access_token  = create_access_token({"sub": user["id"]})
+    new_refresh   = create_refresh_token(user["id"])
+
+    return {
+        "access_token" : access_token,
+        "refresh_token": new_refresh,
+        "token_type"   : "bearer",
+    }
+
+
+@app.get("/auth/me")
+def get_me(request: Request):
+    """Returns current user profile."""
+    user_id = get_current_user(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = get_user_by_id(user_id)
+    if not user:
+        # Fallback: try by username (legacy in-memory tokens)
+        user = get_user_by_username(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id"          : user.get("id", user_id),
+        "username"    : user["username"],
+        "email"       : user.get("email", ""),
+        "plan"        : user.get("plan", "free"),
+        "scans_count" : user.get("scans_count", 0),
+        "created_at"  : user.get("created_at", ""),
+    }
+
+
+@app.post("/auth/forgot-password")
+@limiter.limit("3/minute")
+def forgot_password(request: Request, body: PasswordResetRequest):
+    """Sends a password reset email."""
+    token = create_reset_token(body.email)
+    if token:
+        send_password_reset(body.email, token)
+    # Always return success to avoid email enumeration
+    return {"message": "If that email exists, a reset link has been sent."}
+
+
+@app.post("/auth/reset-password")
+def reset_password(body: PasswordResetConfirm):
+    """Resets password using a valid token."""
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not consume_reset_token(body.token, body.new_password):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    return {"message": "Password reset successfully"}
+
+
+# ── Payments (Stripe) ─────────────────────────────────────────
+@app.get("/api/plans")
+def list_plans():
+    """Returns available subscription plans."""
+    return get_plans_public()
+
+
+@app.post("/api/checkout")
+@limiter.limit("10/minute")
+async def checkout(request: Request, body: CheckoutRequest):
+    """Creates a Stripe Checkout session."""
+    user_id = get_current_user(request) or "guest"
+    result  = create_checkout_session(body.plan, body.email, user_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@app.post("/api/stripe-webhook")
+async def stripe_webhook(request: Request):
+    """Handles Stripe webhook events (payment confirmation, cancellation)."""
+    payload    = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    event      = handle_webhook(payload, sig_header)
+
+    if "error" in event:
+        raise HTTPException(status_code=400, detail=event["error"])
+
+    if event.get("type") == "payment_success":
+        user_id = event.get("user_id")
+        plan    = event.get("plan", "pro")
+        if user_id:
+            update_plan(user_id, plan)
+
+    return {"received": True}
