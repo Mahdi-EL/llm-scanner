@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "buildCommand": "cd frontend && npm ci --legacy-peer-deps && npm run build",
+  "outputDirectory": "frontend/build",
+  "rewrites": [
+    { "source": "/",                              "destination": "/landing.html" },
+    { "source": "/(dashboard|new-scan|pricing)",  "destination": "/index.html"  },
+    { "source": "/results/(.*)",                  "destination": "/index.html"  }
+  ]
+}
