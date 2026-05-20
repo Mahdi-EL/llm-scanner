@@ -8,7 +8,8 @@ from datetime import datetime
 
 
 # ── Database Path ─────────────────────────────────────────────
-DB_PATH = "results/llmscanner.db"
+# Override with DB_PATH env var so Railway can use a persistent volume
+DB_PATH = os.getenv("DB_PATH", "results/llmscanner.db")
 
 
 # ── Initialize Database ───────────────────────────────────────
@@ -17,7 +18,9 @@ def init_db():
     Creates the database and all tables if they don't exist.
     Called once at startup.
     """
-    os.makedirs("results", exist_ok=True)
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
 
     conn = sqlite3.connect(DB_PATH)
     c    = conn.cursor()

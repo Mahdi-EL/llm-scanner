@@ -5,24 +5,22 @@ import sqlite3
 import hashlib
 import secrets
 import uuid
+import bcrypt as _bcrypt
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Optional
-from passlib.context import CryptContext
 from database import DB_PATH
 
 
-# ── Password hashing (bcrypt) ─────────────────────────────────
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
+# ── Password hashing (bcrypt direct — passlib dropped for bcrypt 4+/5+ compat) ─
 def _hash(password: str) -> str:
-    return _pwd.hash(password)
+    return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
 
 def verify_password(plain: str, hashed: str) -> bool:
     # Transparent migration: legacy SHA-256 hashes are 64-char hex strings
     if len(hashed) == 64 and not hashed.startswith("$"):
         return hashlib.sha256(plain.encode()).hexdigest() == hashed
-    return _pwd.verify(plain, hashed)
+    return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 def needs_rehash(hashed: str) -> bool:
     """True if password was stored as SHA-256 and should be upgraded to bcrypt."""
@@ -70,7 +68,11 @@ def init_users_table():
             )
         """)
 
-        # Seed default admin if absent
+        # Seed default admin if absent — password from env or secure default
+        import os as _os
+        admin_pwd = _os.getenv("ADMIN_PASSWORD", "")
+        if not admin_pwd:
+            return  # No admin seeded unless ADMIN_PASSWORD env var is set
         exists = conn.execute(
             "SELECT id FROM users WHERE username = ?", ("admin",)
         ).fetchone()
@@ -81,8 +83,8 @@ def init_users_table():
             """, (
                 str(uuid.uuid4()),
                 "admin",
-                "admin@llmscanner.com",
-                _hash("admin123"),
+                _os.getenv("ADMIN_EMAIL", "admin@llmscanner.com"),
+                _hash(admin_pwd),
                 "enterprise",
                 datetime.now().isoformat(),
             ))
