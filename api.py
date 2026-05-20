@@ -28,7 +28,9 @@ from auth_db import (
     create_reset_token, consume_reset_token,
     increment_scan_count, update_plan,
     _hash as _bcrypt_hash,
+    init_users_table,
 )
+from database import init_db
 from email_service import send_waitlist_welcome, send_password_reset, send_scan_complete
 from payment import create_checkout_session, handle_webhook, get_plans_public
 
@@ -64,6 +66,13 @@ app.add_middleware(
     allow_methods     =["*"],
     allow_headers     =["*"],
 )
+
+# ── Startup ───────────────────────────────────────────────────
+@app.on_event("startup")
+async def startup():
+    init_db()           # creates tables first
+    init_users_table()  # creates users/refresh_tokens tables
+    scan_db._migrate()  # safe now — tables guaranteed to exist
 
 # ── WebSocket connections ─────────────────────────────────────
 active_connections: List[WebSocket] = []
@@ -278,9 +287,10 @@ def login(request: Request, user_login: UserLogin):
 def start_scan(
     request         : Request,
     scan_request    : ScanRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    user_id         : str = Depends(require_auth),
 ):
-    """Launches a new scan in the background."""
+    """Launches a new scan in the background. Requires authentication."""
     scan_id = scan_db.create_scan(scan_request.target_name, scan_request.target_type)
     background_tasks.add_task(execute_scan, scan_id, scan_request)
     return {
@@ -302,8 +312,8 @@ def get_scan_status(scan_id: str):
 
 @app.get("/scans")
 @limiter.limit("60/minute")
-def list_all_scans(request: Request):
-    """Returns the list of all scans."""
+def list_all_scans(request: Request, user_id: str = Depends(require_auth)):
+    """Returns the list of all scans. Requires authentication."""
     scans = scan_db.list_scans()
     return {"total": len(scans), "scans": scans}
 
@@ -317,17 +327,6 @@ def _get_complete_scan(scan_id: str) -> dict:
     if scan["status"] != "complete":
         raise HTTPException(status_code=400, detail="Scan not complete yet")
     return scan
-
-
-@app.get("/download/{scan_id}")
-def download_pdf(scan_id: str):
-    """Downloads the PDF report."""
-    scan     = _get_complete_scan(scan_id)
-    pdf_path = scan.get("pdf_path")
-    if not pdf_path or not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="PDF not found")
-    return FileResponse(path=pdf_path, media_type="application/pdf",
-                        filename=f"LLM_Security_Report_{scan_id}.pdf")
 
 
 @app.get("/download/html/{scan_id}")
@@ -352,20 +351,38 @@ def download_markdown(scan_id: str):
                         filename=f"LLM_Security_Report_{scan_id}.md")
 
 
+@app.get("/download/{scan_id}")
+def download_pdf(scan_id: str):
+    """Downloads the PDF report."""
+    scan     = _get_complete_scan(scan_id)
+    pdf_path = scan.get("pdf_path")
+    if not pdf_path or not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return FileResponse(path=pdf_path, media_type="application/pdf",
+                        filename=f"LLM_Security_Report_{scan_id}.pdf")
+
+
 @app.get("/results/{scan_id}")
 def get_results(scan_id: str):
-    """Returns full JSON results."""
-    scan      = _get_complete_scan(scan_id)
+    """Returns full JSON results — served from DB (file is fallback)."""
+    scan = _get_complete_scan(scan_id)
+
+    # Primary: use results_json stored in SQLite (works even without file)
+    if scan.get("results_json"):
+        return json.loads(scan["results_json"])
+
+    # Fallback: read from file (legacy scans pre-DB storage)
     json_path = scan.get("json_path")
-    if not json_path or not os.path.exists(json_path):
-        raise HTTPException(status_code=404, detail="Results file not found")
-    with open(json_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    if json_path and os.path.exists(json_path):
+        with open(json_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    raise HTTPException(status_code=404, detail="Results not found")
 
 
 @app.delete("/scan/{scan_id}")
-def delete_scan_endpoint(scan_id: str):
-    """Deletes a scan and its files."""
+def delete_scan_endpoint(scan_id: str, user_id: str = Depends(require_auth)):
+    """Deletes a scan and its files. Requires authentication."""
     scan = scan_db.get_scan(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
@@ -416,7 +433,7 @@ def health_check():
         "version"           : "2.0.0",
         "environment"       : os.getenv("ENVIRONMENT", "development"),
         "timestamp"         : datetime.now().isoformat(),
-        "active_scans"      : scan_db.count_scans(),
+        "active_scans"      : scan_db.count_running_scans(),
         "active_websockets" : len(active_connections),
         "compression"       : "gzip enabled",
         "rate_limiting"     : "enabled",
@@ -576,6 +593,23 @@ def reset_password(body: PasswordResetConfirm):
     if not consume_reset_token(body.token, body.new_password):
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
     return {"message": "Password reset successfully"}
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password : str
+    new_password     : str
+
+
+@app.put("/auth/password")
+def change_password(body: PasswordChangeRequest, user_id: str = Depends(require_auth)):
+    """Changes the current user's password (requires the current password)."""
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    user = get_user_by_id(user_id)
+    if not user or not db_verify_password(body.current_password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    upgrade_password(user_id, _bcrypt_hash(body.new_password))
+    return {"message": "Password updated successfully"}
 
 
 # ── Payments (Stripe) ─────────────────────────────────────────

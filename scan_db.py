@@ -30,6 +30,12 @@ def _db():
 # ── Migration (safe, idempotent) ───────────────────────────────
 def _migrate():
     with _db() as conn:
+        # Guard: only migrate if the scans table already exists (init_db runs first)
+        tables = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if "scans" not in tables:
+            return
         existing = {row[1] for row in conn.execute("PRAGMA table_info(scans)").fetchall()}
         if "progress"      not in existing:
             conn.execute("ALTER TABLE scans ADD COLUMN progress      INTEGER DEFAULT 0")
@@ -97,6 +103,13 @@ def count_scans() -> int:
         return conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
 
 
+def count_running_scans() -> int:
+    with _db() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM scans WHERE status = 'running'"
+        ).fetchone()[0]
+
+
 def save_findings(scan_id: str, results: list):
     """Persists individual findings after a scan completes."""
     with _db() as conn:
@@ -139,5 +152,4 @@ def save_findings(scan_id: str, results: list):
             ))
 
 
-# ── Init ──────────────────────────────────────────────────────
-_migrate()
+# _migrate() is called from api.py startup event AFTER init_db() creates tables

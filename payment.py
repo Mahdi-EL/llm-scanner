@@ -62,7 +62,7 @@ def create_checkout_session(plan: str, customer_email: str, user_id: str) -> dic
                 "quantity": 1,
             }],
             metadata    ={ "user_id": user_id, "plan": plan },
-            success_url =f"{APP_URL}/dashboard?payment=success&plan={plan}",
+            success_url =f"{APP_URL}/?payment=success&plan={plan}",
             cancel_url  =f"{APP_URL}/pricing?payment=cancelled",
         )
         return {

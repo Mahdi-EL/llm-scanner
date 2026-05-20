@@ -1,37 +1,48 @@
-version: '3.8'
+version: '3.9'
 
 services:
 
-  # ── Backend ─────────────────────────────────────────────────
+  # ── Backend (FastAPI) ────────────────────────────────────────
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: llm-scanner-backend
+    container_name: llm-scanner-api
     ports:
       - "8000:8000"
     environment:
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - DB_PATH=/data/llmscanner.db
     volumes:
-      - ./results:/app/results
+      - scan_data:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
+      start_period: 15s
       retries: 3
 
-  # ── Frontend ─────────────────────────────────────────────────
+  # ── Frontend (React + nginx) ─────────────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=http://localhost:8000
     container_name: llm-scanner-frontend
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
+# ── Persistent volume for SQLite DB + scan results ───────────
 volumes:
-  results:
+  scan_data:

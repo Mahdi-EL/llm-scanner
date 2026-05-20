@@ -1,27 +1,24 @@
 # ── Build Stage ───────────────────────────────────────────────
-FROM node:18-alpine as build
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
+RUN npm ci --legacy-peer-deps
 
-# Install dependencies
-RUN npm install
-
-# Copy source code
 COPY . .
 
-# Build the React app
+# Injected at build time: docker build --build-arg REACT_APP_API_URL=https://…
+ARG REACT_APP_API_URL=http://localhost:8000
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+
 RUN npm run build
 
-# ── Production Stage ──────────────────────────────────────────
-FROM nginx:alpine
 
-# Copy built files to nginx
-COPY --from=build /app/build /usr/share/nginx/html
+# ── Runtime Stage (nginx) ─────────────────────────────────────
+FROM nginx:1.27-alpine
 
-# Copy nginx config
+COPY --from=builder /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
