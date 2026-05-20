@@ -731,6 +731,7 @@ body{{background:#07070a;color:#e2e8f0;min-height:100vh}}
           <div class="ring-lbl">{score_label}</div>
         </div>
       </div>
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.8px;margin-top:4px">Security Score</div>
     </div>
   </div>
 
