@@ -12,7 +12,7 @@ function Section({ title, desc, children }) {
         {desc && <div style={{ fontSize:'12px', color:'var(--t3)' }}>{desc}</div>}
       </div>
       <div style={{ background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'12px', overflow:'hidden', position:'relative' }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)' }} />
+        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(17,24,39,0.06),transparent)' }} />
         {children}
       </div>
     </div>
@@ -58,9 +58,9 @@ function Toggle({ value, onChange }) {
 }
 
 const PLAN_STYLE = {
-  free      : { bg:'rgba(255,255,255,0.06)',  color:'rgba(255,255,255,0.5)', border:'rgba(255,255,255,0.12)' },
-  pro       : { bg:'rgba(74,138,244,0.15)',   color:'#93c5fd',              border:'rgba(74,138,244,0.3)' },
-  enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#86efac',              border:'rgba(34,197,94,0.3)' },
+  free      : { bg:'rgba(17,24,39,0.06)',  color:'rgba(17,24,39,0.5)', border:'rgba(17,24,39,0.12)' },
+  pro       : { bg:'rgba(37,99,235,0.15)',   color:'#2563eb',              border:'rgba(37,99,235,0.3)' },
+  enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#16a34a',              border:'rgba(34,197,94,0.3)' },
 };
 
 export default function Settings() {
@@ -181,7 +181,7 @@ export default function Settings() {
               <div className="form-group" style={{ marginBottom:0 }}>
                 <label>Confirm New Password</label>
                 <input type="password" placeholder="Repeat password" value={pwForm.confirm} onChange={e => setPwForm(p => ({ ...p, confirm:e.target.value }))}
-                  style={{ borderColor: pwForm.confirm && pwForm.next !== pwForm.confirm ? '#f87171' : '' }} />
+                  style={{ borderColor: pwForm.confirm && pwForm.next !== pwForm.confirm ? '#dc2626' : '' }} />
               </div>
             </div>
             <div>
@@ -208,7 +208,7 @@ export default function Settings() {
             <button className="btn-ghost" style={{ fontSize:'12px', padding:'8px 14px', flexShrink:0 }} onClick={copyKey}>
               {keyCopied ? '✓ Copied' : 'Copy'}
             </button>
-            <button className="btn-ghost" style={{ fontSize:'12px', padding:'8px 14px', flexShrink:0, color:'#f87171' }} onClick={regenerateKey}>
+            <button className="btn-ghost" style={{ fontSize:'12px', padding:'8px 14px', flexShrink:0, color:'#dc2626' }} onClick={regenerateKey}>
               Regenerate
             </button>
           </div>
@@ -217,8 +217,8 @@ export default function Settings() {
           <span style={{
             fontSize:'11px', fontWeight:'700', padding:'3px 10px', borderRadius:'10px',
             ...(user?.plan !== 'free'
-              ? { background:'rgba(74,222,128,0.1)', color:'#4ade80', border:'1px solid rgba(74,222,128,0.25)' }
-              : { background:'rgba(255,255,255,0.06)', color:'var(--t3)', border:'1px solid var(--b1)' }),
+              ? { background:'rgba(74,222,128,0.1)', color:'#16a34a', border:'1px solid rgba(74,222,128,0.25)' }
+              : { background:'rgba(17,24,39,0.06)', color:'var(--t3)', border:'1px solid var(--b1)' }),
           }}>
             {user?.plan !== 'free' ? 'Enabled' : 'Upgrade to use'}
           </span>
@@ -247,7 +247,7 @@ export default function Settings() {
               <button key={t} onClick={() => { setTheme(t); toast(`Theme set to ${t}. Full theme switching coming soon.`, 'info'); }}
                 style={{ padding:'5px 12px', fontSize:'12px', fontWeight:'600', borderRadius:'7px', border:'1px solid', cursor:'pointer', textTransform:'capitalize',
                   background: theme === t ? 'var(--blue-soft)' : 'var(--s3)',
-                  borderColor: theme === t ? 'rgba(74,138,244,0.4)' : 'var(--b1)',
+                  borderColor: theme === t ? 'rgba(37,99,235,0.4)' : 'var(--b1)',
                   color: theme === t ? 'var(--blue)' : 'var(--t3)',
                 }}>
                 {t}
@@ -270,7 +270,7 @@ export default function Settings() {
       {/* ── Danger zone ──────────────────────────── */}
       <div style={{ marginBottom:'28px' }}>
         <div style={{ marginBottom:'16px' }}>
-          <div style={{ fontSize:'14px', fontWeight:'700', color:'#f87171', marginBottom:'4px' }}>Danger Zone</div>
+          <div style={{ fontSize:'14px', fontWeight:'700', color:'#dc2626', marginBottom:'4px' }}>Danger Zone</div>
           <div style={{ fontSize:'12px', color:'var(--t3)' }}>Irreversible actions — proceed with caution</div>
         </div>
         <div style={{ background:'rgba(240,68,56,0.05)', border:'1px solid rgba(240,68,56,0.2)', borderRadius:'12px', overflow:'hidden' }}>
@@ -279,18 +279,18 @@ export default function Settings() {
               <div style={{ fontSize:'13px', fontWeight:'600', color:'var(--t1)', marginBottom:'2px' }}>Sign out of all devices</div>
               <div style={{ fontSize:'12px', color:'var(--t3)' }}>Revoke all active sessions immediately.</div>
             </div>
-            <button className="btn-outline" style={{ fontSize:'12px', padding:'6px 16px', borderColor:'rgba(240,68,56,0.4)', color:'#f87171' }}
+            <button className="btn-outline" style={{ fontSize:'12px', padding:'6px 16px', borderColor:'rgba(240,68,56,0.4)', color:'#dc2626' }}
               onClick={() => { logout(); navigate('/login'); }}>
               Sign Out All
             </button>
           </div>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 22px' }}>
             <div>
-              <div style={{ fontSize:'13px', fontWeight:'600', color:'#f87171', marginBottom:'2px' }}>Delete account</div>
+              <div style={{ fontSize:'13px', fontWeight:'600', color:'#dc2626', marginBottom:'2px' }}>Delete account</div>
               <div style={{ fontSize:'12px', color:'var(--t3)' }}>Permanently delete your account and all scan data.</div>
             </div>
             <button onClick={deleteAccount}
-              style={{ padding:'6px 16px', fontSize:'12px', fontWeight:'600', background:'rgba(240,68,56,0.1)', border:'1px solid rgba(240,68,56,0.35)', color:'#f87171', borderRadius:'8px', cursor:'pointer', transition:'all 0.15s' }}
+              style={{ padding:'6px 16px', fontSize:'12px', fontWeight:'600', background:'rgba(240,68,56,0.1)', border:'1px solid rgba(240,68,56,0.35)', color:'#dc2626', borderRadius:'8px', cursor:'pointer', transition:'all 0.15s' }}
               onMouseEnter={e => e.currentTarget.style.background='rgba(240,68,56,0.2)'}
               onMouseLeave={e => e.currentTarget.style.background='rgba(240,68,56,0.1)'}>
               Delete Account

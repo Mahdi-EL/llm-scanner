@@ -54,7 +54,7 @@ const ATTACK_CATEGORIES = [
   { label:'+ 10 more categories',   sev:'low',      icon:'⋯' },
 ];
 
-const SEV_COLOR = { critical:'#f87171', high:'#fb923c', medium:'#facc15', low:'var(--t3)' };
+const SEV_COLOR = { critical:'#dc2626', high:'#ea580c', medium:'#b45309', low:'var(--t3)' };
 
 const STEPS = [
   { num:1, label:'Name Target' },
@@ -92,10 +92,10 @@ function SectionCard({ step, title, subtitle, children }) {
       background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'14px',
       padding:'24px', marginBottom:'12px', position:'relative', overflow:'hidden',
     }}>
-      <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)' }} />
+      <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(17,24,39,0.06),transparent)' }} />
       <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'20px' }}>
         <div style={{
-          width:'26px', height:'26px', background:'var(--blue-soft)', border:'1px solid rgba(74,138,244,0.25)',
+          width:'26px', height:'26px', background:'var(--blue-soft)', border:'1px solid rgba(37,99,235,0.25)',
           borderRadius:'7px', display:'flex', alignItems:'center', justifyContent:'center',
           fontSize:'11px', fontWeight:'800', color:'var(--blue)', flexShrink:0,
         }}>{step}</div>
@@ -190,7 +190,7 @@ export default function NewScan() {
                 onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = 'var(--b1)'; }}
               >
                 {t.tag && (
-                  <span style={{ position:'absolute', top:'9px', right:'9px', fontSize:'9px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.5px', color:'var(--blue)', background:'var(--blue-soft)', border:'1px solid rgba(74,138,244,0.2)', borderRadius:'10px', padding:'2px 7px' }}>
+                  <span style={{ position:'absolute', top:'9px', right:'9px', fontSize:'9px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.5px', color:'var(--blue)', background:'var(--blue-soft)', border:'1px solid rgba(37,99,235,0.2)', borderRadius:'10px', padding:'2px 7px' }}>
                     {t.tag}
                   </span>
                 )}
@@ -256,14 +256,14 @@ export default function NewScan() {
         background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'14px',
         padding:'20px 24px', marginBottom:'16px', position:'relative', overflow:'hidden',
       }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)' }} />
+        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(17,24,39,0.06),transparent)' }} />
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
           <div>
             <div style={{ fontSize:'13px', fontWeight:'700', color:'var(--t1)' }}>Attack Coverage</div>
             <div style={{ fontSize:'12px', color:'var(--t3)', marginTop:'2px' }}>1,010+ prompts across 21 categories</div>
           </div>
           <div style={{ display:'flex', gap:'16px', fontSize:'12px' }}>
-            {[['#f87171','Critical'],['#fb923c','High'],['#facc15','Medium']].map(([c,l]) => (
+            {[['#dc2626','Critical'],['#ea580c','High'],['#b45309','Medium']].map(([c,l]) => (
               <div key={l} style={{ display:'flex', alignItems:'center', gap:'5px', color:'var(--t3)' }}>
                 <div style={{ width:'8px', height:'8px', borderRadius:'2px', background:c }} />
                 {l}

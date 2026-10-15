@@ -19,9 +19,9 @@ const IcoInfo = () => (
 );
 
 const STYLES = {
-  success: { bg:'rgba(34,197,94,0.12)',  border:'rgba(34,197,94,0.3)',  color:'#4ade80',       Icon: IcoCheck },
-  error  : { bg:'rgba(240,68,56,0.12)',  border:'rgba(240,68,56,0.3)',  color:'#f87171',       Icon: IcoX     },
-  info   : { bg:'rgba(74,138,244,0.12)', border:'rgba(74,138,244,0.3)', color:'var(--blue)',   Icon: IcoInfo  },
+  success: { bg:'rgba(34,197,94,0.12)',  border:'rgba(34,197,94,0.3)',  color:'#16a34a',       Icon: IcoCheck },
+  error  : { bg:'rgba(240,68,56,0.12)',  border:'rgba(240,68,56,0.3)',  color:'#dc2626',       Icon: IcoX     },
+  info   : { bg:'rgba(37,99,235,0.12)', border:'rgba(37,99,235,0.3)', color:'var(--blue)',   Icon: IcoInfo  },
   warning: { bg:'rgba(251,146,60,0.12)', border:'rgba(251,146,60,0.3)', color:'var(--orange)', Icon: IcoInfo  },
 };
 

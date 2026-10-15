@@ -32,6 +32,8 @@ def needs_rehash(hashed: str) -> bool:
 def _db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn
         conn.commit()
@@ -67,6 +69,25 @@ def init_users_table():
                 created_at TEXT NOT NULL
             )
         """)
+        # API keys for programmatic / CI access (store only the hash)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id           TEXT PRIMARY KEY,
+                user_id      TEXT NOT NULL,
+                name         TEXT,
+                key_hash     TEXT UNIQUE NOT NULL,
+                prefix       TEXT NOT NULL,
+                created_at   TEXT NOT NULL,
+                last_used_at TEXT,
+                revoked      INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys (user_id)")
+
+        # Migration: per-user webhook URL (notifications)
+        ucols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "webhook_url" not in ucols:
+            conn.execute("ALTER TABLE users ADD COLUMN webhook_url TEXT")
 
         # Seed default admin if absent — password from env or secure default
         import os as _os
@@ -202,6 +223,67 @@ def consume_refresh_token(token: str) -> Optional[str]:
             return None
         conn.execute("DELETE FROM refresh_tokens WHERE token = ?", (token,))
         return row["user_id"]
+
+
+# ── API Keys (programmatic / CI access) ───────────────────────
+API_KEY_PREFIX = "llmsk_"
+
+def _hash_api_key(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def create_api_key(user_id: str, name: str = "") -> dict:
+    """Generates a new API key. Returns the FULL key once (never stored)."""
+    raw    = API_KEY_PREFIX + secrets.token_urlsafe(32)
+    key_id = str(uuid.uuid4())
+    with _db() as conn:
+        conn.execute("""
+            INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (key_id, user_id, name or "API key", _hash_api_key(raw),
+              raw[:14], datetime.now().isoformat()))
+    return {"id": key_id, "name": name or "API key", "key": raw, "prefix": raw[:14]}
+
+
+def get_user_by_api_key(key: str) -> Optional[str]:
+    """Returns the owning user_id for a valid, non-revoked key (and stamps usage)."""
+    if not key or not key.startswith(API_KEY_PREFIX):
+        return None
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT id, user_id FROM api_keys WHERE key_hash = ? AND revoked = 0",
+            (_hash_api_key(key),),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute("UPDATE api_keys SET last_used_at = ? WHERE id = ?",
+                     (datetime.now().isoformat(), row["id"]))
+        return row["user_id"]
+
+
+def list_api_keys(user_id: str) -> list:
+    """Lists the user's keys WITHOUT the secret (prefix only)."""
+    with _db() as conn:
+        rows = conn.execute("""
+            SELECT id, name, prefix, created_at, last_used_at, revoked
+            FROM api_keys WHERE user_id = ? ORDER BY created_at DESC
+        """, (user_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def revoke_api_key(user_id: str, key_id: str) -> bool:
+    with _db() as conn:
+        cur = conn.execute(
+            "UPDATE api_keys SET revoked = 1 WHERE id = ? AND user_id = ?",
+            (key_id, user_id),
+        )
+        return cur.rowcount > 0
+
+
+# ── Per-user webhook ──────────────────────────────────────────
+def update_webhook(user_id: str, url: Optional[str]):
+    with _db() as conn:
+        conn.execute("UPDATE users SET webhook_url = ? WHERE id = ?", (url, user_id))
 
 
 # ── Init on import ────────────────────────────────────────────

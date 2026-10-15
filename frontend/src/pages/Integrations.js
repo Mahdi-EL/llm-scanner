@@ -70,9 +70,9 @@ const INTEGRATIONS = [
     name    : 'Ollama (Local)',
     icon    : '🦙',
     desc    : 'Run open-source models locally via Ollama — no data leaves your machine.',
-    color   : '#4a8af4',
-    bg      : 'rgba(74,138,244,0.08)',
-    border  : 'rgba(74,138,244,0.2)',
+    color   : '#2563eb',
+    bg      : 'rgba(37,99,235,0.08)',
+    border  : 'rgba(37,99,235,0.2)',
     group   : 'Local Models',
     models  : 'Llama 3 · Mistral · Phi-3',
     fields  : [
@@ -85,7 +85,7 @@ const INTEGRATIONS = [
     name    : 'Custom REST API',
     icon    : '🔌',
     desc    : 'Any HTTP endpoint that accepts a chat-style JSON request body.',
-    color   : '#9b6ef3',
+    color   : '#6366f1',
     bg      : 'rgba(155,110,243,0.08)',
     border  : 'rgba(155,110,243,0.18)',
     group   : 'Custom',
@@ -104,10 +104,10 @@ function StatusDot({ connected }) {
     <div style={{ display:'flex', alignItems:'center', gap:'5px' }}>
       <div style={{
         width:'7px', height:'7px', borderRadius:'50%',
-        background: connected ? '#4ade80' : 'var(--b2)',
+        background: connected ? '#16a34a' : 'var(--b2)',
         boxShadow: connected ? '0 0 6px rgba(74,222,128,0.5)' : 'none',
       }} />
-      <span style={{ fontSize:'11px', color: connected ? '#4ade80' : 'var(--t3)', fontWeight:'600' }}>
+      <span style={{ fontSize:'11px', color: connected ? '#16a34a' : 'var(--t3)', fontWeight:'600' }}>
         {connected ? 'Connected' : 'Not configured'}
       </span>
     </div>
@@ -170,7 +170,7 @@ function IntegrationCard({ integration, onTest }) {
           <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'3px' }}>
             <span style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)' }}>{integration.name}</span>
             {testOk === true && (
-              <span style={{ fontSize:'10px', fontWeight:'700', color:'#4ade80', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.25)', borderRadius:'10px', padding:'1px 8px' }}>
+              <span style={{ fontSize:'10px', fontWeight:'700', color:'#16a34a', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.25)', borderRadius:'10px', padding:'1px 8px' }}>
                 ✓ Verified
               </span>
             )}
@@ -280,7 +280,7 @@ export default function Integrations() {
 
       {/* Info bar */}
       <div style={{
-        background:'rgba(74,138,244,0.06)', border:'1px solid rgba(74,138,244,0.18)',
+        background:'rgba(37,99,235,0.06)', border:'1px solid rgba(37,99,235,0.18)',
         borderRadius:'10px', padding:'13px 18px', marginBottom:'24px',
         display:'flex', gap:'12px', alignItems:'center',
       }}>
@@ -311,8 +311,8 @@ export default function Integrations() {
 
       {/* CTA */}
       <div style={{
-        background:'linear-gradient(135deg, rgba(74,138,244,0.06), rgba(155,110,243,0.06))',
-        border:'1px solid rgba(74,138,244,0.15)',
+        background:'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(155,110,243,0.06))',
+        border:'1px solid rgba(37,99,235,0.15)',
         borderRadius:'12px', padding:'22px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px',
       }}>
         <div>

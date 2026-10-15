@@ -34,13 +34,13 @@ export default function ForgotPassword() {
         position    : 'relative',
         overflow    : 'hidden',
       }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent)' }} />
+        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(17,24,39,0.07),transparent)' }} />
 
         <div style={{ textAlign:'center', marginBottom:'36px' }}>
           <div style={{
             width:'52px', height:'52px',
             background:'var(--blue-soft)',
-            border:'1px solid rgba(74,138,244,0.25)',
+            border:'1px solid rgba(37,99,235,0.25)',
             borderRadius:'14px',
             display:'flex', alignItems:'center', justifyContent:'center',
             fontSize:'22px', margin:'0 auto 20px',
@@ -55,7 +55,7 @@ export default function ForgotPassword() {
             borderRadius:'10px', padding:'20px', textAlign:'center',
           }}>
             <div style={{ fontSize:'24px', marginBottom:'10px' }}>📬</div>
-            <div style={{ fontSize:'14px', color:'#4ade80', fontWeight:'600', marginBottom:'6px' }}>Check your inbox</div>
+            <div style={{ fontSize:'14px', color:'#16a34a', fontWeight:'600', marginBottom:'6px' }}>Check your inbox</div>
             <div style={{ fontSize:'13px', color:'var(--t2)', lineHeight:'1.5' }}>
               If that email is registered, a reset link has been sent.
             </div>

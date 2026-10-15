@@ -3,25 +3,25 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { scansAPI, API_URL } from '../services/api';
 
 const SEV_META = {
-  CRITICAL: { color:'#f87171', bg:'rgba(248,113,113,0.12)', border:'rgba(248,113,113,0.25)', label:'Critical' },
-  HIGH:     { color:'#fb923c', bg:'rgba(251,146,60,0.12)',  border:'rgba(251,146,60,0.25)',  label:'High'     },
-  MEDIUM:   { color:'#facc15', bg:'rgba(250,204,21,0.10)',  border:'rgba(250,204,21,0.25)',  label:'Medium'   },
-  LOW:      { color:'#4ade80', bg:'rgba(74,222,128,0.10)',  border:'rgba(74,222,128,0.25)',  label:'Low'      },
+  CRITICAL: { color:'#dc2626', bg:'rgba(248,113,113,0.12)', border:'rgba(248,113,113,0.25)', label:'Critical' },
+  HIGH:     { color:'#ea580c', bg:'rgba(251,146,60,0.12)',  border:'rgba(251,146,60,0.25)',  label:'High'     },
+  MEDIUM:   { color:'#b45309', bg:'rgba(250,204,21,0.10)',  border:'rgba(250,204,21,0.25)',  label:'Medium'   },
+  LOW:      { color:'#16a34a', bg:'rgba(74,222,128,0.10)',  border:'rgba(74,222,128,0.25)',  label:'Low'      },
 };
 const SEV_ORDER = ['CRITICAL','HIGH','MEDIUM','LOW'];
 
 /* ── Animated SVG score ring ─────────────────────────────── */
 function ScoreRing({ score }) {
   const R = 54, CIRC = 2 * Math.PI * R;
-  const color = score >= 70 ? '#4ade80' : score >= 40 ? '#facc15' : '#f87171';
+  const color = score >= 70 ? '#16a34a' : score >= 40 ? '#b45309' : '#dc2626';
   const label = score >= 85 ? 'Excellent' : score >= 70 ? 'Low Risk' : score >= 40 ? 'Moderate' : 'High Risk';
   return (
     <div style={{ position:'relative', width:'148px', height:'148px', flexShrink:0 }}>
       {/* Outer glow ring */}
       <div style={{ position:'absolute', inset:'-6px', borderRadius:'50%', background:`radial-gradient(circle, ${color}15 0%, transparent 70%)`, pointerEvents:'none' }} />
       <svg width="148" height="148" viewBox="0 0 148 148" style={{ transform:'rotate(-90deg)' }}>
-        <circle cx="74" cy="74" r={R} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="10" />
-        <circle cx="74" cy="74" r={R} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10"
+        <circle cx="74" cy="74" r={R} fill="none" stroke="rgba(17,24,39,0.04)" strokeWidth="10" />
+        <circle cx="74" cy="74" r={R} fill="none" stroke="rgba(17,24,39,0.06)" strokeWidth="10"
           strokeDasharray={`${(score/100)*CIRC} ${CIRC}`} style={{ transition:'none' }} />
         <circle cx="74" cy="74" r={R} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
           strokeDasharray={`${(score/100)*CIRC} ${CIRC}`}
@@ -57,14 +57,14 @@ function CategoryChart({ results }) {
   });
   const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const max = sorted[0]?.[1] || 1;
-  const COLORS = ['#f87171','#fb923c','#facc15','#4ade80','#4a8af4','#9b6ef3','#2dd4bf','#e879f9'];
+  const COLORS = ['#dc2626','#ea580c','#b45309','#16a34a','#2563eb','#6366f1','#2dd4bf','#e879f9'];
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
       {sorted.map(([cat,cnt],i)=>(
         <div key={cat} style={{ display:'flex', alignItems:'center', gap:'10px' }}>
           <div style={{ width:'8px', height:'8px', borderRadius:'2px', background:COLORS[i%8], flexShrink:0 }} />
           <div style={{ fontSize:'11px', color:'var(--t2)', fontWeight:'500', width:'130px', flexShrink:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textTransform:'capitalize' }}>{cat}</div>
-          <div style={{ flex:1, height:'4px', background:'rgba(255,255,255,0.05)', borderRadius:'2px', overflow:'hidden' }}>
+          <div style={{ flex:1, height:'4px', background:'rgba(17,24,39,0.05)', borderRadius:'2px', overflow:'hidden' }}>
             <div style={{ width:`${(cnt/max)*100}%`, height:'100%', background:COLORS[i%8], borderRadius:'2px', transition:'width 0.8s cubic-bezier(.4,0,.2,1)', boxShadow:`0 0 6px ${COLORS[i%8]}60` }} />
           </div>
           <div style={{ fontSize:'12px', fontWeight:'700', color:'var(--t2)', width:'22px', textAlign:'right', flexShrink:0 }}>{cnt}</div>
@@ -105,7 +105,7 @@ function FindingCard({ item, index }) {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:'8px', flexShrink:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-            <div style={{ width:'32px', height:'3px', background:'rgba(255,255,255,0.07)', borderRadius:'2px', overflow:'hidden' }}>
+            <div style={{ width:'32px', height:'3px', background:'rgba(17,24,39,0.07)', borderRadius:'2px', overflow:'hidden' }}>
               <div style={{ width:`${score*10}%`, height:'100%', background:m.color, borderRadius:'2px' }} />
             </div>
             <span style={{ fontSize:'11px', fontWeight:'800', color:m.color }}>{score}/10</span>
@@ -150,14 +150,14 @@ function FindingCard({ item, index }) {
 function Recommendations({ score, summary }) {
   const recs = [];
   if ((summary.critical||0)>0)
-    recs.push({ icon:'🚨', priority:'P1', title:'Patch critical prompt injections', body:'Your AI can be fully hijacked. Add strict output validation and input sanitization before any production use.', color:'#f87171' });
+    recs.push({ icon:'🚨', priority:'P1', title:'Patch critical prompt injections', body:'Your AI can be fully hijacked. Add strict output validation and input sanitization before any production use.', color:'#dc2626' });
   if ((summary.high||0)>0)
-    recs.push({ icon:'⚠️', priority:'P2', title:'Harden against role-play bypasses', body:'High-severity findings stem from weak persona anchoring. Use layered instructions and deny-list known jailbreak phrases.', color:'#fb923c' });
+    recs.push({ icon:'⚠️', priority:'P2', title:'Harden against role-play bypasses', body:'High-severity findings stem from weak persona anchoring. Use layered instructions and deny-list known jailbreak phrases.', color:'#ea580c' });
   if (score < 70)
-    recs.push({ icon:'🔐', priority:'P2', title:'Add output classifiers', body:'Deploy a secondary LLM or regex classifier to evaluate responses before serving to end users.', color:'#facc15' });
+    recs.push({ icon:'🔐', priority:'P2', title:'Add output classifiers', body:'Deploy a secondary LLM or regex classifier to evaluate responses before serving to end users.', color:'#b45309' });
   recs.push({ icon:'📅', priority:'P3', title:'Schedule regular re-scans', body:'AI models drift over time. Re-scan monthly or after every model update to catch regressions.', color:'var(--blue)' });
   if (score>=85)
-    recs.push({ icon:'✅', priority:'P3', title:'Maintain excellent posture', body:'Strong resistance detected. Continue with automated weekly scans and red-team exercises.', color:'#4ade80' });
+    recs.push({ icon:'✅', priority:'P3', title:'Maintain excellent posture', body:'Strong resistance detected. Continue with automated weekly scans and red-team exercises.', color:'#16a34a' });
   return (
     <div className="card-glow" style={{ padding:'22px 24px', marginTop:'20px' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
@@ -196,17 +196,17 @@ function RunningState({ scan }) {
     return ()=>{ clearInterval(t1); clearInterval(t2); };
   }, []);
   const STAGES = [
-    { label:'Prompt Injection',       color:'#f87171', pct:Math.min(prog*1.1,100) },
-    { label:'Jailbreak Templates',    color:'#fb923c', pct:Math.min(prog,100) },
+    { label:'Prompt Injection',       color:'#dc2626', pct:Math.min(prog*1.1,100) },
+    { label:'Jailbreak Templates',    color:'#ea580c', pct:Math.min(prog,100) },
     { label:'Data Exfiltration',      color:'var(--blue)', pct:Math.min(prog*0.8,100) },
-    { label:'Authority Impersonation',color:'#facc15', pct:Math.min(prog*0.6,100) },
+    { label:'Authority Impersonation',color:'#b45309', pct:Math.min(prog*0.6,100) },
     { label:'System Prompt Spoofing', color:'var(--purple)', pct:Math.min(prog*0.4,100) },
     { label:'Context Manipulation',   color:'#2dd4bf', pct:Math.min(prog*0.25,100) },
   ];
   return (
     <div style={{ maxWidth:'520px', margin:'56px auto' }}>
       <div style={{ textAlign:'center', marginBottom:'32px' }}>
-        <div style={{ width:'72px', height:'72px', margin:'0 auto 20px', borderRadius:'20px', background:'linear-gradient(135deg,rgba(74,138,244,0.15),rgba(155,110,243,0.15))', border:'1px solid rgba(74,138,244,0.25)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', boxShadow:'0 0 40px rgba(74,138,244,0.12), 0 0 0 8px rgba(74,138,244,0.04)' }}>🛡</div>
+        <div style={{ width:'72px', height:'72px', margin:'0 auto 20px', borderRadius:'20px', background:'linear-gradient(135deg,rgba(37,99,235,0.15),rgba(155,110,243,0.15))', border:'1px solid rgba(37,99,235,0.25)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', boxShadow:'0 0 40px rgba(37,99,235,0.12), 0 0 0 8px rgba(37,99,235,0.04)' }}>🛡</div>
         <h2 style={{ fontSize:'22px', fontWeight:'800', letterSpacing:'-0.5px', marginBottom:'6px' }}>Scan in Progress</h2>
         <p style={{ color:'var(--t2)', fontSize:'14px', marginBottom:'3px' }}>Target: <strong style={{ color:'var(--t1)' }}>{scan.target_name}</strong></p>
         <p style={{ color:'var(--t3)', fontSize:'13px' }}>Firing 1 000+ adversarial prompts{'.'.repeat(dots)}</p>
@@ -226,7 +226,7 @@ function RunningState({ scan }) {
               <span style={{ fontSize:'12px', color:'var(--t2)', fontWeight:'500' }}>{s.label}</span>
               <span style={{ fontSize:'11px', color:'var(--t3)', fontVariantNumeric:'tabular-nums' }}>{Math.round(s.pct)}%</span>
             </div>
-            <div style={{ height:'3px', background:'rgba(255,255,255,0.05)', borderRadius:'2px', overflow:'hidden' }}>
+            <div style={{ height:'3px', background:'rgba(17,24,39,0.05)', borderRadius:'2px', overflow:'hidden' }}>
               <div style={{ height:'100%', width:`${s.pct}%`, background:s.color, borderRadius:'2px', boxShadow:`0 0 8px ${s.color}50`, transition:'width 0.9s ease' }} />
             </div>
           </div>
@@ -302,7 +302,7 @@ export default function Results() {
   if (scan.status==='failed') return (
     <div className="empty-state" style={{ padding:'100px 40px' }}>
       <div className="empty-state-icon">❌</div>
-      <h3 style={{ color:'#f87171' }}>Scan Failed</h3>
+      <h3 style={{ color:'#dc2626' }}>Scan Failed</h3>
       <p>{scan.error||'An error occurred during the scan.'}</p>
       <button className="btn-primary" onClick={()=>navigate('/')}>Back to Dashboard</button>
     </div>
@@ -312,7 +312,7 @@ export default function Results() {
   const score        = summary.security_score || 0;
   const results      = _results;
   const totalFindings = (summary.critical||0)+(summary.high||0)+(summary.medium||0)+(summary.low||0);
-  const riskColor    = score>=70 ? '#4ade80' : score>=40 ? '#facc15' : '#f87171';
+  const riskColor    = score>=70 ? '#16a34a' : score>=40 ? '#b45309' : '#dc2626';
   const riskDesc     = score>=85
     ? 'Excellent security posture. Strong resistance to all tested attack vectors.'
     : score>=70 ? 'Good resistance to adversarial attacks. A few findings need review before production.'
@@ -472,7 +472,7 @@ export default function Results() {
       {results.length === 0 && (
         <div className="card-glow" style={{ padding:'48px', textAlign:'center' }}>
           <div style={{ fontSize:'32px', marginBottom:'12px' }}>🎉</div>
-          <div style={{ fontSize:'17px', fontWeight:'700', color:'#4ade80', marginBottom:'6px' }}>No Vulnerabilities Found</div>
+          <div style={{ fontSize:'17px', fontWeight:'700', color:'#16a34a', marginBottom:'6px' }}>No Vulnerabilities Found</div>
           <div style={{ fontSize:'14px', color:'var(--t3)' }}>Your AI application passed all adversarial tests with zero findings.</div>
         </div>
       )}

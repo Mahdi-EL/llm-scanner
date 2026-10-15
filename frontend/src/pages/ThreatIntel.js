@@ -319,10 +319,10 @@ const CATEGORIES = [
 ];
 
 const SEV_META = {
-  critical: { label:'Critical', bg:'rgba(248,113,113,0.12)', color:'#f87171', border:'rgba(248,113,113,0.25)' },
-  high    : { label:'High',     bg:'rgba(251,146,60,0.12)',  color:'#fb923c', border:'rgba(251,146,60,0.25)' },
-  medium  : { label:'Medium',   bg:'rgba(250,204,21,0.10)',  color:'#facc15', border:'rgba(250,204,21,0.2)' },
-  low     : { label:'Low',      bg:'rgba(74,222,128,0.10)',  color:'#4ade80', border:'rgba(74,222,128,0.2)' },
+  critical: { label:'Critical', bg:'rgba(248,113,113,0.12)', color:'#dc2626', border:'rgba(248,113,113,0.25)' },
+  high    : { label:'High',     bg:'rgba(251,146,60,0.12)',  color:'#ea580c', border:'rgba(251,146,60,0.25)' },
+  medium  : { label:'Medium',   bg:'rgba(250,204,21,0.10)',  color:'#b45309', border:'rgba(250,204,21,0.2)' },
+  low     : { label:'Low',      bg:'rgba(74,222,128,0.10)',  color:'#16a34a', border:'rgba(74,222,128,0.2)' },
 };
 
 function SevBadge({ sev }) {
@@ -424,9 +424,9 @@ export default function ThreatIntel() {
       <div className="ti-summary-strip">
         {[
           { label:'Categories',      value: CATEGORIES.length, color:'var(--t1)' },
-          { label:'Critical',        value: counts.critical,   color:'#f87171' },
-          { label:'High',            value: counts.high,       color:'#fb923c' },
-          { label:'Medium',          value: counts.medium,     color:'#facc15' },
+          { label:'Critical',        value: counts.critical,   color:'#dc2626' },
+          { label:'High',            value: counts.high,       color:'#ea580c' },
+          { label:'Medium',          value: counts.medium,     color:'#b45309' },
           { label:'Attack Prompts',  value: '1 010+',          color:'var(--blue)' },
         ].map(s => (
           <div key={s.label} className="ti-stat">

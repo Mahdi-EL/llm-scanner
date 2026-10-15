@@ -10,13 +10,19 @@ from typing import Optional, List
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
+from contextlib import asynccontextmanager
 import os
+import warnings
 import json
 import uuid
 import csv
 import sqlite3
+import logging
+import ipaddress
+import socket
+from urllib.parse import urlparse
 from target import Target
 from scanner import run_full_scan
 from database import DB_PATH
@@ -29,6 +35,8 @@ from auth_db import (
     increment_scan_count, update_plan,
     _hash as _bcrypt_hash,
     init_users_table,
+    create_api_key, get_user_by_api_key, list_api_keys, revoke_api_key,
+    update_webhook,
 )
 from database import init_db
 from email_service import send_waitlist_welcome, send_password_reset, send_scan_complete
@@ -36,17 +44,92 @@ from payment import create_checkout_session, handle_webhook, get_plans_public
 
 
 # ── Config ────────────────────────────────────────────────────
-SECRET_KEY      = os.getenv("SECRET_KEY", "llmscanner-secret-key-change-in-production")
+# SECRET_KEY must be set in production. We refuse to fall back to a hardcoded
+# default when running on a real host — a public default key lets anyone forge
+# JWTs and take over any account.
+SECRET_KEY = os.getenv("SECRET_KEY")
+_IS_PROD = (
+    os.getenv("ENV", "development").lower() in ("prod", "production")
+    or bool(os.getenv("RAILWAY_ENVIRONMENT"))
+    or bool(os.getenv("VERCEL"))
+)
+if not SECRET_KEY:
+    if _IS_PROD:
+        raise RuntimeError(
+            "SECRET_KEY environment variable must be set in production. "
+            "Generate one with:  python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+        )
+    SECRET_KEY = "dev-only-insecure-key-do-not-deploy"
+    warnings.warn(
+        "SECRET_KEY is not set — using an insecure development key. "
+        "Set SECRET_KEY before deploying.",
+        stacklevel=2,
+    )
 ALGORITHM       = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+
+# ── Logging ───────────────────────────────────────────────────
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+)
+log = logging.getLogger("llmscanner.api")
+
+# ── Plan quotas (scans per calendar month; None = unlimited) ───
+PLAN_LIMITS = {
+    "free"      : int(os.getenv("FREE_SCAN_LIMIT", "10")),
+    "pro"       : int(os.getenv("PRO_SCAN_LIMIT", "200")),
+    "enterprise": None,
+}
+# Cap on simultaneously-running scans (each is ~1000 blocking LLM calls).
+MAX_CONCURRENT_SCANS = int(os.getenv("MAX_CONCURRENT_SCANS", "3"))
+
+# ── SSRF guard for user-supplied target URLs ──────────────────
+def validate_target_url(url: Optional[str]) -> None:
+    """Reject URLs that could be used for SSRF (private/loopback/link-local
+    hosts, non-http schemes). Raises HTTPException(400) on a bad URL."""
+    if not url:
+        return
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Target URL must be http(s)")
+    host = parsed.hostname
+    if not host:
+        raise HTTPException(status_code=400, detail="Target URL has no host")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        raise HTTPException(status_code=400, detail="Target host does not resolve")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            raise HTTPException(
+                status_code=400,
+                detail="Target URL resolves to a non-routable/internal address",
+            )
 
 limiter = Limiter(key_func=get_remote_address)
 
 # ── App Setup ─────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: create tables before any request is served.
+    init_db()           # creates core tables first
+    init_users_table()  # creates users/refresh_tokens tables
+    scan_db._migrate()  # safe now — tables guaranteed to exist
+    interrupted = scan_db.fail_interrupted_scans()
+    if interrupted:
+        log.warning("Marked %d interrupted scan(s) as failed on startup", interrupted)
+    log.info("API ready")
+    yield
+    # (no shutdown work needed)
+
 app = FastAPI(
     title       ="LLM Scanner API",
     description ="Automatically scan AI applications for security vulnerabilities",
-    version     ="2.0.0"
+    version     ="2.0.0",
+    lifespan    =lifespan,
 )
 
 app.state.limiter = limiter
@@ -55,24 +138,18 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Gzip compression for all responses
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS
+# CORS — auth is via bearer tokens (Authorization header), not cookies, so we
+# do NOT enable credentials, and we list the headers/methods we actually use.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins     =os.getenv(
+    allow_origins     =[o.strip() for o in os.getenv(
         "ALLOWED_ORIGINS",
         "http://localhost:3000"
-    ).split(","),
-    allow_credentials =True,
-    allow_methods     =["*"],
-    allow_headers     =["*"],
+    ).split(",") if o.strip()],
+    allow_credentials =False,
+    allow_methods     =["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers     =["Authorization", "Content-Type"],
 )
-
-# ── Startup ───────────────────────────────────────────────────
-@app.on_event("startup")
-async def startup():
-    init_db()           # creates tables first
-    init_users_table()  # creates users/refresh_tokens tables
-    scan_db._migrate()  # safe now — tables guaranteed to exist
 
 # ── WebSocket connections ─────────────────────────────────────
 active_connections: List[WebSocket] = []
@@ -126,7 +203,7 @@ class CheckoutRequest(BaseModel):
 # ── Auth Helpers ──────────────────────────────────────────────
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire    = datetime.utcnow() + timedelta(
+    expire    = datetime.now(timezone.utc) + timedelta(
         minutes=ACCESS_TOKEN_EXPIRE_MINUTES
     )
     to_encode.update({"exp": expire})
@@ -149,14 +226,28 @@ def _token_from_request(request: Request) -> Optional[str]:
     return None
 
 
+def _user_from_request(request: Request) -> Optional[str]:
+    """Resolve the caller from a JWT (Authorization: Bearer) OR an API key
+    (X-API-Key header / Authorization: ApiKey <key>) — enables CI access."""
+    user_id = _token_from_request(request)
+    if user_id:
+        return user_id
+    api_key = request.headers.get("X-API-Key")
+    if not api_key:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("apikey "):
+            api_key = auth.split(None, 1)[1]
+    return get_user_by_api_key(api_key) if api_key else None
+
+
 def get_current_user(request: Request) -> Optional[str]:
     """Optional auth — returns user_id or None."""
-    return _token_from_request(request)
+    return _user_from_request(request)
 
 
 def require_auth(request: Request) -> str:
-    """Strict auth dependency — raises 401 if not authenticated."""
-    user_id = _token_from_request(request)
+    """Strict auth dependency — raises 401 if not authenticated (JWT or API key)."""
+    user_id = _user_from_request(request)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user_id
@@ -220,9 +311,46 @@ def execute_scan(scan_id: str, scan_request):
             completed_at   =datetime.now().isoformat(),
         )
         scan_db.save_findings(scan_id, report_data.get("results", []))
+        _notify_scan_complete(scan_id, scan_request.target_name, summary)
 
     except Exception as e:
+        log.exception("Scan %s failed", scan_id)
         scan_db.update_scan(scan_id, status="failed", error_message=str(e))
+
+
+def _notify_scan_complete(scan_id: str, target_name: str, summary: dict):
+    """Best-effort email + webhook notification once a scan finishes."""
+    scan = scan_db.get_scan(scan_id)
+    user = get_user_by_id(scan.get("user_id")) if scan else None
+    if not user:
+        return
+
+    # Email
+    try:
+        if user.get("email"):
+            send_scan_complete(
+                user["email"], target_name,
+                summary.get("security_score", 0), scan_id,
+            )
+    except Exception:
+        log.warning("scan-complete email failed for %s", scan_id, exc_info=True)
+
+    # Webhook (SSRF-revalidated, short timeout, best-effort)
+    url = user.get("webhook_url")
+    if url:
+        try:
+            validate_target_url(url)
+            import requests
+            requests.post(url, json={
+                "event"         : "scan.completed",
+                "scan_id"       : scan_id,
+                "target_name"   : target_name,
+                "security_score": summary.get("security_score", 0),
+                "critical"      : summary.get("critical", 0),
+                "high"          : summary.get("high", 0),
+            }, timeout=5)
+        except Exception:
+            log.warning("scan-complete webhook failed for %s", scan_id, exc_info=True)
 
 
 # ── Endpoints ─────────────────────────────────────────────────
@@ -291,8 +419,34 @@ def start_scan(
     user_id         : str = Depends(require_auth),
 ):
     """Launches a new scan in the background. Requires authentication."""
-    scan_id = scan_db.create_scan(scan_request.target_name, scan_request.target_type)
+    # SSRF guard: only validate when pointing at a real external target.
+    if scan_request.target_type != "simulation":
+        validate_target_url(scan_request.api_url)
+
+    # Plan quota (scans per calendar month).
+    user  = get_user_by_id(user_id)
+    plan  = (user or {}).get("plan", "free")
+    limit = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
+    if limit is not None and scan_db.count_scans_this_month(user_id) >= limit:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Monthly scan limit reached for the '{plan}' plan ({limit}). "
+                   f"Upgrade your plan to run more scans.",
+        )
+
+    # Capacity guard: each scan is ~1000 blocking LLM calls.
+    if scan_db.count_running_scans() >= MAX_CONCURRENT_SCANS:
+        raise HTTPException(
+            status_code=429,
+            detail="The scanner is at capacity right now. Please retry in a few minutes.",
+        )
+
+    scan_id = scan_db.create_scan(
+        scan_request.target_name, scan_request.target_type, user_id=user_id
+    )
+    increment_scan_count(user_id)
     background_tasks.add_task(execute_scan, scan_id, scan_request)
+    log.info("Scan %s started by user %s (type=%s)", scan_id, user_id, scan_request.target_type)
     return {
         "scan_id"    : scan_id,
         "status"     : "started",
@@ -301,38 +455,48 @@ def start_scan(
     }
 
 
-@app.get("/scan/{scan_id}")
-def get_scan_status(scan_id: str):
-    """Returns the status of a specific scan."""
+# ── Ownership-aware fetch ─────────────────────────────────────
+def _get_owned_scan(scan_id: str, user_id: str) -> dict:
+    """Fetches a scan the caller owns. Returns 404 (not 403) when it is
+    missing OR owned by someone else, so existence isn't leaked."""
     scan = scan_db.get_scan(scan_id)
-    if not scan:
+    if not scan or scan.get("user_id") != user_id:
         raise HTTPException(status_code=404, detail="Scan not found")
     return scan
 
 
-@app.get("/scans")
-@limiter.limit("60/minute")
-def list_all_scans(request: Request, user_id: str = Depends(require_auth)):
-    """Returns the list of all scans. Requires authentication."""
-    scans = scan_db.list_scans()
-    return {"total": len(scans), "scans": scans}
-
-
-# ── Downloads ─────────────────────────────────────────────────
-def _get_complete_scan(scan_id: str) -> dict:
-    """Helper: fetches scan, raises 404/400 if not found or not complete."""
-    scan = scan_db.get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
+def _get_complete_scan(scan_id: str, user_id: str) -> dict:
+    """Owned scan that has finished, else 404/400."""
+    scan = _get_owned_scan(scan_id, user_id)
     if scan["status"] != "complete":
         raise HTTPException(status_code=400, detail="Scan not complete yet")
     return scan
 
 
+@app.get("/scan/{scan_id}")
+def get_scan_status(scan_id: str, user_id: str = Depends(require_auth)):
+    """Returns the status of a scan the caller owns."""
+    return _get_owned_scan(scan_id, user_id)
+
+
+@app.get("/scans")
+@limiter.limit("60/minute")
+def list_all_scans(
+    request: Request,
+    user_id: str = Depends(require_auth),
+    limit  : int = 50,
+    offset : int = 0,
+):
+    """Returns the caller's own scans (paginated). Requires authentication."""
+    scans = scan_db.list_scans(user_id=user_id, limit=limit, offset=offset)
+    return {"total": len(scans), "limit": limit, "offset": offset, "scans": scans}
+
+
+# ── Downloads ─────────────────────────────────────────────────
 @app.get("/download/html/{scan_id}")
-def download_html(scan_id: str):
-    """Downloads the HTML interactive report."""
-    scan      = _get_complete_scan(scan_id)
+def download_html(scan_id: str, user_id: str = Depends(require_auth)):
+    """Downloads the HTML interactive report (owner only)."""
+    scan      = _get_complete_scan(scan_id, user_id)
     html_path = scan.get("html_path")
     if not html_path or not os.path.exists(html_path):
         raise HTTPException(status_code=404, detail="HTML report not found")
@@ -341,9 +505,9 @@ def download_html(scan_id: str):
 
 
 @app.get("/download/md/{scan_id}")
-def download_markdown(scan_id: str):
-    """Downloads the Markdown report."""
-    scan    = _get_complete_scan(scan_id)
+def download_markdown(scan_id: str, user_id: str = Depends(require_auth)):
+    """Downloads the Markdown report (owner only)."""
+    scan    = _get_complete_scan(scan_id, user_id)
     md_path = scan.get("md_path")
     if not md_path or not os.path.exists(md_path):
         raise HTTPException(status_code=404, detail="Markdown report not found")
@@ -352,9 +516,9 @@ def download_markdown(scan_id: str):
 
 
 @app.get("/download/{scan_id}")
-def download_pdf(scan_id: str):
-    """Downloads the PDF report."""
-    scan     = _get_complete_scan(scan_id)
+def download_pdf(scan_id: str, user_id: str = Depends(require_auth)):
+    """Downloads the PDF report (owner only)."""
+    scan     = _get_complete_scan(scan_id, user_id)
     pdf_path = scan.get("pdf_path")
     if not pdf_path or not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF not found")
@@ -363,9 +527,9 @@ def download_pdf(scan_id: str):
 
 
 @app.get("/results/{scan_id}")
-def get_results(scan_id: str):
-    """Returns full JSON results — served from DB (file is fallback)."""
-    scan = _get_complete_scan(scan_id)
+def get_results(scan_id: str, user_id: str = Depends(require_auth)):
+    """Returns full JSON results for an owned scan — DB first, file fallback."""
+    scan = _get_complete_scan(scan_id, user_id)
 
     # Primary: use results_json stored in SQLite (works even without file)
     if scan.get("results_json"):
@@ -382,16 +546,80 @@ def get_results(scan_id: str):
 
 @app.delete("/scan/{scan_id}")
 def delete_scan_endpoint(scan_id: str, user_id: str = Depends(require_auth)):
-    """Deletes a scan and its files. Requires authentication."""
-    scan = scan_db.get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=404, detail="Scan not found")
+    """Deletes a scan the caller owns and its files."""
+    scan = _get_owned_scan(scan_id, user_id)
     for key in ("json_path", "pdf_path", "html_path", "md_path"):
         path = scan.get(key)
         if path and os.path.exists(path):
             os.remove(path)
     scan_db.delete_scan(scan_id)
     return {"message": f"Scan {scan_id} deleted"}
+
+
+# ── Scan comparison (regression detection) ────────────────────
+@app.get("/scan/compare/{base_id}/{head_id}")
+def compare_scans(base_id: str, head_id: str, user_id: str = Depends(require_auth)):
+    """Diffs two owned scans: score delta + newly-introduced / resolved findings."""
+    base = _get_complete_scan(base_id, user_id)
+    head = _get_complete_scan(head_id, user_id)
+
+    def _finding_keys(scan):
+        results = (scan.get("results") or {}).get("results", [])
+        return {(r.get("category", ""), r.get("attack", "")): r for r in results}
+
+    base_f, head_f = _finding_keys(base), _finding_keys(head)
+    introduced = [head_f[k] for k in head_f.keys() - base_f.keys()]
+    resolved   = [base_f[k] for k in base_f.keys() - head_f.keys()]
+
+    return {
+        "base": {"scan_id": base_id, "security_score": base.get("security_score", 0),
+                 "created_at": base.get("created_at")},
+        "head": {"scan_id": head_id, "security_score": head.get("security_score", 0),
+                 "created_at": head.get("created_at")},
+        "score_delta"        : head.get("security_score", 0) - base.get("security_score", 0),
+        "introduced_count"   : len(introduced),
+        "resolved_count"     : len(resolved),
+        "introduced_findings": introduced,
+        "resolved_findings"  : resolved,
+    }
+
+
+# ── API Keys (programmatic / CI access) ───────────────────────
+class ApiKeyCreate(BaseModel):
+    name: Optional[str] = ""
+
+
+@app.post("/api/keys")
+def create_api_key_endpoint(body: ApiKeyCreate, user_id: str = Depends(require_auth)):
+    """Creates an API key. The full key is returned ONCE — store it now."""
+    return create_api_key(user_id, body.name or "API key")
+
+
+@app.get("/api/keys")
+def list_api_keys_endpoint(user_id: str = Depends(require_auth)):
+    """Lists the caller's API keys (prefix only, never the full secret)."""
+    return {"keys": list_api_keys(user_id)}
+
+
+@app.delete("/api/keys/{key_id}")
+def revoke_api_key_endpoint(key_id: str, user_id: str = Depends(require_auth)):
+    if not revoke_api_key(user_id, key_id):
+        raise HTTPException(status_code=404, detail="API key not found")
+    return {"message": "API key revoked"}
+
+
+# ── Notification webhook ──────────────────────────────────────
+class WebhookBody(BaseModel):
+    url: Optional[str] = None
+
+
+@app.put("/api/webhook")
+def set_webhook(body: WebhookBody, user_id: str = Depends(require_auth)):
+    """Sets (or clears, with null) the per-user scan-completion webhook URL."""
+    if body.url:
+        validate_target_url(body.url)   # SSRF guard on the stored URL
+    update_webhook(user_id, body.url)
+    return {"message": "Webhook updated", "webhook_url": body.url}
 
 
 # ── WebSocket ─────────────────────────────────────────────────

@@ -23,6 +23,10 @@ def init_db():
         os.makedirs(db_dir, exist_ok=True)
 
     conn = sqlite3.connect(DB_PATH)
+    # WAL + a busy timeout greatly reduce "database is locked" errors when a
+    # background scan writes while the API reads.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     c    = conn.cursor()
 
     # ── Scans Table ──────────────────────────────────────────
@@ -30,6 +34,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS scans (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             scan_id         TEXT UNIQUE NOT NULL,
+            user_id         TEXT,
             target_name     TEXT NOT NULL,
             target_type     TEXT DEFAULT 'simulation',
             status          TEXT DEFAULT 'pending',
@@ -94,6 +99,13 @@ def init_db():
     c.execute("""
         INSERT OR IGNORE INTO global_stats (id) VALUES (1)
     """)
+
+    # ── Indexes (speed up the hot lookups) ────────────────────
+    c.execute("CREATE INDEX IF NOT EXISTS idx_findings_scan_id ON findings (scan_id)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_scans_created_at ON scans (created_at)")
+    # NOTE: the idx_scans_user_id index is created in scan_db._migrate(), which
+    # runs after init_db() and guarantees the user_id column exists on old DBs
+    # that predate the ownership model.
 
     conn.commit()
     conn.close()

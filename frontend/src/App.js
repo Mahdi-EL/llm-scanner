@@ -6,6 +6,7 @@ import Navbar          from './components/Navbar';
 import Sidebar         from './components/Sidebar';
 import TopBar          from './components/TopBar';
 import CommandPalette  from './components/CommandPalette';
+import ErrorBoundary   from './components/ErrorBoundary';
 import LandingPage     from './pages/LandingPage';
 import Dashboard       from './pages/Dashboard';
 import NewScan         from './pages/NewScan';
@@ -141,12 +142,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <Router>
-          <AppRoutes />
-        </Router>
-      </ToastProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <ToastProvider>
+          <Router>
+            <AppRoutes />
+          </Router>
+        </ToastProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

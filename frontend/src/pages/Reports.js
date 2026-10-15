@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { scansAPI, API_URL } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
-const SEV_COLOR = { CRITICAL:'#f87171', HIGH:'#fb923c', MEDIUM:'#facc15', LOW:'#4ade80' };
+const SEV_COLOR = { CRITICAL:'#dc2626', HIGH:'#ea580c', MEDIUM:'#b45309', LOW:'#16a34a' };
 
 function relTime(ts) {
   const d = (Date.now() - new Date(ts)) / 1000;
@@ -16,7 +16,7 @@ function relTime(ts) {
 
 function ScoreBar({ score }) {
   if (score == null) return <span style={{ color:'var(--t3)' }}>—</span>;
-  const color = score >= 70 ? '#4ade80' : score >= 40 ? '#facc15' : '#f87171';
+  const color = score >= 70 ? '#16a34a' : score >= 40 ? '#b45309' : '#dc2626';
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
       <div style={{ flex:1, height:'4px', background:'var(--s3)', borderRadius:'4px', overflow:'hidden', minWidth:'48px' }}>
@@ -30,7 +30,7 @@ function ScoreBar({ score }) {
 function RiskBadge({ score }) {
   if (score == null) return null;
   const label = score >= 70 ? 'Low Risk' : score >= 40 ? 'Moderate' : 'High Risk';
-  const color = score >= 70 ? '#4ade80' : score >= 40 ? '#facc15' : '#f87171';
+  const color = score >= 70 ? '#16a34a' : score >= 40 ? '#b45309' : '#dc2626';
   const bg    = score >= 70 ? 'rgba(74,222,128,0.1)' : score >= 40 ? 'rgba(250,204,21,0.1)' : 'rgba(248,113,113,0.1)';
   return (
     <span style={{ background:bg, color, border:`1px solid ${color}30`, borderRadius:'20px', padding:'2px 9px', fontSize:'11px', fontWeight:'700', letterSpacing:'0.3px', whiteSpace:'nowrap' }}>
@@ -134,7 +134,7 @@ export default function Reports() {
     return <span style={{ fontSize:'10px', marginLeft:'3px', color:'var(--blue)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
   };
 
-  const scoreColor = stats.avgScore >= 70 ? '#4ade80' : stats.avgScore >= 40 ? '#facc15' : stats.avgScore != null ? '#f87171' : 'var(--t3)';
+  const scoreColor = stats.avgScore >= 70 ? '#16a34a' : stats.avgScore >= 40 ? '#b45309' : stats.avgScore != null ? '#dc2626' : 'var(--t3)';
 
   return (
     <div>
@@ -164,12 +164,12 @@ export default function Reports() {
             ),
           },
           {
-            label:'Critical Findings', value: stats.totalCritical, color: stats.totalCritical > 0 ? '#f87171' : 'var(--t3)', icon:(
+            label:'Critical Findings', value: stats.totalCritical, color: stats.totalCritical > 0 ? '#dc2626' : 'var(--t3)', icon:(
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             ),
           },
           {
-            label:'Low Risk Scans', value: stats.lowRisk, color:'#4ade80', icon:(
+            label:'Low Risk Scans', value: stats.lowRisk, color:'#16a34a', icon:(
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="20 6 9 17 4 12"/></svg>
             ),
           },
@@ -192,12 +192,12 @@ export default function Reports() {
             {['LOW RISK','MODERATE','HIGH RISK'].map(r => {
               const cnt = r === 'LOW RISK' ? stats.lowRisk : r === 'HIGH RISK' ? stats.highRisk : completed.length - stats.lowRisk - stats.highRisk;
               const pct = completed.length ? (cnt / completed.length) * 100 : 0;
-              const color = r === 'LOW RISK' ? '#4ade80' : r === 'MODERATE' ? '#facc15' : '#f87171';
+              const color = r === 'LOW RISK' ? '#16a34a' : r === 'MODERATE' ? '#b45309' : '#dc2626';
               return pct > 0 ? <div key={r} style={{ height:'100%', width:`${pct}%`, background:color }} /> : null;
             })}
           </div>
           <div style={{ display:'flex', gap:'16px' }}>
-            {[['#4ade80','Low Risk',stats.lowRisk],['#facc15','Moderate',completed.length-stats.lowRisk-stats.highRisk],['#f87171','High Risk',stats.highRisk]].map(([c,l,v])=>(
+            {[['#16a34a','Low Risk',stats.lowRisk],['#b45309','Moderate',completed.length-stats.lowRisk-stats.highRisk],['#dc2626','High Risk',stats.highRisk]].map(([c,l,v])=>(
               <div key={l} style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:'var(--t3)' }}>
                 <div style={{ width:'8px', height:'8px', borderRadius:'2px', background:c }} />
                 <span>{l}</span>
@@ -273,7 +273,7 @@ export default function Reports() {
                   key={scan.scan_id}
                   style={{ display:'grid', gridTemplateColumns:'2fr 120px 160px 64px 64px 110px 130px', alignItems:'center', padding:'14px 20px', borderBottom:'1px solid var(--b1)', cursor:'pointer', transition:'background 0.12s' }}
                   onClick={() => navigate(`/results/${scan.scan_id}`)}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.025)'}
+                  onMouseEnter={e => e.currentTarget.style.background='rgba(17,24,39,0.025)'}
                   onMouseLeave={e => e.currentTarget.style.background='transparent'}
                 >
                   <div style={{ display:'flex', alignItems:'center', gap:'12px', minWidth:0 }}>
