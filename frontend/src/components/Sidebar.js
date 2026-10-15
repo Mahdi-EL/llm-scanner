@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Logo from './Logo';
 
 const IcoDashboard = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -90,9 +91,9 @@ const NAV_BOTTOM = [
 ];
 
 const PLAN_STYLE = {
-  free      : { bg:'rgba(255,255,255,0.06)',  color:'rgba(255,255,255,0.38)', border:'rgba(255,255,255,0.1)' },
-  pro       : { bg:'rgba(74,138,244,0.15)',   color:'#93c5fd',               border:'rgba(74,138,244,0.3)' },
-  enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#86efac',               border:'rgba(34,197,94,0.3)' },
+  free      : { bg:'rgba(17,24,39,0.06)',  color:'rgba(17,24,39,0.38)', border:'rgba(17,24,39,0.1)' },
+  pro       : { bg:'rgba(37,99,235,0.15)',   color:'#2563eb',               border:'rgba(37,99,235,0.3)' },
+  enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#16a34a',               border:'rgba(34,197,94,0.3)' },
 };
 
 export default function Sidebar() {
@@ -123,7 +124,7 @@ export default function Sidebar() {
 
       {/* ── Logo ──────────────────────────── */}
       <Link to="/" className="sidebar-logo" style={{ textDecoration:'none' }}>
-        <div className="sidebar-logo-icon">🔐</div>
+        <div className="sidebar-logo-icon"><Logo size={26} /></div>
         <span className="sidebar-logo-text">
           LLM<span style={{ color:'var(--blue)' }}>Scanner</span>
         </span>
@@ -138,13 +139,13 @@ export default function Sidebar() {
             display:'flex', alignItems:'center', justifyContent:'center', gap:'7px',
             width:'100%', padding:'9px',
             background:'var(--blue)', color:'#fff',
-            border:'1px solid rgba(74,138,244,0.5)',
+            border:'1px solid rgba(37,99,235,0.5)',
             borderRadius:'7px', font:'600 13px/1 inherit',
             cursor:'pointer',
-            boxShadow:'0 2px 12px rgba(74,138,244,0.25), inset 0 1px 0 rgba(255,255,255,0.1)',
+            boxShadow:'0 2px 12px rgba(37,99,235,0.25), inset 0 1px 0 rgba(17,24,39,0.1)',
             transition:'background 0.15s, box-shadow 0.15s, transform 0.12s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background='#3b7de8'; e.currentTarget.style.transform='translateY(-1px)'; }}
+          onMouseEnter={e => { e.currentTarget.style.background='#1d4ed8'; e.currentTarget.style.transform='translateY(-1px)'; }}
           onMouseLeave={e => { e.currentTarget.style.background='var(--blue)'; e.currentTarget.style.transform='none'; }}
         >
           <IcoPlus />

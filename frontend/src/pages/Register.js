@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import Logo from '../components/Logo';
 
 /* ── Password strength meter ─────────────────────────────── */
 function PasswordStrength({ pwd }) {
@@ -11,7 +12,7 @@ function PasswordStrength({ pwd }) {
     special: /[^A-Za-z0-9]/.test(pwd),
   };
   const score = Object.values(checks).filter(Boolean).length;
-  const SEG_COLORS = ['', '#f87171', '#facc15', '#4ade80', '#4ade80'];
+  const SEG_COLORS = ['', '#dc2626', '#b45309', '#16a34a', '#16a34a'];
   const LABELS     = ['', 'Weak', 'Fair', 'Good', 'Strong'];
   if (!pwd) return null;
 
@@ -49,10 +50,10 @@ function PasswordStrength({ pwd }) {
 
 /* ── Left panel live scan preview ────────────────────────── */
 const SCAN_ATTACKS = [
-  { name:'Prompt Injection', val:24, color:'#f87171' },
-  { name:'Jailbreak',        val:18, color:'#fb923c' },
-  { name:'Data Exfiltration',val:15, color:'#facc15' },
-  { name:'Policy Bypass',    val:12, color:'#4ade80' },
+  { name:'Prompt Injection', val:24, color:'#dc2626' },
+  { name:'Jailbreak',        val:18, color:'#ea580c' },
+  { name:'Data Exfiltration',val:15, color:'#b45309' },
+  { name:'Policy Bypass',    val:12, color:'#16a34a' },
 ];
 
 /* ── Main ─────────────────────────────────────────────────── */
@@ -89,7 +90,7 @@ export default function Register() {
         <div className="auth-left-content">
 
           <div className="auth-left-logo">
-            <div className="auth-left-logo-icon">🔐</div>
+            <div className="auth-left-logo-icon"><Logo size={26} /></div>
             <span className="auth-left-logo-text">LLMScanner</span>
           </div>
 
@@ -97,7 +98,7 @@ export default function Register() {
             <h2 className="auth-left-headline">
               Start Securing<br /><span>Your AI Today.</span>
             </h2>
-            <p style={{ fontSize:'14px', color:'rgba(255,255,255,0.35)', lineHeight:'1.6', marginTop:'16px', maxWidth:'340px' }}>
+            <p style={{ fontSize:'14px', color:'rgba(17,24,39,0.35)', lineHeight:'1.6', marginTop:'16px', maxWidth:'340px' }}>
               Free forever. No credit card. Get your first full security report in under 15 minutes.
             </p>
           </div>
@@ -111,7 +112,7 @@ export default function Register() {
               <span className="auth-scan-title">Live Scan — Banking AI Chatbot</span>
               <span style={{ display:'flex', alignItems:'center', gap:'5px' }}>
                 <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:'var(--blue)', animation:'pulse-glow 1.8s ease-in-out infinite' }} />
-                <span style={{ fontSize:'10px', color:'rgba(74,138,244,0.9)', fontWeight:'700' }}>Running</span>
+                <span style={{ fontSize:'10px', color:'rgba(37,99,235,0.9)', fontWeight:'700' }}>Running</span>
               </span>
             </div>
             <div className="auth-scan-body">

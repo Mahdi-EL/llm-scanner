@@ -123,13 +123,13 @@ export default function Pricing() {
         {PLANS.map(plan => (
           <div key={plan.id} style={{
             background   : plan.popular ? 'var(--s2)' : 'var(--s1)',
-            border       : `1px solid ${plan.popular ? 'rgba(74,138,244,0.35)' : 'var(--b1)'}`,
+            border       : `1px solid ${plan.popular ? 'rgba(37,99,235,0.35)' : 'var(--b1)'}`,
             borderRadius : '16px',
             padding      : '32px',
             position     : 'relative',
             overflow     : 'hidden',
             transform    : plan.popular ? 'scale(1.03)' : 'scale(1)',
-            boxShadow    : plan.popular ? '0 8px 40px rgba(74,138,244,0.12)' : 'none',
+            boxShadow    : plan.popular ? '0 8px 40px rgba(37,99,235,0.12)' : 'none',
             transition   : 'transform 0.2s, box-shadow 0.2s',
           }}
             onMouseEnter={e => { if (!plan.popular) { e.currentTarget.style.transform='translateY(-4px)'; e.currentTarget.style.borderColor='var(--b2)'; e.currentTarget.style.boxShadow='var(--sh)'; } }}
@@ -141,7 +141,7 @@ export default function Pricing() {
             {plan.popular && (
               <div style={{
                 position:'absolute', top:'18px', right:'18px',
-                background:'var(--blue-soft)', border:'1px solid rgba(74,138,244,0.3)',
+                background:'var(--blue-soft)', border:'1px solid rgba(37,99,235,0.3)',
                 color:'var(--blue)', padding:'3px 10px', borderRadius:'20px',
                 fontSize:'10px', fontWeight:'700', letterSpacing:'0.5px', textTransform:'uppercase',
               }}>Most Popular</div>
@@ -188,8 +188,8 @@ export default function Pricing() {
               textDecoration: 'none',
               background   : plan.popular ? 'var(--blue)' : 'transparent',
               color        : plan.popular ? '#fff' : 'var(--t1)',
-              border       : `1px solid ${plan.popular ? 'rgba(74,138,244,0.5)' : 'var(--b2)'}`,
-              boxShadow    : plan.popular ? '0 2px 12px rgba(74,138,244,0.3)' : 'none',
+              border       : `1px solid ${plan.popular ? 'rgba(37,99,235,0.5)' : 'var(--b2)'}`,
+              boxShadow    : plan.popular ? '0 2px 12px rgba(37,99,235,0.3)' : 'none',
             }}
               onMouseEnter={e => { e.target.style.opacity='0.85'; e.target.style.transform='translateY(-1px)'; }}
               onMouseLeave={e => { e.target.style.opacity='1';    e.target.style.transform='none'; }}
@@ -227,7 +227,7 @@ export default function Pricing() {
         position    : 'relative',
         overflow    : 'hidden',
       }}>
-        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 60% 60% at 50% 0%, rgba(74,138,244,0.06) 0%, transparent 60%)', pointerEvents:'none' }} />
+        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 60% 60% at 50% 0%, rgba(37,99,235,0.06) 0%, transparent 60%)', pointerEvents:'none' }} />
         <h2 style={{ fontSize:'40px', fontWeight:'900', letterSpacing:'-2px', lineHeight:'1.1', marginBottom:'14px' }}>
           Ready to secure your<br />AI application?
         </h2>

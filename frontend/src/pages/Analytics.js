@@ -43,8 +43,8 @@ function AreaChart({ data, color = 'var(--blue)', height = 160 }) {
       {/* Grid lines */}
       {yLines.map(y => (
         <g key={y}>
-          <line x1={pad.l} y1={toY(y)} x2={W-pad.r} y2={toY(y)} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-          <text x={pad.l - 6} y={toY(y) + 4} textAnchor="end" fill="rgba(255,255,255,0.2)" fontSize="9" fontFamily="Inter,sans-serif">{y}</text>
+          <line x1={pad.l} y1={toY(y)} x2={W-pad.r} y2={toY(y)} stroke="rgba(17,24,39,0.04)" strokeWidth="1" />
+          <text x={pad.l - 6} y={toY(y) + 4} textAnchor="end" fill="rgba(17,24,39,0.2)" fontSize="9" fontFamily="Inter,sans-serif">{y}</text>
         </g>
       ))}
 
@@ -58,13 +58,13 @@ function AreaChart({ data, color = 'var(--blue)', height = 160 }) {
       {/* Points + labels */}
       {pts.map((p, i) => {
         const score = data[i].score;
-        const dotColor = score >= 70 ? '#4ade80' : score >= 40 ? '#facc15' : '#f87171';
+        const dotColor = score >= 70 ? '#16a34a' : score >= 40 ? '#b45309' : '#dc2626';
         return (
           <g key={i}>
             <circle cx={p[0]} cy={p[1]} r="5" fill={dotColor} stroke="var(--bg)" strokeWidth="2"
               style={{ filter:`drop-shadow(0 0 4px ${dotColor}90)` }} />
             {/* X axis label */}
-            <text x={p[0]} y={H - 6} textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="8" fontFamily="Inter,sans-serif">
+            <text x={p[0]} y={H - 6} textAnchor="middle" fill="rgba(17,24,39,0.2)" fontSize="8" fontFamily="Inter,sans-serif">
               {data[i].label}
             </text>
           </g>
@@ -80,7 +80,7 @@ function DonutChart({ segments, size = 120 }) {
   let offset = 0;
   return (
     <svg width={size} height={size} viewBox="0 0 120 120">
-      <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="14" />
+      <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(17,24,39,0.04)" strokeWidth="14" />
       {segments.map((s, i) => {
         const dash = (s.pct / 100) * CIRC;
         const seg = (
@@ -116,7 +116,7 @@ function Trend({ value, label }) {
   const up = value >= 0;
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:'600',
-      color: up ? '#4ade80' : '#f87171' }}>
+      color: up ? '#16a34a' : '#dc2626' }}>
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
         {up
           ? <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>
@@ -131,8 +131,8 @@ function Trend({ value, label }) {
 /* ── Category heatmap cell ───────────────────────────────────── */
 function HeatCell({ label, count, max }) {
   const pct  = max > 0 ? count / max : 0;
-  const bg   = pct > 0.7 ? 'rgba(248,113,113,0.35)' : pct > 0.4 ? 'rgba(250,204,21,0.25)' : pct > 0.1 ? 'rgba(74,138,244,0.2)' : 'rgba(255,255,255,0.04)';
-  const border = pct > 0.7 ? 'rgba(248,113,113,0.4)' : pct > 0.4 ? 'rgba(250,204,21,0.3)' : 'rgba(255,255,255,0.08)';
+  const bg   = pct > 0.7 ? 'rgba(248,113,113,0.35)' : pct > 0.4 ? 'rgba(250,204,21,0.25)' : pct > 0.1 ? 'rgba(37,99,235,0.2)' : 'rgba(17,24,39,0.04)';
+  const border = pct > 0.7 ? 'rgba(248,113,113,0.4)' : pct > 0.4 ? 'rgba(250,204,21,0.3)' : 'rgba(17,24,39,0.08)';
   return (
     <div title={`${label}: ${count} findings`} style={{
       background: bg, border:`1px solid ${border}`,
@@ -187,10 +187,10 @@ export default function Analytics() {
 
   /* Risk distribution for donut */
   const riskDist = [
-    { label:'Critical', color:'#f87171', count: totalCrit },
-    { label:'High',     color:'#fb923c', count: totalHigh },
-    { label:'Medium',   color:'#facc15', count: totalMed  },
-    { label:'Low',      color:'#4ade80', count: totalLow  },
+    { label:'Critical', color:'#dc2626', count: totalCrit },
+    { label:'High',     color:'#ea580c', count: totalHigh },
+    { label:'Medium',   color:'#b45309', count: totalMed  },
+    { label:'Low',      color:'#16a34a', count: totalLow  },
   ].filter(r => r.count > 0).map(r => ({
     ...r, pct: totalFindings > 0 ? Math.round((r.count / totalFindings) * 100) : 0,
   }));
@@ -221,7 +221,7 @@ export default function Analytics() {
   });
 
   const cardStyle = { background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'14px', padding:'24px', position:'relative', overflow:'hidden' };
-  const shine = <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent)' }} />;
+  const shine = <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(17,24,39,0.06),transparent)' }} />;
 
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'100px', gap:'12px' }}>
@@ -248,9 +248,9 @@ export default function Analytics() {
       <div className="stats-row" style={{ marginBottom:'20px' }}>
         {[
           { label:'Total Scans',       val: total,        color:'var(--t1)',   suffix:'' },
-          { label:'Avg Security Score',val: avgScore,     color: avgScore >= 70 ? '#4ade80' : avgScore >= 40 ? '#facc15' : avgScore != null ? '#f87171' : 'var(--t3)', suffix:'/100' },
-          { label:'Total Findings',    val: totalFindings,color: totalFindings > 0 ? '#fb923c' : 'var(--t3)', suffix:'' },
-          { label:'Critical Issues',   val: totalCrit,    color: totalCrit > 0 ? '#f87171' : 'var(--t3)', suffix:'' },
+          { label:'Avg Security Score',val: avgScore,     color: avgScore >= 70 ? '#16a34a' : avgScore >= 40 ? '#b45309' : avgScore != null ? '#dc2626' : 'var(--t3)', suffix:'/100' },
+          { label:'Total Findings',    val: totalFindings,color: totalFindings > 0 ? '#ea580c' : 'var(--t3)', suffix:'' },
+          { label:'Critical Issues',   val: totalCrit,    color: totalCrit > 0 ? '#dc2626' : 'var(--t3)', suffix:'' },
         ].map(k => (
           <div key={k.label} className="stat-card-glow">
             <div className="stat-number" style={{ color:k.color, fontSize:'30px' }}>{k.val != null ? `${k.val}${k.suffix}` : '—'}</div>
@@ -302,7 +302,7 @@ export default function Analytics() {
               <div style={{ fontSize:'10px', color:'var(--t3)', marginTop:'2px' }}>Scans run</div>
             </div>
             <div style={{ flex:1, background:'var(--s2)', border:'1px solid var(--b1)', borderRadius:'8px', padding:'10px 12px', textAlign:'center' }}>
-              <div style={{ fontSize:'18px', fontWeight:'800', color:'#4ade80' }}>{Math.max(...last30)}</div>
+              <div style={{ fontSize:'18px', fontWeight:'800', color:'#16a34a' }}>{Math.max(...last30)}</div>
               <div style={{ fontSize:'10px', color:'var(--t3)', marginTop:'2px' }}>Peak day</div>
             </div>
           </div>
@@ -362,10 +362,10 @@ export default function Analytics() {
           <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'20px' }}>How many scans fell in each score range</div>
           <div style={{ display:'flex', gap:'8px' }}>
             {[
-              { label:'0–29 Critical', color:'#f87171', bg:'rgba(248,113,113,0.12)', range:[0,29] },
-              { label:'30–49 High',    color:'#fb923c', bg:'rgba(251,146,60,0.12)',  range:[30,49] },
-              { label:'50–69 Moderate',color:'#facc15', bg:'rgba(250,204,21,0.12)', range:[50,69] },
-              { label:'70–84 Low',     color:'#4ade80', bg:'rgba(74,222,128,0.12)', range:[70,84] },
+              { label:'0–29 Critical', color:'#dc2626', bg:'rgba(248,113,113,0.12)', range:[0,29] },
+              { label:'30–49 High',    color:'#ea580c', bg:'rgba(251,146,60,0.12)',  range:[30,49] },
+              { label:'50–69 Moderate',color:'#b45309', bg:'rgba(250,204,21,0.12)', range:[50,69] },
+              { label:'70–84 Low',     color:'#16a34a', bg:'rgba(74,222,128,0.12)', range:[70,84] },
               { label:'85–100 Secure', color:'#2dd4bf', bg:'rgba(45,212,191,0.12)', range:[85,100] },
             ].map(bucket => {
               const count = completed.filter(s => {

@@ -22,10 +22,10 @@ const INIT_NOTIFS = [
 ];
 
 const TYPE_COLOR = {
-  critical : '#f87171',
-  warning  : '#fb923c',
-  success  : '#4ade80',
-  info     : '#4a8af4',
+  critical : '#dc2626',
+  warning  : '#ea580c',
+  success  : '#16a34a',
+  info     : '#2563eb',
 };
 
 export default function TopBar({ onOpenCmd }) {
@@ -100,7 +100,7 @@ export default function TopBar({ onOpenCmd }) {
                 <span className="notif-title">Notifications</span>
                 <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
                   {unread > 0 && (
-                    <span style={{ background:'rgba(74,138,244,0.15)', color:'var(--blue)', border:'1px solid rgba(74,138,244,0.25)', padding:'1px 8px', borderRadius:'10px', fontSize:'10px', fontWeight:'700' }}>
+                    <span style={{ background:'rgba(37,99,235,0.15)', color:'var(--blue)', border:'1px solid rgba(37,99,235,0.25)', padding:'1px 8px', borderRadius:'10px', fontSize:'10px', fontWeight:'700' }}>
                       {unread} new
                     </span>
                   )}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI } from '../services/api';
+import { authAPI, clearAuth } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -12,7 +12,7 @@ export function AuthProvider({ children }) {
     if (token) {
       authAPI.me()
         .then(r => setUser(r.data))
-        .catch(() => localStorage.clear())
+        .catch(() => clearAuth())
         .finally(() => setLoading(false));
     } else {
       setLoading(false);

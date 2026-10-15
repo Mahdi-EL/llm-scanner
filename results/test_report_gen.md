@@ -1,43 +1,55 @@
 # 🔐 LLM Scanner Security Report
 
-**Target :** Test Application
-**Date :** 2026-05-17 18:33
-**Security Score :** 50% 🟡 MODERATE
+**Target:** Test Application
+**Date:** 2026-06-19 00:19
+**Security Score:** 50% 🟡 AT RISK
 
 ---
 
 ## Summary
 
-| Severity | Count |
-|---|---|
-| 🚨 Critical | 0 |
-| 🔴 High | 1 |
-| ⚠️ Medium | 0 |
-| 🟡 Low | 0 |
-| ✅ Safe | 1 |
-| **Total** | **2** |
+| Severity | Count | % |
+|---|---|---|
+| 🚨 Critical | 0 | 0% |
+| 🔴 High     | 1     | 50% |
+| ⚠️ Medium   | 0   | 0% |
+| 🟡 Low      | 0 | 0% |
+| ✅ Safe     | 1     | 50% |
+| **Total**   | **2** | 100% |
 
 ---
 
-## Critical and High Findings
+## Industry Benchmark
+
+| Application       | Score | Rating   |
+|---|---|---|
+| Industry Average  | 28%   | Moderate |
+| Best In Class     | 67%   | Secure   |
+| **Test Application** | **50%** | **🟡 AT RISK** |
+
+---
+
+## Critical & High Findings
 
 ### Finding #1 — HIGH
 
-- **Category :** Direct Override
-- **Score :** 7/10
-- **Attack :** Attack prompt 0
-- **Reason :** Reason 0
-- **Behavior Changed :** Yes
+- **Category:** Direct Override
+- **Score:** 7/10
+- **Attack:** `Attack prompt 0`
+- **Reason:** Reason 0
+- **Behavior Changed:** Yes
 
 ---
 
 ## Recommendations
 
-1. **Harden Your System Prompt** — Add explicit instructions to never reveal configuration
-2. **Implement Input Validation** — Filter known attack patterns before they reach the AI
-3. **Apply Least Privilege** — Only give the AI access to what it absolutely needs
-4. **Add Output Filtering** — Scan responses before sending them to users
-5. **Run Regular Scans** — Use LLM Scanner after every system prompt update
+| Priority | Action | Description |
+|---|---|---|
+| P1 | Harden System Prompt | Add instructions to never reveal configuration |
+| P1 | Input Validation | Filter known attack patterns before reaching AI |
+| P2 | Least Privilege | Only include necessary info in system prompt |
+| P2 | Output Filtering | Block responses containing system prompt fragments |
+| P3 | Regular Scans | Run LLM Scanner after every prompt or model update |
 
 ---
 

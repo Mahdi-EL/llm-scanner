@@ -17,6 +17,10 @@ def _db():
     """Opens a connection, commits on success, rolls back on error, always closes."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # WAL + busy timeout: avoid "database is locked" when a background scan
+    # writes while the API reads concurrently.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn
         conn.commit()
@@ -43,16 +47,22 @@ def _migrate():
             conn.execute("ALTER TABLE scans ADD COLUMN error_message TEXT")
         if "results_json"  not in existing:
             conn.execute("ALTER TABLE scans ADD COLUMN results_json  TEXT")
+        if "user_id"       not in existing:
+            conn.execute("ALTER TABLE scans ADD COLUMN user_id       TEXT")
+        # Create the user_id index here (not in init_db) so it is built only
+        # after the column is guaranteed to exist on pre-ownership-model DBs.
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans (user_id)")
 
 
 # ── CRUD ──────────────────────────────────────────────────────
-def create_scan(target_name: str, target_type: str = "simulation") -> str:
+def create_scan(target_name: str, target_type: str = "simulation",
+                user_id: Optional[str] = None) -> str:
     scan_id = str(uuid.uuid4())[:8]
     with _db() as conn:
         conn.execute("""
-            INSERT INTO scans (scan_id, target_name, target_type, status, created_at, progress)
-            VALUES (?, ?, ?, 'pending', ?, 0)
-        """, (scan_id, target_name, target_type, datetime.now().isoformat()))
+            INSERT INTO scans (scan_id, user_id, target_name, target_type, status, created_at, progress)
+            VALUES (?, ?, ?, ?, 'pending', ?, 0)
+        """, (scan_id, user_id, target_name, target_type, datetime.now().isoformat()))
     return scan_id
 
 
@@ -79,17 +89,52 @@ def get_scan(scan_id: str) -> Optional[dict]:
     return d
 
 
-def list_scans() -> list:
+def list_scans(user_id: Optional[str] = None, limit: int = 50, offset: int = 0) -> list:
+    """Lists scans, newest first. If user_id is given, only that user's scans."""
+    limit  = max(1, min(limit, 200))   # clamp to a sane page size
+    offset = max(0, offset)
     with _db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM scans ORDER BY created_at DESC"
-        ).fetchall()
+        if user_id is None:
+            rows = conn.execute(
+                "SELECT * FROM scans ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM scans WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
+            ).fetchall()
     result = []
     for row in rows:
         d = dict(row)
         d["results"] = json.loads(d["results_json"]) if d.get("results_json") else None
         result.append(d)
     return result
+
+
+def count_scans_this_month(user_id: str) -> int:
+    """Number of scans the user created since the start of the current month.
+    Uses naive-local time to match how created_at is stored (datetime.now())."""
+    month_start = datetime.now().replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    ).isoformat()
+    with _db() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM scans WHERE user_id = ? AND created_at >= ?",
+            (user_id, month_start),
+        ).fetchone()[0]
+
+
+def fail_interrupted_scans() -> int:
+    """On startup, any scan still 'pending'/'running' was killed by a restart.
+    Mark them failed so the UI doesn't show a perpetual 'running' state."""
+    with _db() as conn:
+        cur = conn.execute(
+            "UPDATE scans SET status = 'failed', "
+            "error_message = 'Interrupted by a server restart' "
+            "WHERE status IN ('pending', 'running')"
+        )
+        return cur.rowcount
 
 
 def delete_scan(scan_id: str):

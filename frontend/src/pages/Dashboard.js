@@ -90,14 +90,14 @@ function PostureGauge({ score }) {
     </div>
   );
   const pct = score / 100;
-  const color = score>=70 ? '#4ade80' : score>=40 ? '#facc15' : '#f87171';
+  const color = score>=70 ? '#16a34a' : score>=40 ? '#b45309' : '#dc2626';
   const label = score>=85 ? 'Secure' : score>=70 ? 'Low Risk' : score>=40 ? 'Moderate' : 'High Risk';
   const needle = -180 + 180 * pct;
   const [nx, ny] = toXY(needle);
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
       <svg viewBox="0 0 108 60" style={{ width:'100%', maxWidth:'160px', overflow:'visible' }}>
-        <path d={arc(-180, 0)} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="9" strokeLinecap="round" />
+        <path d={arc(-180, 0)} fill="none" stroke="rgba(17,24,39,0.05)" strokeWidth="9" strokeLinecap="round" />
         {score > 0 && <path d={arc(-180, needle)} fill="none" stroke={color} strokeWidth="9" strokeLinecap="round"
           style={{ filter:`drop-shadow(0 0 6px ${color}70)`, transition:'all 1.2s cubic-bezier(.4,0,.2,1)' }} />}
         <circle cx={nx.toFixed(2)} cy={ny.toFixed(2)} r="5.5" fill={color} stroke="var(--s1)" strokeWidth="2.5"
@@ -112,10 +112,10 @@ function PostureGauge({ score }) {
 /* ── Score pill ────────────────────────────────────────── */
 function ScorePill({ score }) {
   if (score == null) return <span style={{ color:'var(--t3)', fontSize:'12px' }}>—</span>;
-  const color = score>=70 ? '#4ade80' : score>=40 ? '#facc15' : '#f87171';
+  const color = score>=70 ? '#16a34a' : score>=40 ? '#b45309' : '#dc2626';
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'7px' }}>
-      <div style={{ width:'48px', height:'3px', background:'rgba(255,255,255,0.07)', borderRadius:'2px', overflow:'hidden' }}>
+      <div style={{ width:'48px', height:'3px', background:'rgba(17,24,39,0.07)', borderRadius:'2px', overflow:'hidden' }}>
         <div style={{ width:`${score}%`, height:'100%', background:color, borderRadius:'2px', boxShadow:`0 0 4px ${color}80` }} />
       </div>
       <span style={{ color, fontWeight:'700', fontSize:'13px', fontVariantNumeric:'tabular-nums' }}>{score}</span>
@@ -127,13 +127,13 @@ function ScorePill({ score }) {
 function SevChips({ summary }) {
   if (!summary) return <span style={{ color:'var(--t3)', fontSize:'12px' }}>—</span>;
   const parts = [
-    { key:'critical', color:'#f87171', bg:'rgba(248,113,113,0.12)' },
-    { key:'high',     color:'#fb923c', bg:'rgba(251,146,60,0.12)' },
-    { key:'medium',   color:'#facc15', bg:'rgba(250,204,21,0.1)' },
-    { key:'low',      color:'#4ade80', bg:'rgba(74,222,128,0.1)' },
+    { key:'critical', color:'#dc2626', bg:'rgba(248,113,113,0.12)' },
+    { key:'high',     color:'#ea580c', bg:'rgba(251,146,60,0.12)' },
+    { key:'medium',   color:'#b45309', bg:'rgba(250,204,21,0.1)' },
+    { key:'low',      color:'#16a34a', bg:'rgba(74,222,128,0.1)' },
   ].filter(p=>(summary[p.key]||0)>0);
   if (parts.length===0) return (
-    <span style={{ fontSize:'11px', fontWeight:'700', color:'#4ade80', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.22)', padding:'2px 8px', borderRadius:'10px' }}>Clean</span>
+    <span style={{ fontSize:'11px', fontWeight:'700', color:'#16a34a', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.22)', padding:'2px 8px', borderRadius:'10px' }}>Clean</span>
   );
   return (
     <div style={{ display:'flex', gap:'4px' }}>
@@ -169,7 +169,7 @@ function SkeletonRows() {
 function EmptyHero({ onStart }) {
   return (
     <div style={{ textAlign:'center', padding:'72px 40px', maxWidth:'480px', margin:'0 auto' }}>
-      <div style={{ width:'80px', height:'80px', margin:'0 auto 24px', borderRadius:'22px', background:'linear-gradient(135deg,rgba(74,138,244,0.12),rgba(155,110,243,0.12))', border:'1px solid rgba(74,138,244,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'36px', boxShadow:'0 0 50px rgba(74,138,244,0.1), 0 0 0 12px rgba(74,138,244,0.04)' }}>🛡</div>
+      <div style={{ width:'80px', height:'80px', margin:'0 auto 24px', borderRadius:'22px', background:'linear-gradient(135deg,rgba(37,99,235,0.12),rgba(155,110,243,0.12))', border:'1px solid rgba(37,99,235,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'36px', boxShadow:'0 0 50px rgba(37,99,235,0.1), 0 0 0 12px rgba(37,99,235,0.04)' }}>🛡</div>
       <h2 style={{ fontSize:'22px', fontWeight:'800', letterSpacing:'-0.5px', marginBottom:'10px' }}>Ready to secure your AI?</h2>
       <p style={{ fontSize:'14px', color:'var(--t2)', lineHeight:'1.7', marginBottom:'28px' }}>
         Launch your first adversarial scan — 1 000+ attack prompts across 21 categories. No API key required in Simulation mode.
@@ -259,31 +259,31 @@ export default function Dashboard() {
   const totalPages = Math.ceil(filtered.length/PER_PAGE);
   const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
 
-  const scoreColor = avgScore==null ? 'var(--t3)' : avgScore>=70 ? '#4ade80' : avgScore>=40 ? '#facc15' : '#f87171';
+  const scoreColor = avgScore==null ? 'var(--t3)' : avgScore>=70 ? '#16a34a' : avgScore>=40 ? '#b45309' : '#dc2626';
 
   const STATS = [
     { label:'Total Scans',       value:total,    color:'var(--t1)',
       sub: completedScans.length>0 ? `${completedScans.length} completed` : 'None yet', subColor:'var(--t3)',
-      iconBg:'rgba(255,255,255,0.05)',
+      iconBg:'rgba(17,24,39,0.05)',
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
     },
     { label:'Avg Security Score', value:avgScore, color:scoreColor, suffix:'/100',
       sub: trendDelta!=null ? `${trendDelta>=0?'↑':'↓'} ${Math.abs(trendDelta)} pts vs last scan` : 'Need 2+ scans for trend',
-      subColor: trendDelta==null ? 'var(--t3)' : trendDelta>=0 ? '#4ade80' : '#f87171',
-      iconBg: avgScore==null ? 'rgba(255,255,255,0.04)' : avgScore>=70 ? 'rgba(74,222,128,0.12)' : avgScore>=40 ? 'rgba(250,204,21,0.1)' : 'var(--red-soft)',
+      subColor: trendDelta==null ? 'var(--t3)' : trendDelta>=0 ? '#16a34a' : '#dc2626',
+      iconBg: avgScore==null ? 'rgba(17,24,39,0.04)' : avgScore>=70 ? 'rgba(74,222,128,0.12)' : avgScore>=40 ? 'rgba(250,204,21,0.1)' : 'var(--red-soft)',
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       chart: scoreTrend,
     },
-    { label:'Critical Findings',  value:critical, color:critical>0 ? '#f87171' : 'var(--t3)',
+    { label:'Critical Findings',  value:critical, color:critical>0 ? '#dc2626' : 'var(--t3)',
       sub: critical>0 ? 'Require immediate review' : 'No critical issues',
-      subColor: critical>0 ? 'rgba(248,113,113,0.7)' : '#4ade80',
-      iconBg: critical>0 ? 'var(--red-soft)' : 'rgba(255,255,255,0.04)',
+      subColor: critical>0 ? 'rgba(248,113,113,0.7)' : '#16a34a',
+      iconBg: critical>0 ? 'var(--red-soft)' : 'rgba(17,24,39,0.04)',
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
     },
     { label:'Active Scans',       value:running,  color:running>0 ? 'var(--blue)' : 'var(--t3)',
       sub: running>0 ? `${running} scan${running>1?'s':''} in progress` : 'All scans complete',
-      subColor: running>0 ? 'rgba(74,138,244,0.7)' : 'var(--t3)',
-      iconBg: running>0 ? 'var(--blue-soft)' : 'rgba(255,255,255,0.04)',
+      subColor: running>0 ? 'rgba(37,99,235,0.7)' : 'var(--t3)',
+      iconBg: running>0 ? 'var(--blue-soft)' : 'rgba(17,24,39,0.04)',
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
     },
   ];
@@ -305,7 +305,7 @@ export default function Dashboard() {
       {/* ── Header ───────────────────────────── */}
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'28px' }}>
         <div>
-          <div style={{ fontSize:'11px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'1px', color:'rgba(255,255,255,0.18)', marginBottom:'5px' }}>
+          <div style={{ fontSize:'11px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'1px', color:'rgba(17,24,39,0.18)', marginBottom:'5px' }}>
             {greetHour()}, {user?.username||'there'} 👋
           </div>
           <h1 className="page-title">Security Dashboard</h1>
@@ -367,7 +367,7 @@ export default function Dashboard() {
               {[
                 { label:'Last scan',   val:latestScan ? relTime(latestScan.created_at) : '—' },
                 { label:'Total scans', val:total,       vc:'var(--t1)' },
-                { label:'Clean scans', val:`${cleanScans}/${completedScans.length}`, vc:'#4ade80' },
+                { label:'Clean scans', val:`${cleanScans}/${completedScans.length}`, vc:'#16a34a' },
               ].map(row=>(
                 <div key={row.label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <span style={{ fontSize:'11px', color:'var(--t3)' }}>{row.label}</span>
@@ -385,14 +385,14 @@ export default function Dashboard() {
                 <p style={{ fontSize:'12px', color:'var(--t3)', marginTop:'2px' }}>
                   Last {scoreTrend.length} scan{scoreTrend.length!==1?'s':''}
                   {trendDelta!=null && (
-                    <span style={{ marginLeft:'8px', fontWeight:'700', color:trendDelta>=0?'#4ade80':'#f87171' }}>
+                    <span style={{ marginLeft:'8px', fontWeight:'700', color:trendDelta>=0?'#16a34a':'#dc2626' }}>
                       {trendDelta>=0?'↑':'↓'} {Math.abs(trendDelta)} pts
                     </span>
                   )}
                 </p>
               </div>
               <div style={{ display:'flex', gap:'10px' }}>
-                {[['#4ade80','≥70'],['#facc15','40–69'],['#f87171','<40']].map(([c,l])=>(
+                {[['#16a34a','≥70'],['#b45309','40–69'],['#dc2626','<40']].map(([c,l])=>(
                   <div key={l} style={{ display:'flex', alignItems:'center', gap:'4px' }}>
                     <div style={{ width:'7px', height:'7px', borderRadius:'2px', background:c }} />
                     <span style={{ fontSize:'10px', color:'var(--t3)' }}>{l}</span>
@@ -407,7 +407,7 @@ export default function Dashboard() {
             ) : (
               <div style={{ display:'flex', alignItems:'flex-end', gap:'4px', height:'72px' }}>
                 {scoreTrend.map((sc,i)=>{
-                  const color = sc>=70 ? '#4ade80' : sc>=40 ? '#facc15' : '#f87171';
+                  const color = sc>=70 ? '#16a34a' : sc>=40 ? '#b45309' : '#dc2626';
                   const h = Math.max(6, Math.round((sc/100)*72));
                   const relScan = completedScans.filter(s=>s.results?.summary?.security_score!=null).slice(-12)[i];
                   return (
@@ -438,7 +438,7 @@ export default function Dashboard() {
               </div>
               <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
                 {running>0 && (
-                  <span style={{ display:'inline-flex', alignItems:'center', gap:'5px', fontSize:'11px', color:'var(--blue)', fontWeight:'700', background:'var(--blue-soft)', border:'1px solid rgba(74,138,244,0.2)', padding:'4px 11px', borderRadius:'20px' }}>
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:'5px', fontSize:'11px', color:'var(--blue)', fontWeight:'700', background:'var(--blue-soft)', border:'1px solid rgba(37,99,235,0.2)', padding:'4px 11px', borderRadius:'20px' }}>
                     <span className="pulse-dot" style={{ margin:0 }} />{running} running
                   </span>
                 )}
@@ -481,7 +481,7 @@ export default function Dashboard() {
                   <div key={scan.scan_id}
                     style={{ display:'grid', gridTemplateColumns:'2fr 90px 130px 140px 80px 80px', padding:'13px 24px', borderBottom:'1px solid var(--b1)', alignItems:'center', cursor:isComplete?'pointer':'default', transition:'background 0.12s' }}
                     onClick={()=>isComplete&&navigate(`/results/${scan.scan_id}`)}
-                    onMouseEnter={e=>{ if(isComplete) e.currentTarget.style.background='rgba(255,255,255,0.025)'; }}
+                    onMouseEnter={e=>{ if(isComplete) e.currentTarget.style.background='rgba(17,24,39,0.025)'; }}
                     onMouseLeave={e=>e.currentTarget.style.background='transparent'}
                   >
                     <div style={{ display:'flex', alignItems:'center', gap:'11px', minWidth:0 }}>
