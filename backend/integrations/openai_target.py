@@ -1,6 +1,3 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
 import os
 import time
 from dotenv import load_dotenv

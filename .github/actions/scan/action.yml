@@ -1,0 +1,107 @@
+name: LLM Scanner security scan
+description: >
+  Scan an AI application with LLM Scanner and fail the job when the scan
+  finds problems at or above a chosen severity.
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  api-key:
+    description: LLM Scanner API key (llmsk_...). Store it as a secret.
+    required: true
+  api-url:
+    description: URL of your LLM Scanner API.
+    required: true
+  target-name:
+    description: Name of the target, used in reports and to compare scans.
+    required: true
+  target-type:
+    description: simulation, groq, openai_compatible or custom_rest.
+    default: openai_compatible
+  target-url:
+    description: The target's API URL (openai_compatible and custom_rest).
+    required: false
+  target-key:
+    description: The target's own API key. Store it as a secret.
+    required: false
+  target-id:
+    description: Use a saved target (its settings and key) instead of the target-* inputs.
+    required: false
+  model:
+    description: Model name sent to the target.
+    required: false
+  system-prompt-file:
+    description: File holding the system prompt (tested in simulation; used for leak detection otherwise).
+    required: false
+  categories:
+    description: Space-separated attack categories. Empty means all 22.
+    required: false
+  fail-on:
+    description: Fail when any finding is at or above this severity (low, medium, high, critical). Empty disables.
+    default: high
+  min-score:
+    description: Fail when the score is below this value. Empty disables.
+    required: false
+  report-format:
+    description: Report to upload as an artifact (pdf, html, md or json). Empty disables.
+    default: html
+  timeout:
+    description: Seconds to wait for the scan before failing.
+    default: "5400"
+
+outputs:
+  scan-id:
+    description: ID of the scan.
+    value: ${{ steps.scan.outputs.scan-id }}
+  score:
+    description: Security score from 0 to 100.
+    value: ${{ steps.scan.outputs.score }}
+  grade:
+    description: Letter grade (A to F).
+    value: ${{ steps.scan.outputs.grade }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install the LLM Scanner CLI
+      shell: bash
+      run: pip install --quiet "${{ github.action_path }}/../../../sdk"
+
+    - name: Run the scan
+      id: scan
+      shell: bash
+      env:
+        LLMSCANNER_API_KEY: ${{ inputs.api-key }}
+        LLMSCANNER_API_URL: ${{ inputs.api-url }}
+        TARGET_KEY: ${{ inputs.target-key }}
+      run: |
+        args=(scan --name "${{ inputs.target-name }}" --wait --poll 15 --timeout "${{ inputs.timeout }}")
+        if [ -n "${{ inputs.target-id }}" ]; then
+          args+=(--target-id "${{ inputs.target-id }}")
+        else
+          args+=(--type "${{ inputs.target-type }}")
+          [ -n "${{ inputs.target-url }}" ] && args+=(--url "${{ inputs.target-url }}")
+          [ -n "$TARGET_KEY" ] && args+=(--target-key "$TARGET_KEY")
+          [ -n "${{ inputs.model }}" ] && args+=(--model "${{ inputs.model }}")
+          [ -n "${{ inputs.system-prompt-file }}" ] && args+=(--prompt-file "${{ inputs.system-prompt-file }}")
+        fi
+        [ -n "${{ inputs.categories }}" ] && args+=(--categories ${{ inputs.categories }})
+        [ -n "${{ inputs.fail-on }}" ] && args+=(--fail-on "${{ inputs.fail-on }}")
+        [ -n "${{ inputs.min-score }}" ] && args+=(--min-score "${{ inputs.min-score }}")
+        if [ -n "${{ inputs.report-format }}" ]; then
+          args+=(--download "${{ inputs.report-format }}" --out "llm-scanner-report.${{ inputs.report-format }}")
+        fi
+        llmscanner "${args[@]}"
+
+    - name: Upload the report
+      if: always() && inputs.report-format != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: llm-scanner-report
+        path: llm-scanner-report.*
+        if-no-files-found: ignore

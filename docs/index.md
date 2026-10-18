@@ -1,23 +1,11 @@
-# 🔐 LLM Scanner Documentation
+# LLM Scanner documentation
 
-> The Burp Suite for AI Applications
+Start with the [README](../README.md): what a scan does, local setup, deploying, the SDK, the CLI,
+the GitHub Action and webhooks.
 
-## Quick Navigation
-
-| Guide | Description |
+| Page | What's in it |
 |---|---|
-| [Installation](installation.md) | Get started in 5 minutes |
-| [Quick Start](quickstart.md) | Your first scan |
-| [Attack Categories](attack-categories.md) | All 14 attack types |
-| [API Reference](api-reference.md) | All endpoints |
-| [SDK Guide](sdk.md) | Python SDK |
-| [FAQ](faq.md) | Common questions |
-
-## Key Stats
-321+  attack prompts
-14    attack categories
-4     detection layers
-3     report formats
-6     scan profiles
-47    automated tests
-*Built by Mahdi EL — github.com/Mahdi-EL/llm-scanner*
+| [Attack categories](attack-categories.md) | The 22 categories, their OWASP mapping and fixes (generated) |
+| [API reference](api-reference.md) | Every endpoint (generated from the code) |
+| [FAQ](faq.md) | Cost, timing, scoring, data retention |
+| [Maintenance](maintenance.md) | History purge, password resets, backups, secret rotation, Stripe setup |

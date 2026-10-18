@@ -156,11 +156,13 @@
   min-height     : 100vh;
   display        : flex;
   flex-direction : column;
+  min-width      : 0;      /* let wide tables scroll instead of stretching the page */
 }
 .app-with-sidebar .main-content {
   padding   : 36px 52px;
   max-width : 1200px;
   flex      : 1;
+  min-width : 0;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1467,3 +1469,40 @@
 }
 button:focus:not(:focus-visible) { outline: none; }
 
+
+/* ── Findings: raw attack / reply text ─────────────────────── */
+.finding-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace;
+  color: var(--t2);
+  background: var(--s3, rgba(17, 24, 39, 0.03));
+  border: 1px solid var(--b1);
+  border-radius: 6px;
+  padding: 10px 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+/* ── Mobile nav drawer (the sidebar is hidden under 900px) ── */
+.topbar-menu-btn {
+  display:none; align-items:center; justify-content:center;
+  width:32px; height:32px; margin-right:2px;
+  background:none; border:1px solid var(--b1); border-radius:7px;
+  color:var(--t2); cursor:pointer;
+}
+.sidebar-backdrop { display:none; }
+@media (max-width:900px) {
+  .topbar-menu-btn { display:inline-flex; }
+  .topbar { padding:0 16px; }
+  .topbar-cmd-label, .topbar-kbd { display:none; }
+  .sidebar.mobile-open { display:flex; width:264px; box-shadow:0 0 40px rgba(16,24,40,0.25); z-index:310; }
+  .sidebar.collapsed ~ .app-main { margin-left:0; }
+  .sidebar-backdrop { display:block; position:fixed; inset:0; background:rgba(17,24,39,0.35); z-index:300; }
+  .sidebar.mobile-open .sidebar-collapse-btn { display:none; }
+}
+@media (max-width:480px) {
+  .topbar-new-scan-btn { display:none; }      /* the drawer and the page itself both offer New Scan */
+  .topbar-page-icon { display:none; }
+}

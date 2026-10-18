@@ -1,25 +1,52 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { scansAPI } from '../services/api';
+import { relTime } from '../utils/format';
 
 const PAGE_TITLES = {
   '/'             : { title:'Dashboard',    icon:'⊞' },
   '/new-scan'     : { title:'New Scan',     icon:'⚡' },
   '/reports'      : { title:'Reports',      icon:'📄' },
-  '/integrations' : { title:'Integrations', icon:'🔌' },
+  '/targets'      : { title:'Targets and CI', icon:'🔌' },
   '/analytics'    : { title:'Analytics',    icon:'📊' },
-  '/threat-intel' : { title:'Threat Intel', icon:'🛡' },
+  '/threat-intel' : { title:'Attack library', icon:'🛡' },
   '/settings'     : { title:'Settings',     icon:'⚙' },
   '/pricing'      : { title:'Pricing',      icon:'💎' },
 };
 
-const INIT_NOTIFS = [
-  { id:1, type:'critical', title:'Prompt injection detected',  body:'gpt-4o endpoint exposed system prompt via role-play vector',         time:'3m ago',  read:false },
-  { id:2, type:'warning',  title:'High severity finding',      body:'Jailbreak template (DAN) succeeded on claude-3-haiku',               time:'42m ago', read:false },
-  { id:3, type:'success',  title:'Scan completed',             body:'openai.example.com scored 76/100 — 12 findings',                    time:'1h ago',  read:false },
-  { id:4, type:'info',     title:'Attack library updated',     body:'1 010 prompts across 21 categories now active',                     time:'2h ago',  read:true  },
-  { id:5, type:'success',  title:'Weekly digest ready',        body:'3 scans this week · avg score 68 · 2 critical findings',            time:'1d ago',  read:true  },
-];
+// Notifications come from the user's own recent scans. What has been read is
+// remembered per browser (a convenience only; nothing breaks without it).
+const READ_KEY = 'notifs_read_until';
+const HIDDEN_KEY = 'notifs_hidden';
+
+function storageGet(key, fallback) {
+  try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
+}
+function storageSet(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* private mode */ }
+}
+
+function toNotification(scan) {
+  const s = scan.summary || {};
+  const when = scan.completed_at || scan.created_at;
+  if (scan.status === 'complete') {
+    return {
+      id: scan.scan_id, when,
+      type: s.critical ? 'critical' : s.high ? 'warning' : 'success',
+      title: `Scan complete: ${scan.target_name}`,
+      body: `Score ${s.security_score ?? 0}/100, grade ${s.grade || '?'} · ${s.critical || 0} critical, ${s.high || 0} high`,
+    };
+  }
+  if (scan.status === 'failed' || scan.status === 'cancelled') {
+    return {
+      id: scan.scan_id, when, type: 'warning',
+      title: `Scan ${scan.status}: ${scan.target_name}`,
+      body: scan.error_message || 'The scan stopped before it finished.',
+    };
+  }
+  return null;
+}
 
 const TYPE_COLOR = {
   critical : '#dc2626',
@@ -28,14 +55,26 @@ const TYPE_COLOR = {
   info     : '#2563eb',
 };
 
-export default function TopBar({ onOpenCmd }) {
+export default function TopBar({ onOpenCmd, onOpenNav }) {
   const location  = useLocation();
   const navigate  = useNavigate();
   const { user }  = useAuth();
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifs,    setNotifs]    = useState(INIT_NOTIFS);
+  const [items,     setItems]     = useState([]);
+  const [readUntil, setReadUntil] = useState(() => storageGet(READ_KEY, ''));
+  const [hidden,    setHidden]    = useState(() => storageGet(HIDDEN_KEY, []));
   const panelRef  = useRef(null);
 
+  const load = useCallback(() => {
+    scansAPI.list({ limit: 10 })
+      .then(r => setItems(r.data.scans.map(toNotification).filter(Boolean)))
+      .catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load, location.pathname]);
+
+  const notifs = items
+    .filter(n => !hidden.includes(n.id))
+    .map(n => ({ ...n, time: relTime(n.when), read: !!readUntil && n.when <= readUntil }));
   const unread = notifs.filter(n => !n.read).length;
 
   useEffect(() => {
@@ -45,10 +84,15 @@ export default function TopBar({ onOpenCmd }) {
     return () => document.removeEventListener('mousedown', handler);
   }, [notifOpen]);
 
-  const markAllRead  = () => setNotifs(ns => ns.map(n => ({ ...n, read:true })));
-  const dismiss      = id  => setNotifs(ns => ns.filter(n => n.id !== id));
+  const markAllRead  = () => {
+    const latest = items.reduce((m, n) => (n.when > m ? n.when : m), '');
+    setReadUntil(latest); storageSet(READ_KEY, latest);
+  };
+  const dismiss      = id  => { const next = [...hidden, id].slice(-200); setHidden(next); storageSet(HIDDEN_KEY, next); };
+  const open         = n   => { setNotifOpen(false); navigate(`/results/${n.id}`); };
 
-  const page    = PAGE_TITLES[location.pathname] || { title:'LLMScanner', icon:'🔐' };
+  const page    = PAGE_TITLES[location.pathname]
+    || (location.pathname.startsWith('/results/') ? { title:'Scan results', icon:'📄' } : { title:'LLMScanner', icon:'🔐' });
   const initial = (user?.username || 'U')[0].toUpperCase();
 
   return (
@@ -56,6 +100,11 @@ export default function TopBar({ onOpenCmd }) {
 
       {/* ── Left: page identity ─────────────── */}
       <div className="topbar-left">
+        <button className="topbar-menu-btn" onClick={onOpenNav} aria-label="Open menu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
         <span className="topbar-page-icon">{page.icon}</span>
         <span className="topbar-page-title">{page.title}</span>
       </div>
@@ -84,7 +133,7 @@ export default function TopBar({ onOpenCmd }) {
         <div style={{ position:'relative' }} ref={panelRef}>
           <button
             className={`topbar-icon-btn${notifOpen ? ' active' : ''}`}
-            onClick={() => { setNotifOpen(o => !o); if (!notifOpen && unread > 0) {} }}
+            onClick={() => { if (!notifOpen) load(); setNotifOpen(o => !o); }}
             title="Notifications"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -117,12 +166,12 @@ export default function TopBar({ onOpenCmd }) {
                       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                       <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
                     </svg>
-                    <div>All caught up!</div>
+                    <div>No finished scans yet.</div>
                   </div>
                 ) : notifs.map(n => (
                   <div key={n.id} className={`notif-item${n.read ? '' : ' unread'}`}>
                     <div className="notif-dot" style={{ background: TYPE_COLOR[n.type] || 'var(--blue)' }} />
-                    <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ flex:1, minWidth:0, cursor:'pointer' }} onClick={() => open(n)}>
                       <div className="notif-item-title">{n.title}</div>
                       <div className="notif-item-body">{n.body}</div>
                       <div className="notif-item-time">{n.time}</div>
@@ -138,7 +187,7 @@ export default function TopBar({ onOpenCmd }) {
 
               {notifs.length > 0 && (
                 <div className="notif-footer">
-                  <button className="notif-clear-all" onClick={() => setNotifs([])}>Clear all</button>
+                  <button className="notif-clear-all" onClick={() => notifs.forEach(n => dismiss(n.id))}>Clear all</button>
                 </div>
               )}
             </div>

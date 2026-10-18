@@ -80,9 +80,9 @@ const NAV_MAIN = [
   { path:'/',              icon:<IcoDashboard />,    label:'Dashboard' },
   { path:'/new-scan',      icon:<IcoScan />,         label:'New Scan' },
   { path:'/reports',       icon:<IcoReports />,      label:'Reports' },
-  { path:'/integrations',  icon:<IcoIntegrations />, label:'Integrations' },
+  { path:'/targets',       icon:<IcoIntegrations />, label:'Targets & CI' },
   { path:'/analytics',     icon:<IcoAnalytics />,    label:'Analytics' },
-  { path:'/threat-intel',  icon:<IcoThreatIntel />,  label:'Threat Intel' },
+  { path:'/threat-intel',  icon:<IcoThreatIntel />,  label:'Attack library' },
 ];
 
 const NAV_BOTTOM = [
@@ -91,12 +91,12 @@ const NAV_BOTTOM = [
 ];
 
 const PLAN_STYLE = {
-  free      : { bg:'rgba(17,24,39,0.06)',  color:'rgba(17,24,39,0.38)', border:'rgba(17,24,39,0.1)' },
+  free      : { bg:'rgba(17,24,39,0.06)',  color:'#545b68', border:'rgba(17,24,39,0.1)' },
   pro       : { bg:'rgba(37,99,235,0.15)',   color:'#2563eb',               border:'rgba(37,99,235,0.3)' },
   enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#16a34a',               border:'rgba(34,197,94,0.3)' },
 };
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onClose }) {
   const location  = useLocation();
   const navigate  = useNavigate();
   const { user, logout } = useAuth();
@@ -120,7 +120,9 @@ export default function Sidebar() {
   const isFree  = !user?.plan || user.plan === 'free';
 
   return (
-    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+    <>
+    {mobileOpen && <div className="sidebar-backdrop" onClick={onClose} />}
+    <aside className={`sidebar${collapsed && !mobileOpen ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
 
       {/* ── Logo ──────────────────────────── */}
       <Link to="/" className="sidebar-logo" style={{ textDecoration:'none' }}>
@@ -188,7 +190,7 @@ export default function Sidebar() {
             Upgrade
           </div>
           <div className="sidebar-upgrade-title">Unlock Pro features</div>
-          <div className="sidebar-upgrade-sub">50 scans/mo, API access, priority queue &amp; more.</div>
+          <div className="sidebar-upgrade-sub">200 scans a month, scheduled scans and regression alerts.</div>
           <Link to="/pricing" className="sidebar-upgrade-cta">View Plans →</Link>
         </div>
       )}
@@ -223,5 +225,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

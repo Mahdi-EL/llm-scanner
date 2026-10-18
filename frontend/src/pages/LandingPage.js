@@ -4,12 +4,12 @@ import { useInView, useCountUp } from '../utils/hooks';
 
 /* ── Data ─────────────────────────────────────────────────── */
 const FEATURES = [
-  { num:'01', title:'Prompt Injection Detection',   desc:'Automatically tests your AI against 30+ prompt injection variants designed to hijack system instructions and bypass safety filters.' },
+  { num:'01', title:'Prompt Injection Detection',   desc:'Tests your AI against hundreds of injection prompts, direct and hidden in documents, designed to hijack its instructions.' },
   { num:'02', title:'Jailbreak & Policy Bypass',    desc:'Stress-tests your LLM against known jailbreak techniques — DAN, roleplay, encoding tricks — and measures resistance across all attempts.' },
   { num:'03', title:'Data Exfiltration Testing',    desc:'Simulates adversarial prompts designed to extract sensitive data, PII, system prompts, or confidential information from your AI application.' },
-  { num:'04', title:'Automated Security Reports',   desc:'Every scan generates a full security report with severity scores, per-attack analysis, risk heatmaps, and actionable remediation guidance.' },
-  { num:'05', title:'Any LLM, Any Infrastructure', desc:'Works with OpenAI, Groq, Anthropic, or any custom REST endpoint. Run real tests or safe simulations during development.' },
-  { num:'06', title:'Continuous Re-scanning',       desc:'Schedule recurring scans to catch security regressions as your prompts evolve. Stay ahead of new attack techniques automatically.' },
+  { num:'04', title:'Automated Security Reports',   desc:'Every scan produces a PDF, HTML and Markdown report with severity scores, the OWASP LLM Top 10 risk for each finding, and fixes for the categories that failed.' },
+  { num:'05', title:'Any OpenAI-compatible API',    desc:'Works with OpenAI, Groq, Mistral, Together, OpenRouter or any custom REST endpoint. Or test a system prompt in simulation mode.' },
+  { num:'06', title:'Scheduled Re-scanning',        desc:'On Pro, schedule daily or weekly scans and get an email or webhook alert when the score drops.' },
 ];
 
 const PREVIEW_ATTACKS = [
@@ -27,35 +27,28 @@ const ATTACK_PILLS = [
 ];
 const PILLS_DOUBLED = [...ATTACK_PILLS, ...ATTACK_PILLS];
 
-const INTEGRATIONS = ['OpenAI', 'Groq', 'Anthropic', 'Custom REST', 'Simulation', 'Any LLM API'];
-const TRUSTED = ['NORTHWIND', 'Vaultline', 'Helix AI', 'Quantara', 'BluePeak', 'Sentinel', 'Foundry'];
+const INTEGRATIONS = ['OpenAI', 'Groq', 'Mistral', 'Together AI', 'OpenRouter', 'Custom REST', 'Simulation'];
 
 const STEPS = [
   { step:'01', title:'Connect your target',  desc:'Enter a name and choose your AI target — simulation mode works instantly, or point to any LLM API.' },
-  { step:'02', title:'We run the gauntlet',  desc:'1000+ adversarial prompts fire automatically across 21 attack categories. Zero manual effort required.' },
-  { step:'03', title:'Get your full report', desc:'A detailed security report with scores, per-finding analysis, severity breakdown, and PDF download — in under 15 minutes.' },
+  { step:'02', title:'We run the gauntlet',  desc:'Over 1,000 adversarial prompts across 22 attack categories, including multi-turn conversations, graded one by one. You can watch the progress live.' },
+  { step:'03', title:'Get your full report', desc:'A score and grade, every finding with the model’s reply, and what to fix first. Download it as PDF, HTML, Markdown or JSON.' },
 ];
 
 const COMPARE = [
-  { feature:'Attack coverage',       manual:'Limited by analyst hours', scanner:'1000+ prompts, 21 categories'   },
-  { feature:'Time to first result',  manual:'2 – 4 weeks',              scanner:'< 15 minutes'             },
-  { feature:'Report generation',     manual:'Manual write-up',          scanner:'Auto PDF + JSON export'   },
-  { feature:'Cost per assessment',   manual:'$5,000 – $25,000',         scanner:'From $49 / month'         },
-  { feature:'Scan frequency',        manual:'Quarterly at best',        scanner:'Unlimited / on-demand'    },
-  { feature:'Consistency',           manual:'Varies by analyst',        scanner:'100% reproducible results'},
-];
-
-const TESTIMONIALS = [
-  { quote:"LLM Scanner caught prompt injection vulnerabilities in our customer service bot that our internal team missed completely. The report was ready in 12 minutes.", name:'Sarah K.', role:'Security Lead @ Fintech Startup', init:'SK' },
-  { quote:"We ran our first scan before I even finished my coffee. The PDF report was detailed enough to share directly with our board without extra work.", name:'Marcus R.', role:'CTO @ AI SaaS Company', init:'MR' },
-  { quote:"Simulation mode is perfect for testing during development before we have a production API key. The attack coverage is impressively thorough.", name:'Priya N.', role:'ML Engineer @ Healthcare AI', init:'PN' },
+  { feature:'Attack coverage',       manual:'Limited by analyst hours', scanner:'1,000+ prompts, 22 categories' },
+  { feature:'Time to first result',  manual:'Weeks to schedule',        scanner:'Same day, from your browser'   },
+  { feature:'Report generation',     manual:'Manual write-up',          scanner:'PDF, HTML, Markdown and JSON'  },
+  { feature:'Re-testing',            manual:'A new engagement',         scanner:'Re-scan any time, or on a schedule' },
+  { feature:'Grading',               manual:'Varies by analyst',        scanner:'Deterministic judge settings plus rule-based leak detection' },
+  { feature:'Depth',                 manual:'Creative, multi-step attacks', scanner:'Broad automated coverage; use both' },
 ];
 
 const FAQ = [
-  { q:'Do I need an API key to start?', a:'No. Simulation mode runs a full assessment instantly without any key. When you are ready, point the scanner at any OpenAI, Groq, Anthropic, or custom REST endpoint for live testing.' },
-  { q:'How long does a scan take?', a:'Most full assessments complete in under 15 minutes — 1000+ adversarial prompts across 21 attack categories, fully automated.' },
-  { q:'What do I get at the end?', a:'A detailed security report with an overall risk score, per-attack findings, severity breakdown, remediation guidance, and an exportable PDF + JSON.' },
-  { q:'Is my data safe?', a:'Scans run against the target you specify. We do not store your prompts or model responses beyond what is needed to generate your report.' },
+  { q:'Do I need an API key to start?', a:'No. Simulation mode tests a system prompt on a hosted model without any key. When you are ready, point the scanner at any OpenAI-compatible API or custom REST endpoint.' },
+  { q:'How long does a scan take?', a:'It depends on how fast your target answers. A full scan sends about 1,090 attacks; you can pick fewer categories for a quicker one, and watch the progress live.' },
+  { q:'What do I get at the end?', a:'A 0–100 score and a letter grade, every finding with the model’s reply and why it failed, the OWASP LLM Top 10 risk it maps to, and fixes for each failed category.' },
+  { q:'What happens to my data?', a:'Your target’s API key is encrypted while a scan runs and deleted when it ends, unless you save the target. Attack replies are kept with your scan so you can read the report. Delete the scan, or your account, to remove them.' },
 ];
 
 /* ── Scroll-reveal wrapper ────────────────────────────────── */
@@ -100,15 +93,11 @@ export default function LandingPage() {
       <section className="ed-hero">
         <div className="ed-hero-rule">
           <span className="ed-kicker"><Plus /> AI Security Platform</span>
-          <span className="ed-kicker ed-kicker-end">Est. 2025 <Plus /></span>
+          <span className="ed-kicker ed-kicker-end">Open source <Plus /></span>
         </div>
 
         <div className="ed-hero-grid">
           <div className="ed-hero-left">
-            <div className="ed-badge">
-              <span className="ed-stars">★★★★★</span>
-              Rated 4.9/5 by 2,000+ AI teams
-            </div>
 
             <h1 className="ed-display">
               Secure your <span className="ed-mark">AI</span><br />
@@ -124,8 +113,8 @@ export default function LandingPage() {
             </div>
             <div className="ed-hero-meta">
               <div className="ed-meta-item"><strong>1000+</strong><span>attack prompts / scan</span></div>
-              <div className="ed-meta-item"><strong>21</strong><span>vulnerability categories</span></div>
-              <div className="ed-meta-item"><strong>&lt;15m</strong><span>per full assessment</span></div>
+              <div className="ed-meta-item"><strong>22</strong><span>attack categories</span></div>
+              <div className="ed-meta-item"><strong>OWASP</strong><span>LLM Top 10 mapping</span></div>
             </div>
           </div>
 
@@ -133,7 +122,7 @@ export default function LandingPage() {
           <div className="ed-hero-right">
             <div className="ed-card ed-scan">
               <div className="ed-scan-head">
-                <span className="ed-scan-title">Live Scan — Banking AI Chatbot</span>
+                <span className="ed-scan-title">Example scan — banking chatbot</span>
                 <span className="ed-scan-status"><span className="ed-dot" />Running</span>
               </div>
               <div className="ed-scan-body">
@@ -169,12 +158,9 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* ═══════════════════ TRUSTED / INTEGRATIONS ═══════════════════ */}
+      {/* ═══════════════════ INTEGRATIONS ═══════════════════ */}
       <section className="ed-section ed-logos-section">
-        <p className="ed-overline">Trusted by security &amp; ML teams · works with any AI infrastructure</p>
-        <div className="ed-logos">
-          {TRUSTED.map(n => <span key={n} className="ed-logo">{n}</span>)}
-        </div>
+        <p className="ed-overline">Works with any OpenAI-compatible API, your own REST endpoint, or a simulated model</p>
         <div className="ed-integrations">
           {INTEGRATIONS.map(n => <span key={n} className="ed-chip">{n}</span>)}
         </div>
@@ -234,9 +220,9 @@ export default function LandingPage() {
           </div>
         </Reveal>
         <div className="ed-stats">
-          <CountStat target={1000} suffix="+" label="Adversarial attack prompts across 21 attack categories" />
-          <div className="ed-stat"><div className="ed-stat-num">&lt;15m</div><div className="ed-stat-label">Average time to complete a full security assessment</div></div>
-          <div className="ed-stat"><div className="ed-stat-num">∞</div><div className="ed-stat-label">Scans on any LLM — OpenAI, Groq, or your own API</div></div>
+          <CountStat target={1000} suffix="+" label="Adversarial attack prompts across 22 attack categories" />
+          <div className="ed-stat"><div className="ed-stat-num">22</div><div className="ed-stat-label">Attack categories, each mapped to the OWASP Top 10 for LLM Applications</div></div>
+          <div className="ed-stat"><div className="ed-stat-num">4</div><div className="ed-stat-label">Report formats: PDF, HTML, Markdown and JSON</div></div>
         </div>
       </section>
 
@@ -267,35 +253,11 @@ export default function LandingPage() {
         </Reveal>
       </section>
 
-      {/* ═══════════════════ TESTIMONIALS ═══════════════════ */}
-      <section className="ed-section">
-        <Reveal>
-          <div className="ed-section-head">
-            <Eyebrow index="05">Social proof</Eyebrow>
-            <h2 className="ed-title">Trusted by security teams.</h2>
-            <p className="ed-sub">Engineers and security leads use LLM Scanner to catch AI vulnerabilities before their users — or attackers — do.</p>
-          </div>
-        </Reveal>
-        <Reveal>
-          <div className="ed-testimonials">
-            {TESTIMONIALS.map(t => (
-              <figure key={t.name} className="ed-quote-card">
-                <blockquote>"{t.quote}"</blockquote>
-                <figcaption>
-                  <span className="ed-avatar">{t.init}</span>
-                  <span><strong>{t.name}</strong><em>{t.role}</em></span>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </Reveal>
-      </section>
-
       {/* ═══════════════════ FAQ ═══════════════════ */}
       <section className="ed-section ed-section-alt">
         <Reveal>
           <div className="ed-section-head">
-            <Eyebrow index="06">Questions</Eyebrow>
+            <Eyebrow index="05">Questions</Eyebrow>
             <h2 className="ed-title">Frequently asked.</h2>
           </div>
         </Reveal>
@@ -327,7 +289,7 @@ export default function LandingPage() {
 
       {/* ═══════════════════ FOOTER ═══════════════════ */}
       <footer className="ed-footer">
-        <span className="ed-foot-brand">LLM<b>Scanner</b> © 2025</span>
+        <span className="ed-foot-brand">LLM<b>Scanner</b> © {new Date().getFullYear()}</span>
         <div className="ed-foot-links">
           <Link to="/pricing">Pricing</Link>
           <Link to="/login">Sign In</Link>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { scansAPI } from '../services/api';
+import { scansAPI, saveBlob } from '../services/api';
+import { usePolling } from '../utils/hooks';
+import { relTime, toCSV, isActive, scoreColor, riskLabel } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -12,18 +14,6 @@ const greetHour = () => {
   if (h < 18) return 'Good afternoon';
   return 'Good evening';
 };
-
-function relTime(dateStr) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month:'short', day:'numeric' });
-}
 
 /* ── Animated counter ──────────────────────────────────── */
 function AnimatedNum({ value }) {
@@ -90,8 +80,8 @@ function PostureGauge({ score }) {
     </div>
   );
   const pct = score / 100;
-  const color = score>=70 ? '#16a34a' : score>=40 ? '#b45309' : '#dc2626';
-  const label = score>=85 ? 'Secure' : score>=70 ? 'Low Risk' : score>=40 ? 'Moderate' : 'High Risk';
+  const color = scoreColor(score);
+  const label = riskLabel(score);
   const needle = -180 + 180 * pct;
   const [nx, ny] = toXY(needle);
   return (
@@ -112,7 +102,7 @@ function PostureGauge({ score }) {
 /* ── Score pill ────────────────────────────────────────── */
 function ScorePill({ score }) {
   if (score == null) return <span style={{ color:'var(--t3)', fontSize:'12px' }}>—</span>;
-  const color = score>=70 ? '#16a34a' : score>=40 ? '#b45309' : '#dc2626';
+  const color = scoreColor(score);
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'7px' }}>
       <div style={{ width:'48px', height:'3px', background:'rgba(17,24,39,0.07)', borderRadius:'2px', overflow:'hidden' }}>
@@ -166,20 +156,20 @@ function SkeletonRows() {
 }
 
 /* ── Empty hero ────────────────────────────────────────── */
-function EmptyHero({ onStart }) {
+function EmptyHero({ onStart, onLibrary }) {
   return (
     <div style={{ textAlign:'center', padding:'72px 40px', maxWidth:'480px', margin:'0 auto' }}>
       <div style={{ width:'80px', height:'80px', margin:'0 auto 24px', borderRadius:'22px', background:'linear-gradient(135deg,rgba(37,99,235,0.12),rgba(155,110,243,0.12))', border:'1px solid rgba(37,99,235,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'36px', boxShadow:'0 0 50px rgba(37,99,235,0.1), 0 0 0 12px rgba(37,99,235,0.04)' }}>🛡</div>
       <h2 style={{ fontSize:'22px', fontWeight:'800', letterSpacing:'-0.5px', marginBottom:'10px' }}>Ready to secure your AI?</h2>
       <p style={{ fontSize:'14px', color:'var(--t2)', lineHeight:'1.7', marginBottom:'28px' }}>
-        Launch your first adversarial scan — 1 000+ attack prompts across 21 categories. No API key required in Simulation mode.
+        Launch your first adversarial scan: over 1,000 attack prompts across 22 categories. No API key required in Simulation mode.
       </p>
       <div style={{ display:'flex', gap:'10px', justifyContent:'center', flexWrap:'wrap' }}>
         <button className="btn-primary" onClick={onStart} style={{ padding:'11px 24px', fontSize:'14px' }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           Launch First Scan
         </button>
-        <button className="btn-outline" onClick={()=>window.open('/threat-intel','_self')} style={{ padding:'11px 20px', fontSize:'14px' }}>
+        <button className="btn-outline" onClick={onLibrary} style={{ padding:'11px 20px', fontSize:'14px' }}>
           View Attack Library
         </button>
       </div>
@@ -198,7 +188,9 @@ function EmptyHero({ onStart }) {
 /* ── Main ──────────────────────────────────────────────── */
 export default function Dashboard() {
   const [scans,   setScans]   = useState([]);
+  const [total,   setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState('ALL');
   const [page,    setPage]    = useState(1);
@@ -206,60 +198,64 @@ export default function Dashboard() {
   const { user } = useAuth();
   const toast    = useToast();
 
-  useEffect(() => {
-    fetchScans();
-    const t = setInterval(fetchScans, 5000);
-    return () => clearInterval(t);
-  }, []);
-
+  // Newest first, as the API returns them.
   const fetchScans = async () => {
-    try { const res = await scansAPI.list(); setScans(res.data.scans.reverse()); }
-    catch {} finally { setLoading(false); }
+    try {
+      const res = await scansAPI.list();
+      setScans(res.data.scans);
+      setTotal(res.data.total);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => { fetchScans(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Refresh only while something is queued or running (and the tab is visible).
+  usePolling(fetchScans, 4000, scans.some(isActive));
 
   const exportCSV = () => {
     if (!scans.length) { toast('No scans to export.', 'warning'); return; }
-    const headers = ['Target','Status','Score','Critical','High','Medium','Low','Date'];
+    const headers = ['Target','Status','Score','Grade','Critical','High','Medium','Low','Errors','Date'];
     const rows = scans.map(s => [
       s.target_name, s.status,
-      s.results?.summary?.security_score ?? '',
-      s.results?.summary?.critical ?? '',
-      s.results?.summary?.high ?? '',
-      s.results?.summary?.medium ?? '',
-      s.results?.summary?.low ?? '',
-      new Date(s.created_at).toLocaleString(),
+      s.status === 'complete' ? s.summary?.security_score : '',
+      s.summary?.grade ?? '',
+      s.summary?.critical ?? '', s.summary?.high ?? '', s.summary?.medium ?? '',
+      s.summary?.low ?? '', s.summary?.errors ?? '',
+      new Date(s.created_at).toISOString(),
     ]);
-    const csv = [headers,...rows].map(r=>r.join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-    Object.assign(document.createElement('a'),{href:url,download:'llm_scanner_results.csv'}).click();
+    saveBlob(new Blob([toCSV([headers, ...rows])], { type: 'text/csv' }), 'llm_scanner_results.csv');
     toast('CSV exported.', 'success');
   };
 
   /* ── Derived data ──────────────────────────────────────── */
   const completedScans = useMemo(()=>scans.filter(s=>s.status==='complete'), [scans]);
-  const running  = useMemo(()=>scans.filter(s=>s.status==='running').length, [scans]);
-  const total    = scans.length;
-  const critical = useMemo(()=>scans.reduce((a,s)=>a+(s.results?.summary?.critical||0),0), [scans]);
+  const running  = useMemo(()=>scans.filter(isActive).length, [scans]);
+  const critical = useMemo(()=>completedScans.reduce((a,s)=>a+(s.summary?.critical||0),0), [completedScans]);
   const avgScore = useMemo(()=>{
-    const scored = completedScans.filter(s=>s.results?.summary?.security_score!=null);
-    return scored.length ? Math.round(scored.reduce((a,s)=>a+s.results.summary.security_score,0)/scored.length) : null;
+    const scored = completedScans.filter(s=>s.summary?.security_score!=null);
+    return scored.length ? Math.round(scored.reduce((a,s)=>a+s.summary.security_score,0)/scored.length) : null;
   }, [completedScans]);
-  const scoreTrend = useMemo(()=>
-    completedScans.filter(s=>s.results?.summary?.security_score!=null).slice(-12).map(s=>s.results.summary.security_score),
-  [completedScans]);
+  // Oldest to newest, for the trend chart.
+  const chronological = useMemo(()=>[...completedScans].reverse().slice(-12), [completedScans]);
+  const scoreTrend = chronological.map(s=>s.summary?.security_score ?? 0);
   const trendDelta = scoreTrend.length>=2 ? scoreTrend[scoreTrend.length-1]-scoreTrend[scoreTrend.length-2] : null;
   const latestScan = scans[0]||null;
-  const cleanScans = completedScans.filter(s=>!(s.results?.summary?.critical>0)&&!(s.results?.summary?.high>0)).length;
+  const cleanScans = completedScans.filter(s=>!(s.summary?.critical>0)&&!(s.summary?.high>0)).length;
 
   const filtered = useMemo(()=>
     scans
-      .filter(s=>filter==='ALL'||s.status===filter.toLowerCase())
+      .filter(s=>filter==='ALL'
+        || (filter==='RUNNING' ? isActive(s) : s.status===filter.toLowerCase()))
       .filter(s=>s.target_name.toLowerCase().includes(search.toLowerCase())),
   [scans,filter,search]);
   const totalPages = Math.ceil(filtered.length/PER_PAGE);
   const paged = filtered.slice((page-1)*PER_PAGE, page*PER_PAGE);
 
-  const scoreColor = avgScore==null ? 'var(--t3)' : avgScore>=70 ? '#16a34a' : avgScore>=40 ? '#b45309' : '#dc2626';
+  const avgColor = scoreColor(avgScore);
 
   const STATS = [
     { label:'Total Scans',       value:total,    color:'var(--t1)',
@@ -267,10 +263,10 @@ export default function Dashboard() {
       iconBg:'rgba(17,24,39,0.05)',
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
     },
-    { label:'Avg Security Score', value:avgScore, color:scoreColor, suffix:'/100',
+    { label:'Avg Security Score', value:avgScore, color:avgColor, suffix:'/100',
       sub: trendDelta!=null ? `${trendDelta>=0?'↑':'↓'} ${Math.abs(trendDelta)} pts vs last scan` : 'Need 2+ scans for trend',
       subColor: trendDelta==null ? 'var(--t3)' : trendDelta>=0 ? '#16a34a' : '#dc2626',
-      iconBg: avgScore==null ? 'rgba(17,24,39,0.04)' : avgScore>=70 ? 'rgba(74,222,128,0.12)' : avgScore>=40 ? 'rgba(250,204,21,0.1)' : 'var(--red-soft)',
+      iconBg: avgScore==null ? 'rgba(17,24,39,0.04)' : avgScore>=80 ? 'rgba(74,222,128,0.12)' : avgScore>=50 ? 'rgba(250,204,21,0.1)' : 'var(--red-soft)',
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       chart: scoreTrend,
     },
@@ -292,8 +288,9 @@ export default function Dashboard() {
     const M = {
       complete: { label:'Complete', cls:'badge badge-safe' },
       running:  { label:'Running',  cls:'badge badge-running' },
-      pending:  { label:'Pending',  cls:'badge badge-pending' },
+      pending:  { label:'Queued',   cls:'badge badge-pending' },
       failed:   { label:'Failed',   cls:'badge badge-critical' },
+      cancelled:{ label:'Cancelled',cls:'badge badge-pending' },
     };
     const b = M[status]||{label:status, cls:'badge'};
     return <span className={b.cls}>{status==='running'&&<span className="pulse-dot"/>}{b.label}</span>;
@@ -303,15 +300,15 @@ export default function Dashboard() {
     <div>
 
       {/* ── Header ───────────────────────────── */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'28px' }}>
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'16px', marginBottom:'28px' }}>
         <div>
-          <div style={{ fontSize:'11px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'1px', color:'rgba(17,24,39,0.18)', marginBottom:'5px' }}>
+          <div style={{ fontSize:'11px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'1px', color:'var(--t3)', marginBottom:'5px' }}>
             {greetHour()}, {user?.username||'there'} 👋
           </div>
           <h1 className="page-title">Security Dashboard</h1>
           <p className="page-subtitle" style={{ marginBottom:0 }}>Monitor and manage your AI endpoint security assessments</p>
         </div>
-        <div style={{ display:'flex', gap:'8px', marginTop:'4px', flexShrink:0 }}>
+        <div style={{ display:'flex', gap:'8px', marginTop:'4px', flexWrap:'wrap' }}>
           <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={()=>navigate('/analytics')}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             Analytics
@@ -348,10 +345,17 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {loadError && (
+        <div className="card-glow" style={{ padding:'14px 18px', marginBottom:'14px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span style={{ fontSize:'13px', color:'#dc2626' }}>Couldn’t load your scans. The server may be waking up.</span>
+          <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }} onClick={fetchScans}>Retry</button>
+        </div>
+      )}
+
       {/* ── Empty state ──────────────────────── */}
-      {!loading && total===0 && (
+      {!loading && !loadError && total===0 && (
         <div className="card-glow" style={{ overflow:'hidden' }}>
-          <EmptyHero onStart={()=>navigate('/new-scan')} />
+          <EmptyHero onStart={()=>navigate('/new-scan')} onLibrary={()=>navigate('/threat-intel')} />
         </div>
       )}
 
@@ -392,7 +396,7 @@ export default function Dashboard() {
                 </p>
               </div>
               <div style={{ display:'flex', gap:'10px' }}>
-                {[['#16a34a','≥70'],['#b45309','40–69'],['#dc2626','<40']].map(([c,l])=>(
+                {[['#16a34a','≥80'],['#b45309','50–79'],['#dc2626','<50']].map(([c,l])=>(
                   <div key={l} style={{ display:'flex', alignItems:'center', gap:'4px' }}>
                     <div style={{ width:'7px', height:'7px', borderRadius:'2px', background:c }} />
                     <span style={{ fontSize:'10px', color:'var(--t3)' }}>{l}</span>
@@ -407,9 +411,9 @@ export default function Dashboard() {
             ) : (
               <div style={{ display:'flex', alignItems:'flex-end', gap:'4px', height:'72px' }}>
                 {scoreTrend.map((sc,i)=>{
-                  const color = sc>=70 ? '#16a34a' : sc>=40 ? '#b45309' : '#dc2626';
+                  const color = sc>=80 ? '#16a34a' : sc>=50 ? '#b45309' : '#dc2626';
                   const h = Math.max(6, Math.round((sc/100)*72));
-                  const relScan = completedScans.filter(s=>s.results?.summary?.security_score!=null).slice(-12)[i];
+                  const relScan = chronological[i];
                   return (
                     <div key={i} title={`${sc}/100 — click to view`}
                       className="score-chart-bar"
@@ -433,7 +437,7 @@ export default function Dashboard() {
               <div>
                 <h2 style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)', letterSpacing:'-0.2px' }}>Scan History</h2>
                 <p style={{ fontSize:'12px', color:'var(--t3)', marginTop:'2px' }}>
-                  {total} scan{total!==1?'s':''} · {completedScans.length} completed
+                  {total} scan{total!==1?'s':''} · {completedScans.length} completed{scans.length<total ? ` · showing latest ${scans.length}` : ''}
                 </p>
               </div>
               <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
@@ -446,8 +450,7 @@ export default function Dashboard() {
             </div>
             <div style={{ display:'flex', gap:'10px', alignItems:'center' }}>
               <div style={{ position:'relative', flex:1, maxWidth:'280px' }}>
-                <svg style={{ position:'absolute', left:'10px', top:'50%', transform:'translateY(-50%)', color:'var(--t3)', pointerEvents:'none' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                <input className="search-bar" style={{ paddingLeft:'30px', marginBottom:0, height:'34px', fontSize:'13px' }}
+                <input className="search-bar" style={{ marginBottom:0, height:'34px', fontSize:'13px', paddingLeft:'38px', backgroundPosition:'12px center' }}
                   placeholder="Search by target name…" value={search}
                   onChange={e=>{setSearch(e.target.value);setPage(1);}} />
               </div>
@@ -479,9 +482,9 @@ export default function Dashboard() {
                 const isComplete = scan.status==='complete';
                 return (
                   <div key={scan.scan_id}
-                    style={{ display:'grid', gridTemplateColumns:'2fr 90px 130px 140px 80px 80px', padding:'13px 24px', borderBottom:'1px solid var(--b1)', alignItems:'center', cursor:isComplete?'pointer':'default', transition:'background 0.12s' }}
-                    onClick={()=>isComplete&&navigate(`/results/${scan.scan_id}`)}
-                    onMouseEnter={e=>{ if(isComplete) e.currentTarget.style.background='rgba(17,24,39,0.025)'; }}
+                    style={{ display:'grid', gridTemplateColumns:'2fr 90px 130px 140px 80px 80px', padding:'13px 24px', borderBottom:'1px solid var(--b1)', alignItems:'center', cursor:'pointer', transition:'background 0.12s' }}
+                    onClick={()=>navigate(`/results/${scan.scan_id}`)}
+                    onMouseEnter={e=>{ e.currentTarget.style.background='rgba(17,24,39,0.025)'; }}
                     onMouseLeave={e=>e.currentTarget.style.background='transparent'}
                   >
                     <div style={{ display:'flex', alignItems:'center', gap:'11px', minWidth:0 }}>
@@ -494,17 +497,17 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div>{statusBadge(scan.status)}</div>
-                    <div><ScorePill score={scan.results?.summary?.security_score} /></div>
-                    <div><SevChips summary={scan.results?.summary} /></div>
+                    <div><ScorePill score={isComplete ? scan.summary?.security_score : null} /></div>
+                    <div>{isComplete ? <SevChips summary={scan.summary} />
+                      : isActive(scan) ? <span style={{ fontSize:'12px', color:'var(--t3)' }}>{scan.progress||0}%</span>
+                      : <span style={{ color:'var(--t3)', fontSize:'12px' }}>—</span>}</div>
                     <div>
                       <div style={{ fontSize:'12px', color:'var(--t2)', fontWeight:'500' }}>{relTime(scan.created_at)}</div>
                       <div style={{ fontSize:'10px', color:'var(--t3)', marginTop:'1px' }}>{new Date(scan.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
                     </div>
                     <div onClick={e=>e.stopPropagation()}>
-                      {isComplete && (
-                        <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }}
-                          onClick={()=>navigate(`/results/${scan.scan_id}`)}>View →</button>
-                      )}
+                      <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }}
+                        onClick={()=>navigate(`/results/${scan.scan_id}`)}>{isComplete ? 'View →' : 'Open'}</button>
                     </div>
                   </div>
                 );

@@ -1,6 +1,4 @@
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
 import os
 import json
 
@@ -324,7 +322,7 @@ class Translator:
         if kwargs:
             try:
                 text = text.format(**kwargs)
-            except:
+            except Exception:
                 pass
         return text
 
@@ -445,7 +443,7 @@ def save_language_preference(language, path="results/preferences.json"):
         with open(path, "r", encoding="utf-8") as f:
             try:
                 prefs = json.load(f)
-            except:
+            except Exception:
                 prefs = {}
 
     prefs["language"] = language
@@ -463,7 +461,7 @@ def load_language_preference(path="results/preferences.json"):
         try:
             prefs = json.load(f)
             return prefs.get("language", "en")
-        except:
+        except Exception:
             return "en"
 
 

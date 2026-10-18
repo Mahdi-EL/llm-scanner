@@ -1,241 +1,300 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { scansAPI, API_URL } from '../services/api';
+import { scansAPI, downloadReport, errorMessage } from '../services/api';
+import { useToast } from '../context/ToastContext';
+import { usePolling } from '../utils/hooks';
+import { scoreColor, isActive, formatDuration } from '../utils/format';
 
 const SEV_META = {
-  CRITICAL: { color:'#dc2626', bg:'rgba(248,113,113,0.12)', border:'rgba(248,113,113,0.25)', label:'Critical' },
-  HIGH:     { color:'#ea580c', bg:'rgba(251,146,60,0.12)',  border:'rgba(251,146,60,0.25)',  label:'High'     },
-  MEDIUM:   { color:'#b45309', bg:'rgba(250,204,21,0.10)',  border:'rgba(250,204,21,0.25)',  label:'Medium'   },
-  LOW:      { color:'#16a34a', bg:'rgba(74,222,128,0.10)',  border:'rgba(74,222,128,0.25)',  label:'Low'      },
+  CRITICAL: { color:'#b42318', bg:'rgba(180,35,24,0.08)', label:'Critical' },
+  HIGH:     { color:'#c4320a', bg:'rgba(196,50,10,0.08)', label:'High'     },
+  MEDIUM:   { color:'#a15c07', bg:'rgba(161,92,7,0.08)',  label:'Medium'   },
+  LOW:      { color:'#4b6b2f', bg:'rgba(75,107,47,0.08)', label:'Low'      },
+  SAFE:     { color:'#3d6b4f', bg:'rgba(61,107,79,0.08)', label:'Safe'     },
+  ERROR:    { color:'#6b6b6b', bg:'rgba(107,107,107,0.08)', label:'Error'  },
 };
-const SEV_ORDER = ['CRITICAL','HIGH','MEDIUM','LOW'];
+const SEV_ORDER = ['CRITICAL','HIGH','MEDIUM','LOW','SAFE','ERROR'];
+const PAGE = 25;
 
-/* ── Animated SVG score ring ─────────────────────────────── */
-function ScoreRing({ score }) {
-  const R = 54, CIRC = 2 * Math.PI * R;
-  const color = score >= 70 ? '#16a34a' : score >= 40 ? '#b45309' : '#dc2626';
-  const label = score >= 85 ? 'Excellent' : score >= 70 ? 'Low Risk' : score >= 40 ? 'Moderate' : 'High Risk';
+const titleOf = (cats, id) => cats[id]?.title || (id?.startsWith('custom:') ? `Custom: ${id.slice(7)}` : (id||'').replace(/_/g,' '));
+
+/* ── Score block ─────────────────────────────────────────── */
+function ScoreBlock({ summary }) {
+  const score = summary.security_score ?? 0;
+  const color = scoreColor(score);
   return (
-    <div style={{ position:'relative', width:'148px', height:'148px', flexShrink:0 }}>
-      {/* Outer glow ring */}
-      <div style={{ position:'absolute', inset:'-6px', borderRadius:'50%', background:`radial-gradient(circle, ${color}15 0%, transparent 70%)`, pointerEvents:'none' }} />
-      <svg width="148" height="148" viewBox="0 0 148 148" style={{ transform:'rotate(-90deg)' }}>
-        <circle cx="74" cy="74" r={R} fill="none" stroke="rgba(17,24,39,0.04)" strokeWidth="10" />
-        <circle cx="74" cy="74" r={R} fill="none" stroke="rgba(17,24,39,0.06)" strokeWidth="10"
-          strokeDasharray={`${(score/100)*CIRC} ${CIRC}`} style={{ transition:'none' }} />
-        <circle cx="74" cy="74" r={R} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
-          strokeDasharray={`${(score/100)*CIRC} ${CIRC}`}
-          style={{ transition:'stroke-dasharray 1.6s cubic-bezier(.4,0,.2,1)', filter:`drop-shadow(0 0 14px ${color}70)` }} />
-      </svg>
-      <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'2px' }}>
-        <span style={{ fontSize:'38px', fontWeight:'900', letterSpacing:'-2.5px', lineHeight:1, color }}>{score}</span>
-        <span style={{ fontSize:'9px', color:'var(--t3)', fontWeight:'700', textTransform:'uppercase', letterSpacing:'1px' }}>/ 100</span>
-        <span style={{ fontSize:'10px', fontWeight:'700', color, letterSpacing:'0.2px', marginTop:'2px' }}>{label}</span>
+    <div style={{ display:'flex', alignItems:'flex-end', gap:'20px' }}>
+      <div>
+        <div style={{ fontFamily:'Georgia, serif', fontSize:'64px', lineHeight:1, color }}>{score}</div>
+        <div style={{ fontSize:'12px', color:'var(--t3)' }}>Security score / 100</div>
+      </div>
+      <div>
+        <div style={{ fontFamily:'Georgia, serif', fontSize:'34px', lineHeight:1, color }}>Grade {summary.grade || '—'}</div>
+        <div style={{ fontSize:'12px', color:'var(--t3)' }}>{summary.tested ?? '—'} attacks graded</div>
       </div>
     </div>
   );
 }
 
-/* ── Mini score bar ──────────────────────────────────────── */
-function SevBadge({ sev, count }) {
-  const m = SEV_META[sev];
-  if (!m || !count) return null;
-  return (
-    <div style={{ background:m.bg, border:`1px solid ${m.border}`, borderRadius:'10px', padding:'8px 14px', textAlign:'center', minWidth:'56px' }}>
-      <div style={{ fontSize:'18px', fontWeight:'900', color:m.color, letterSpacing:'-0.5px', lineHeight:1 }}>{count}</div>
-      <div style={{ fontSize:'9px', color:m.color, opacity:0.7, textTransform:'uppercase', letterSpacing:'0.5px', marginTop:'3px' }}>{m.label}</div>
-    </div>
-  );
-}
-
-/* ── Category breakdown chart ────────────────────────────── */
-function CategoryChart({ results }) {
-  const counts = {};
-  results.forEach(r => {
-    const c = (r.category||'unknown').replace(/_/g,' ');
-    counts[c] = (counts[c]||0)+1;
-  });
-  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const max = sorted[0]?.[1] || 1;
-  const COLORS = ['#dc2626','#ea580c','#b45309','#16a34a','#2563eb','#6366f1','#2dd4bf','#e879f9'];
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
-      {sorted.map(([cat,cnt],i)=>(
-        <div key={cat} style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-          <div style={{ width:'8px', height:'8px', borderRadius:'2px', background:COLORS[i%8], flexShrink:0 }} />
-          <div style={{ fontSize:'11px', color:'var(--t2)', fontWeight:'500', width:'130px', flexShrink:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textTransform:'capitalize' }}>{cat}</div>
-          <div style={{ flex:1, height:'4px', background:'rgba(17,24,39,0.05)', borderRadius:'2px', overflow:'hidden' }}>
-            <div style={{ width:`${(cnt/max)*100}%`, height:'100%', background:COLORS[i%8], borderRadius:'2px', transition:'width 0.8s cubic-bezier(.4,0,.2,1)', boxShadow:`0 0 6px ${COLORS[i%8]}60` }} />
-          </div>
-          <div style={{ fontSize:'12px', fontWeight:'700', color:'var(--t2)', width:'22px', textAlign:'right', flexShrink:0 }}>{cnt}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ── Finding card ────────────────────────────────────────── */
-function FindingCard({ item, index }) {
-  const [open, setOpen] = useState(index === 0);
+function FindingCard({ item, cats }) {
+  const [open, setOpen] = useState(false);
   const m = SEV_META[item.severity] || SEV_META.LOW;
-  const score = item.score ?? 0;
   return (
-    <div style={{
-      background:'var(--s2)', borderRadius:'10px', overflow:'hidden',
-      border:`1px solid var(--b1)`,
-      borderLeft:`3px solid ${m.color}`,
-      transition:'border-color 0.2s, box-shadow 0.2s',
-    }}
-      onMouseEnter={e=>e.currentTarget.style.boxShadow=`0 0 0 1px ${m.color}20, 0 4px 16px rgba(0,0,0,0.3)`}
-      onMouseLeave={e=>e.currentTarget.style.boxShadow='none'}
-    >
-      <button onClick={()=>setOpen(o=>!o)} style={{ width:'100%', padding:'12px 14px 12px 16px', display:'flex', alignItems:'center', gap:'12px', background:'none', border:'none', cursor:'pointer', textAlign:'left' }}>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'3px' }}>
-            <span style={{ fontSize:'10px', fontWeight:'700', color:m.color, background:m.bg, border:`1px solid ${m.border}`, borderRadius:'4px', padding:'1px 7px', textTransform:'uppercase', letterSpacing:'0.5px', flexShrink:0 }}>
-              {m.label}
-            </span>
-            <span style={{ fontSize:'11px', color:'var(--t3)', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.5px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {item.category?.replace(/_/g,' ')}
-            </span>
-          </div>
-          <div style={{ fontSize:'13px', color:'var(--t1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {item.attack?.substring(0,110)}{item.attack?.length > 110 ? '…' : ''}
-          </div>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:'8px', flexShrink:0 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-            <div style={{ width:'32px', height:'3px', background:'rgba(17,24,39,0.07)', borderRadius:'2px', overflow:'hidden' }}>
-              <div style={{ width:`${score*10}%`, height:'100%', background:m.color, borderRadius:'2px' }} />
-            </div>
-            <span style={{ fontSize:'11px', fontWeight:'800', color:m.color }}>{score}/10</span>
-          </div>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform:open?'rotate(180deg)':'none', transition:'transform 0.2s', color:'var(--t3)', flexShrink:0 }}>
-            <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        </div>
+    <div style={{ borderBottom:'1px solid var(--b1)' }}>
+      <button onClick={()=>setOpen(o=>!o)} aria-expanded={open}
+        style={{ width:'100%', padding:'11px 4px', display:'flex', alignItems:'center', gap:'12px', background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+        <span style={{ fontSize:'10px', fontWeight:'700', color:m.color, background:m.bg, borderRadius:'3px', padding:'2px 7px', letterSpacing:'0.5px', flexShrink:0, minWidth:'62px', textAlign:'center' }}>{m.label.toUpperCase()}</span>
+        <span style={{ flex:1, minWidth:0 }}>
+          <span style={{ display:'block', fontSize:'12px', color:'var(--t3)' }}>{titleOf(cats, item.category)}</span>
+          <span style={{ display:'block', fontSize:'13px', color:'var(--t1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.attack}</span>
+        </span>
+        <span style={{ fontSize:'12px', color:'var(--t3)', fontVariantNumeric:'tabular-nums', flexShrink:0 }}>{item.score ?? 0}/10</span>
       </button>
-
       {open && (
-        <div style={{ padding:'0 14px 14px 16px', borderTop:'1px solid var(--b1)' }}>
-          <div style={{ paddingTop:'12px', display:'flex', flexDirection:'column', gap:'10px' }}>
-            <div>
-              <div style={{ fontSize:'10px', color:'var(--t3)', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'5px', display:'flex', alignItems:'center', gap:'6px' }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-                Attack Prompt
-              </div>
-              <div style={{ fontSize:'12px', color:'var(--t2)', fontFamily:'monospace', background:'var(--s3)', border:`1px solid var(--b1)`, borderRadius:'7px', padding:'10px 14px', lineHeight:'1.65', wordBreak:'break-word', whiteSpace:'pre-wrap' }}>
-                {item.attack}
-              </div>
-            </div>
-            {item.reason && (
-              <div>
-                <div style={{ fontSize:'10px', color:'var(--t3)', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'5px', display:'flex', alignItems:'center', gap:'6px' }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  Analysis
-                </div>
-                <div style={{ fontSize:'13px', color:'var(--t1)', lineHeight:'1.7', background:'var(--s3)', borderRadius:'7px', padding:'10px 14px', border:`1px solid ${m.color}20` }}>
-                  {item.reason}
-                </div>
-              </div>
-            )}
-          </div>
+        <div style={{ padding:'0 4px 14px', display:'grid', gap:'10px' }}>
+          <Field label="Attack"><pre className="finding-pre">{item.attack}</pre></Field>
+          <Field label="Reply"><pre className="finding-pre">{item.response || '(empty reply)'}</pre></Field>
+          {item.reason && <Field label="Why"><div style={{ fontSize:'13px', color:'var(--t1)', lineHeight:1.6 }}>{item.reason}</div></Field>}
+          {item.detectors?.length > 0 && (
+            <Field label="Rule-based detection">
+              <ul style={{ margin:0, paddingLeft:'18px', fontSize:'13px' }}>{item.detectors.map((d,i)=><li key={i}>{d.evidence}</li>)}</ul>
+            </Field>
+          )}
+          {item.owasp?.length > 0 && <div style={{ fontSize:'12px', color:'var(--t3)' }}>OWASP LLM Top 10: {item.owasp.join(', ')}</div>}
         </div>
       )}
     </div>
   );
 }
 
-/* ── Recommendations ─────────────────────────────────────── */
-function Recommendations({ score, summary }) {
-  const recs = [];
-  if ((summary.critical||0)>0)
-    recs.push({ icon:'🚨', priority:'P1', title:'Patch critical prompt injections', body:'Your AI can be fully hijacked. Add strict output validation and input sanitization before any production use.', color:'#dc2626' });
-  if ((summary.high||0)>0)
-    recs.push({ icon:'⚠️', priority:'P2', title:'Harden against role-play bypasses', body:'High-severity findings stem from weak persona anchoring. Use layered instructions and deny-list known jailbreak phrases.', color:'#ea580c' });
-  if (score < 70)
-    recs.push({ icon:'🔐', priority:'P2', title:'Add output classifiers', body:'Deploy a secondary LLM or regex classifier to evaluate responses before serving to end users.', color:'#b45309' });
-  recs.push({ icon:'📅', priority:'P3', title:'Schedule regular re-scans', body:'AI models drift over time. Re-scan monthly or after every model update to catch regressions.', color:'var(--blue)' });
-  if (score>=85)
-    recs.push({ icon:'✅', priority:'P3', title:'Maintain excellent posture', body:'Strong resistance detected. Continue with automated weekly scans and red-team exercises.', color:'#16a34a' });
+function Field({ label, children }) {
   return (
-    <div className="card-glow" style={{ padding:'22px 24px', marginTop:'20px' }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
-        <div style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)', letterSpacing:'-0.2px' }}>Recommendations</div>
-        <span style={{ fontSize:'11px', color:'var(--t3)' }}>{recs.length} action{recs.length!==1?'s':''}</span>
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' }}>
-        {recs.slice(0,4).map((r,i)=>(
-          <div key={i} style={{ background:'var(--s2)', border:`1px solid var(--b1)`, borderRadius:'12px', padding:'14px 16px', display:'flex', gap:'12px', alignItems:'flex-start', position:'relative', overflow:'hidden', transition:'border-color 0.2s' }}
-            onMouseEnter={e=>e.currentTarget.style.borderColor='var(--b2)'}
-            onMouseLeave={e=>e.currentTarget.style.borderColor='var(--b1)'}
-          >
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:`linear-gradient(90deg,${r.color}70,transparent)` }} />
-            <div style={{ fontSize:'17px', flexShrink:0, marginTop:'1px' }}>{r.icon}</div>
-            <div style={{ minWidth:0 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'4px' }}>
-                <span style={{ fontSize:'9px', fontWeight:'800', color:r.color, background:`${r.color}18`, border:`1px solid ${r.color}30`, borderRadius:'4px', padding:'1px 6px', letterSpacing:'0.3px' }}>{r.priority}</span>
-                <span style={{ fontSize:'12px', fontWeight:'700', color:'var(--t1)' }}>{r.title}</span>
-              </div>
-              <div style={{ fontSize:'12px', color:'var(--t3)', lineHeight:'1.55' }}>{r.body}</div>
-            </div>
+    <div>
+      <div style={{ fontSize:'10px', color:'var(--t3)', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.7px', marginBottom:'4px' }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+/* ── Recommendations (built by the backend from the failed categories) ── */
+function Recommendations({ recs }) {
+  if (!recs) return null;
+  return (
+    <div className="card-glow" style={{ padding:'22px 24px', marginTop:'16px' }}>
+      <h2 style={{ fontSize:'15px', fontWeight:'700', marginBottom:'4px' }}>What to fix first</h2>
+      {recs.length === 0 ? (
+        <p style={{ fontSize:'13px', color:'var(--t3)' }}>No attack succeeded. Re-scan after every change to the system prompt or model.</p>
+      ) : recs.map(r => (
+        <div key={r.category} style={{ borderTop:'1px solid var(--b1)', padding:'14px 0' }}>
+          <div style={{ display:'flex', gap:'10px', alignItems:'baseline', flexWrap:'wrap' }}>
+            <span style={{ fontSize:'11px', fontWeight:'700', color: r.priority==='P1' ? '#b42318' : r.priority==='P2' ? '#a15c07' : 'var(--t3)', border:'1px solid currentColor', borderRadius:'3px', padding:'1px 6px' }}>{r.priority}</span>
+            <span style={{ fontSize:'14px', fontWeight:'700' }}>{r.title}</span>
+            <span style={{ fontSize:'12px', color:'var(--t3)' }}>{r.failed} failed · worst {r.worst.toLowerCase()}</span>
           </div>
-        ))}
+          <div style={{ fontSize:'12px', color:'var(--t3)', margin:'4px 0' }}>{r.owasp.join(' · ')}</div>
+          <ul style={{ margin:'4px 0 0', paddingLeft:'18px', fontSize:'13px', lineHeight:1.6 }}>{r.fix.map((tip,i)=><li key={i}>{tip}</li>)}</ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Fix it: hardened prompt + re-test the failed attacks ── */
+function FixIt({ scan, failedCount }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const type = scan.config?.target_type || scan.target_type;
+  const promptIsOurs = type === 'simulation' || type === 'groq';
+  const needsPastedPrompt = !scan.config?.has_system_prompt && type !== 'simulation';
+  const needsKey = (type === 'groq' || type === 'openai_compatible') && !scan.target_id;
+  const [pasted, setPasted] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [suggestion, setSuggestion] = useState(null);
+  const [busy, setBusy] = useState('');
+
+  if (!failedCount) return null;
+
+  const suggest = async () => {
+    if (needsPastedPrompt && !pasted.trim()) { toast('Paste your system prompt first.', 'error'); return; }
+    setBusy('suggest');
+    try {
+      const { data } = await scansAPI.remediate(scan.scan_id, pasted.trim() ? { system_prompt: pasted.trim() } : {});
+      setSuggestion(data);
+    } catch (e) { toast(errorMessage(e, 'Could not suggest a prompt.'), 'error'); }
+    finally { setBusy(''); }
+  };
+
+  const retest = async withPrompt => {
+    if (needsKey && !apiKey.trim()) { toast('Enter the target’s API key to re-test it.', 'error'); return; }
+    setBusy('retest');
+    try {
+      const body = {};
+      if (withPrompt && suggestion) body.system_prompt = suggestion.hardened_prompt;
+      if (apiKey.trim()) body.api_key = apiKey.trim();
+      const { data } = await scansAPI.retest(scan.scan_id, body);
+      toast(`Re-testing ${data.attacks} attacks.`, 'success');
+      navigate(`/results/${data.scan_id}`);
+    } catch (e) { toast(errorMessage(e, 'Could not start the re-test.'), 'error'); setBusy(''); }
+  };
+
+  return (
+    <div className="card-glow" style={{ padding:'22px 24px', marginTop:'16px' }}>
+      <h2 style={{ fontSize:'15px', fontWeight:'700', marginBottom:'4px' }}>Fix it</h2>
+      <p style={{ fontSize:'13px', color:'var(--t3)', marginBottom:'14px' }}>
+        Get a hardened system prompt written from these {failedCount} failed attacks, then re-run only those attacks to check the fix.
+      </p>
+      {needsPastedPrompt && !suggestion && (
+        <div className="form-group">
+          <label>Your system prompt</label>
+          <textarea value={pasted} onChange={e => setPasted(e.target.value)} maxLength={20000} style={{ minHeight:'80px' }}
+            placeholder="This target’s prompt wasn’t stored with the scan. Paste it here." />
+        </div>
+      )}
+      {needsKey && (
+        <div className="form-group">
+          <label>Target API key (needed to re-test)</label>
+          <input type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} />
+        </div>
+      )}
+      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+        {!suggestion && (
+          <button className="btn-primary" disabled={!!busy} onClick={suggest}>
+            {busy === 'suggest' ? 'Writing a hardened prompt…' : 'Suggest a hardened system prompt'}
+          </button>
+        )}
+        <button className="btn-outline" disabled={!!busy} onClick={() => retest(false)}>
+          {busy === 'retest' ? 'Starting…' : `Re-test the ${failedCount} failed attacks`}
+        </button>
+        {suggestion && promptIsOurs && (
+          <button className="btn-primary" disabled={!!busy} onClick={() => retest(true)}>Re-test with the hardened prompt</button>
+        )}
+      </div>
+      {suggestion && (
+        <div style={{ marginTop:'16px', display:'grid', gap:'12px' }}>
+          {suggestion.remove_from_prompt?.length > 0 && (
+            <div style={{ fontSize:'13px', color:'#b42318' }}>
+              Remove from any prompt: {suggestion.remove_from_prompt.join(', ')}
+            </div>
+          )}
+          <Field label="Hardened system prompt">
+            <pre className="finding-pre" style={{ maxHeight:'none' }}>{suggestion.hardened_prompt}</pre>
+          </Field>
+          <div>
+            <button className="btn-ghost" style={{ fontSize:'12px' }}
+              onClick={() => { navigator.clipboard?.writeText(suggestion.hardened_prompt); toast('Copied.', 'success', 1500); }}>
+              Copy prompt
+            </button>
+          </div>
+          {suggestion.changes?.length > 0 && (
+            <Field label="What changed in the prompt">
+              <ul style={{ margin:0, paddingLeft:'18px', fontSize:'13px', lineHeight:1.6 }}>{suggestion.changes.map((c, i) => <li key={i}>{c}</li>)}</ul>
+            </Field>
+          )}
+          {suggestion.app_changes?.length > 0 && (
+            <Field label="Also change in your application">
+              <ul style={{ margin:0, paddingLeft:'18px', fontSize:'13px', lineHeight:1.6 }}>{suggestion.app_changes.map((c, i) => <li key={i}>{c}</li>)}</ul>
+            </Field>
+          )}
+          {!promptIsOurs && (
+            <p style={{ fontSize:'12px', color:'var(--t3)' }}>Deploy the new prompt in your application, then re-test the failed attacks.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Category table ──────────────────────────────────────── */
+function CategoryTable({ results, cats }) {
+  const rows = useMemo(() => {
+    const by = {};
+    results.forEach(r => {
+      const row = by[r.category] || (by[r.category] = { id:r.category, attacks:0, failed:0 });
+      row.attacks += 1;
+      if (r.severity !== 'SAFE' && r.severity !== 'ERROR') row.failed += 1;
+    });
+    return Object.values(by).sort((a,b)=>b.failed/b.attacks - a.failed/a.attacks);
+  }, [results]);
+  return (
+    <div style={{ display:'grid', gap:'7px' }}>
+      {rows.map(r => {
+        const share = r.attacks ? r.failed / r.attacks : 0;
+        return (
+          <div key={r.id} style={{ display:'grid', gridTemplateColumns:'minmax(120px,190px) 1fr 52px', gap:'10px', alignItems:'center' }}>
+            <span style={{ fontSize:'12px', color:'var(--t2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{titleOf(cats, r.id)}</span>
+            <span style={{ height:'6px', background:'var(--b1)', borderRadius:'3px', overflow:'hidden' }}>
+              <span style={{ display:'block', width:`${Math.max(share*100, r.failed?3:0)}%`, height:'100%', background: r.failed ? '#b42318' : 'transparent' }} />
+            </span>
+            <span style={{ fontSize:'12px', color:'var(--t3)', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{r.failed}/{r.attacks}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Running / queued ────────────────────────────────────── */
+function RunningState({ scan, cats, onCancel }) {
+  const queued = scan.status === 'pending';
+  const done = scan.completed_attacks || 0;
+  const total = scan.total_attacks || 0;
+  const pct = queued ? 0 : (scan.progress || 0);
+  return (
+    <div style={{ maxWidth:'560px', margin:'56px auto' }}>
+      <div style={{ marginBottom:'24px' }}>
+        <div style={{ fontSize:'12px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--t3)' }}>{queued ? 'Queued' : 'Scanning'}</div>
+        <h2 style={{ fontFamily:'Georgia, serif', fontSize:'28px', fontWeight:600, margin:'6px 0' }}>{scan.target_name}</h2>
+        <p style={{ color:'var(--t3)', fontSize:'14px' }}>
+          {queued ? 'Waiting for a free scanner slot. It starts automatically.'
+                  : `${done} of ${total} attacks done${scan.current_category ? ` · now: ${titleOf(cats, scan.current_category)}` : ''}`}
+        </p>
+      </div>
+      <div className="card-glow" style={{ padding:'22px 24px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', fontSize:'13px', marginBottom:'8px' }}>
+          <span style={{ fontWeight:600 }}>Progress</span>
+          <span style={{ fontVariantNumeric:'tabular-nums' }}>{pct}%</span>
+        </div>
+        <div style={{ height:'8px', background:'var(--b1)', borderRadius:'4px', overflow:'hidden' }}>
+          <div style={{ height:'100%', width:`${pct}%`, background:'var(--t1)', transition:'width 0.8s ease' }} />
+        </div>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'16px', fontSize:'12px', color:'var(--t3)' }}>
+          <span>This page updates by itself. You can leave it; we'll email you when it's done.</span>
+          <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }} onClick={onCancel}>Cancel scan</button>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ── Running state ───────────────────────────────────────── */
-function RunningState({ scan }) {
-  const [dots, setDots] = useState(1);
-  const [prog, setProg] = useState(0);
+/* ── Comparison with the previous scan of this target ───── */
+function PreviousComparison({ scan }) {
+  const [diff, setDiff] = useState(null);
+  const navigate = useNavigate();
   useEffect(() => {
-    const t1 = setInterval(()=>setDots(d=>d%3+1), 600);
-    const t2 = setInterval(()=>setProg(p=>Math.min(p+0.35, 88)), 900);
-    return ()=>{ clearInterval(t1); clearInterval(t2); };
-  }, []);
-  const STAGES = [
-    { label:'Prompt Injection',       color:'#dc2626', pct:Math.min(prog*1.1,100) },
-    { label:'Jailbreak Templates',    color:'#ea580c', pct:Math.min(prog,100) },
-    { label:'Data Exfiltration',      color:'var(--blue)', pct:Math.min(prog*0.8,100) },
-    { label:'Authority Impersonation',color:'#b45309', pct:Math.min(prog*0.6,100) },
-    { label:'System Prompt Spoofing', color:'var(--purple)', pct:Math.min(prog*0.4,100) },
-    { label:'Context Manipulation',   color:'#2dd4bf', pct:Math.min(prog*0.25,100) },
-  ];
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await scansAPI.list({ target_name: scan.target_name, status: 'complete', limit: 10 });
+        const older = data.scans.find(s => s.scan_id !== scan.scan_id && s.created_at < scan.created_at);
+        if (!older) return;
+        const res = await scansAPI.compare(older.scan_id, scan.scan_id);
+        if (alive) setDiff({ ...res.data, previous: older });
+      } catch { /* comparison is optional */ }
+    })();
+    return () => { alive = false; };
+  }, [scan.scan_id, scan.target_name, scan.created_at]);
+  if (!diff) return null;
+  const delta = diff.score_delta;
   return (
-    <div style={{ maxWidth:'520px', margin:'56px auto' }}>
-      <div style={{ textAlign:'center', marginBottom:'32px' }}>
-        <div style={{ width:'72px', height:'72px', margin:'0 auto 20px', borderRadius:'20px', background:'linear-gradient(135deg,rgba(37,99,235,0.15),rgba(155,110,243,0.15))', border:'1px solid rgba(37,99,235,0.25)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'32px', boxShadow:'0 0 40px rgba(37,99,235,0.12), 0 0 0 8px rgba(37,99,235,0.04)' }}>🛡</div>
-        <h2 style={{ fontSize:'22px', fontWeight:'800', letterSpacing:'-0.5px', marginBottom:'6px' }}>Scan in Progress</h2>
-        <p style={{ color:'var(--t2)', fontSize:'14px', marginBottom:'3px' }}>Target: <strong style={{ color:'var(--t1)' }}>{scan.target_name}</strong></p>
-        <p style={{ color:'var(--t3)', fontSize:'13px' }}>Firing 1 000+ adversarial prompts{'.'.repeat(dots)}</p>
-      </div>
-
-      <div className="card-glow" style={{ padding:'22px 24px' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
-          <div style={{ fontSize:'11px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.9px', color:'var(--t3)' }}>Attack Progress</div>
-          <div style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'11px', color:'var(--blue)' }}>
-            <span className="pulse-dot" style={{ margin:0 }} />
-            Live
-          </div>
-        </div>
-        {STAGES.map(s=>(
-          <div key={s.label} style={{ marginBottom:'10px' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'4px' }}>
-              <span style={{ fontSize:'12px', color:'var(--t2)', fontWeight:'500' }}>{s.label}</span>
-              <span style={{ fontSize:'11px', color:'var(--t3)', fontVariantNumeric:'tabular-nums' }}>{Math.round(s.pct)}%</span>
-            </div>
-            <div style={{ height:'3px', background:'rgba(17,24,39,0.05)', borderRadius:'2px', overflow:'hidden' }}>
-              <div style={{ height:'100%', width:`${s.pct}%`, background:s.color, borderRadius:'2px', boxShadow:`0 0 8px ${s.color}50`, transition:'width 0.9s ease' }} />
-            </div>
-          </div>
-        ))}
-        <div style={{ marginTop:'16px', paddingTop:'14px', borderTop:'1px solid var(--b1)', display:'flex', justifyContent:'space-between', fontSize:'12px', color:'var(--t3)' }}>
-          <span>⏱ Est. time: 10–25 min</span>
-          <span>🔄 Page refreshes automatically</span>
-        </div>
-      </div>
+    <div className="card-glow" style={{ padding:'14px 18px', marginBottom:'16px', display:'flex', gap:'18px', alignItems:'center', flexWrap:'wrap', fontSize:'13px' }}>
+      <span style={{ fontWeight:700 }}>Since the previous scan</span>
+      <span style={{ color: delta > 0 ? '#16a34a' : delta < 0 ? '#b42318' : 'var(--t3)', fontWeight:700 }}>
+        {delta > 0 ? '+' : ''}{delta} points
+      </span>
+      <span>{diff.introduced_count} new failure{diff.introduced_count!==1?'s':''}</span>
+      <span>{diff.resolved_count} fixed</span>
+      <button className="btn-ghost" style={{ fontSize:'12px', marginLeft:'auto' }} onClick={()=>navigate(`/results/${diff.previous.scan_id}`)}>Open previous scan →</button>
     </div>
   );
 }
@@ -244,242 +303,191 @@ function RunningState({ scan }) {
 export default function Results() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const [scan,      setScan]      = useState(null);
   const [loading,   setLoading]   = useState(true);
-  const [copied,    setCopied]    = useState(false);
-  const [sevFilter, setSevFilter] = useState('ALL');
-  const scanStatusRef = useRef(null);
+  const [notFound,  setNotFound]  = useState(false);
+  const [sevFilter, setSevFilter] = useState('FAILED');
+  const [shown,     setShown]     = useState(PAGE);
+  const [cats,      setCats]      = useState({});
+  const [busy,      setBusy]      = useState('');
 
-  const fetchScan = async () => {
+  const fetchScan = useCallback(async () => {
     try {
       const r = await scansAPI.get(id);
       setScan(r.data);
-      scanStatusRef.current = r.data?.status;
+      setNotFound(false);
+    } catch (e) {
+      if (e.response?.status === 404) setNotFound(true);
+    } finally {
+      setLoading(false);
     }
-    catch {} finally { setLoading(false); }
-  };
+  }, [id]);
 
+  useEffect(() => { setLoading(true); fetchScan(); }, [fetchScan]);
+  usePolling(fetchScan, 3000, isActive(scan));
   useEffect(() => {
-    fetchScan();
-    const t = setInterval(() => {
-      const s = scanStatusRef.current;
-      if (s !== 'complete' && s !== 'failed') fetchScan();
-    }, 3000);
-    return () => clearInterval(t);
-  }, [id]); // eslint-disable-line
+    scansAPI.categories().then(r => setCats(Object.fromEntries(r.data.categories.map(c => [c.id, c])))).catch(() => {});
+  }, []);
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(()=>setCopied(false), 2400);
+  const results = useMemo(() => scan?.results?.results || [], [scan]);
+  const counts = useMemo(() => {
+    const c = { ALL: results.length, FAILED: 0 };
+    SEV_ORDER.forEach(s => { c[s] = 0; });
+    results.forEach(r => { c[r.severity] = (c[r.severity] || 0) + 1; if (!['SAFE','ERROR'].includes(r.severity)) c.FAILED += 1; });
+    return c;
+  }, [results]);
+  const visible = useMemo(() => {
+    const rank = Object.fromEntries(SEV_ORDER.map((s,i)=>[s,i]));
+    const list = sevFilter === 'ALL' ? results
+      : sevFilter === 'FAILED' ? results.filter(r => !['SAFE','ERROR'].includes(r.severity))
+      : results.filter(r => r.severity === sevFilter);
+    return [...list].sort((a,b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9) || (b.score||0) - (a.score||0));
+  }, [results, sevFilter]);
+
+  const download = async format => {
+    setBusy(format);
+    try { await downloadReport(id, format); }
+    catch (e) { toast(errorMessage(e, 'Download failed.'), 'error'); }
+    finally { setBusy(''); }
   };
 
-  const _results   = useMemo(()=> scan?.results?.results || [], [scan]);
-  const filteredResults = useMemo(()=>
-    sevFilter==='ALL' ? _results : _results.filter(r=>r.severity===sevFilter),
-  [_results, sevFilter]);
-  const sevCounts  = useMemo(()=>{
-    const c = { ALL:_results.length, CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0 };
-    _results.forEach(r=>{ if(c[r.severity]!==undefined) c[r.severity]++; });
-    return c;
-  }, [_results]);
+  const share = async () => {
+    setBusy('share');
+    try {
+      const { data } = await scansAPI.share(id, 7);
+      await navigator.clipboard?.writeText(data.url);
+      toast('Read-only link copied. It expires in 7 days.', 'success', 5000);
+    } catch (e) { toast(errorMessage(e, 'Could not create a share link.'), 'error'); }
+    finally { setBusy(''); }
+  };
+
+  const cancel = async () => {
+    try { await scansAPI.cancel(id); toast('Cancelling scan…', 'info'); fetchScan(); }
+    catch (e) { toast(errorMessage(e), 'error'); }
+  };
+
+  const remove = async () => {
+    if (!window.confirm('Delete this scan and its reports? This can’t be undone.')) return;
+    try { await scansAPI.delete(id); toast('Scan deleted.', 'success'); navigate('/'); }
+    catch (e) { toast(errorMessage(e), 'error'); }
+  };
 
   if (loading) return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'100px', gap:'14px' }}>
       <div className="spinner" style={{ width:'24px', height:'24px' }} />
-      <span style={{ color:'var(--t3)', fontSize:'14px' }}>Loading scan results…</span>
+      <span style={{ color:'var(--t3)', fontSize:'14px' }}>Loading scan…</span>
     </div>
   );
-  if (!scan) return (
+  if (notFound || !scan) return (
     <div className="empty-state" style={{ padding:'100px 40px' }}>
-      <div className="empty-state-icon">🔍</div>
       <h3>Scan not found</h3>
-      <p>This scan may have been deleted or the ID is invalid.</p>
-      <button className="btn-primary" onClick={()=>navigate('/')}>Back to Dashboard</button>
+      <p>{notFound ? 'This scan may have been deleted, or the link is wrong.' : 'We couldn’t load this scan. Check your connection.'}</p>
+      <button className="btn-primary" onClick={()=> notFound ? navigate('/') : fetchScan()}>{notFound ? 'Back to Dashboard' : 'Retry'}</button>
     </div>
   );
-  if (scan.status==='running'||scan.status==='pending') return <RunningState scan={scan} />;
-  if (scan.status==='failed') return (
+  if (isActive(scan)) return <RunningState scan={scan} cats={cats} onCancel={cancel} />;
+  if (scan.status === 'failed' || scan.status === 'cancelled') return (
     <div className="empty-state" style={{ padding:'100px 40px' }}>
-      <div className="empty-state-icon">❌</div>
-      <h3 style={{ color:'#dc2626' }}>Scan Failed</h3>
-      <p>{scan.error||'An error occurred during the scan.'}</p>
-      <button className="btn-primary" onClick={()=>navigate('/')}>Back to Dashboard</button>
+      <h3 style={{ color: scan.status === 'failed' ? '#b42318' : 'var(--t1)' }}>
+        {scan.status === 'failed' ? 'Scan failed' : 'Scan cancelled'}
+      </h3>
+      <p style={{ maxWidth:'520px', margin:'8px auto 20px' }}>{scan.error_message || 'The scan stopped before it finished.'}</p>
+      <div style={{ display:'flex', gap:'8px', justifyContent:'center' }}>
+        <button className="btn-primary" onClick={()=>navigate('/new-scan')}>Start a new scan</button>
+        <button className="btn-outline" onClick={remove}>Delete</button>
+      </div>
     </div>
   );
 
-  const summary      = scan.results?.summary || {};
-  const score        = summary.security_score || 0;
-  const results      = _results;
-  const totalFindings = (summary.critical||0)+(summary.high||0)+(summary.medium||0)+(summary.low||0);
-  const riskColor    = score>=70 ? '#16a34a' : score>=40 ? '#b45309' : '#dc2626';
-  const riskDesc     = score>=85
-    ? 'Excellent security posture. Strong resistance to all tested attack vectors.'
-    : score>=70 ? 'Good resistance to adversarial attacks. A few findings need review before production.'
-    : score>=40 ? 'Several vulnerabilities detected. Prioritize critical and high findings immediately.'
-    : 'Critical vulnerabilities found. Highly susceptible to adversarial exploitation. Immediate remediation required.';
+  const summary = { ...(scan.summary || {}), ...(scan.results?.summary || {}) };
 
   return (
     <div>
-
-      {/* ── Breadcrumb + actions ─────────────── */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'22px', gap:'16px' }}>
+      {/* ── Header ───────────────────────────── */}
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'20px', gap:'16px', flexWrap:'wrap' }}>
         <div>
-          <button onClick={()=>navigate('/')}
-            style={{ display:'inline-flex', alignItems:'center', gap:'5px', background:'none', border:'none', cursor:'pointer', color:'var(--t3)', fontSize:'12px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'8px', padding:0, transition:'color 0.15s' }}
-            onMouseEnter={e=>e.currentTarget.style.color='var(--t1)'}
-            onMouseLeave={e=>e.currentTarget.style.color='var(--t3)'}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-            Dashboard
-          </button>
+          <button onClick={()=>navigate('/')} className="btn-ghost" style={{ fontSize:'12px', padding:0, marginBottom:'8px' }}>← Dashboard</button>
           <h1 className="page-title" style={{ marginBottom:'4px' }}>{scan.target_name}</h1>
-          <p style={{ fontSize:'13px', color:'var(--t3)', marginBottom:0, display:'flex', alignItems:'center', gap:'8px' }}>
-            {new Date(scan.created_at).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}
-            <span style={{ color:'var(--b3)' }}>·</span>
-            <span style={{ fontFamily:'monospace', fontSize:'11px', color:'var(--t3)' }}>{scan.scan_id?.slice(0,12)}…</span>
+          <p style={{ fontSize:'13px', color:'var(--t3)', margin:0 }}>
+            {new Date(scan.created_at).toLocaleString('en-US',{ dateStyle:'long', timeStyle:'short' })}
+            {scan.duration_seconds ? ` · took ${formatDuration(scan.duration_seconds)}` : ''}
+            {scan.config?.target_type ? ` · ${scan.config.target_type.replace(/_/g,' ')}` : ''}
+            {scan.config?.model ? ` · ${scan.config.model}` : ''}
           </p>
         </div>
-        <div style={{ display:'flex', gap:'8px', marginTop:'30px', flexShrink:0 }}>
-          <button onClick={copyLink} style={{ display:'inline-flex', alignItems:'center', gap:'6px', padding:'8px 14px', background:'var(--s2)', border:'1px solid var(--b2)', borderRadius:'8px', color:'var(--t2)', fontSize:'13px', fontWeight:'600', cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s' }}
-            onMouseEnter={e=>{e.currentTarget.style.color='var(--t1)';e.currentTarget.style.borderColor='var(--b3)';}}
-            onMouseLeave={e=>{e.currentTarget.style.color='var(--t2)';e.currentTarget.style.borderColor='var(--b2)';}}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            {copied ? '✓ Copied!' : 'Copy Link'}
-          </button>
-          <button className="btn-primary" onClick={()=>window.open(`${API_URL}/download/${id}`,'_blank')}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download PDF
-          </button>
+        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
+          <button className="btn-primary" disabled={!!busy} onClick={()=>download('pdf')}>{busy==='pdf' ? 'Preparing…' : 'Download PDF'}</button>
+          <button className="btn-outline" disabled={!!busy} onClick={()=>download('html')}>HTML</button>
+          <button className="btn-outline" disabled={!!busy} onClick={()=>download('md')}>Markdown</button>
+          <button className="btn-outline" disabled={!!busy} onClick={()=>download('json')}>JSON</button>
+          <button className="btn-outline" disabled={!!busy} onClick={share}>{busy==='share' ? 'Creating…' : 'Share link'}</button>
+          <button className="btn-ghost" onClick={remove}>Delete</button>
         </div>
       </div>
 
-      {/* ── Hero card ────────────────────────── */}
-      <div className="results-hero" style={{ marginBottom:'16px' }}>
-        {/* Score color accent bar */}
-        <div style={{ height:'3px', background:`linear-gradient(90deg, ${riskColor}80, ${riskColor}20, transparent)` }} />
+      <PreviousComparison scan={scan} />
 
-        <div style={{ display:'grid', gridTemplateColumns:'200px 1fr', gap:0 }}>
-          {/* Left: ring + severity chips */}
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'16px', padding:'32px 20px', borderRight:'1px solid var(--b1)' }}>
-            <ScoreRing score={score} />
-            <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', justifyContent:'center' }}>
-              {SEV_ORDER.map(k=><SevBadge key={k} sev={k} count={summary[k.toLowerCase()]} />)}
-            </div>
-          </div>
-
-          {/* Right: summary + chart */}
-          <div style={{ padding:'28px 32px' }}>
-            <div style={{ marginBottom:'20px' }}>
-              <div style={{ fontSize:'10px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.9px', color:'var(--t3)', marginBottom:'8px' }}>Security Assessment Summary</div>
-              <p style={{ fontSize:'14px', color:'var(--t2)', lineHeight:'1.7', marginBottom:'16px', maxWidth:'500px' }}>{riskDesc}</p>
-
-              {/* Metrics strip */}
-              <div style={{ display:'flex', gap:'28px', flexWrap:'wrap' }}>
-                {[
-                  { label:'Prompts Fired',  val:'1 000+', mono:false },
-                  { label:'Total Findings', val:totalFindings, mono:false },
-                  { label:'Categories Hit', val:[...new Set(results.map(r=>r.category))].length||'0', mono:false },
-                  { label:'Scan ID',        val:scan.scan_id?.slice(0,8)+'…', mono:true },
-                ].map(m=>(
-                  <div key={m.label}>
-                    <div style={{ fontSize:m.mono?'12px':'20px', fontWeight:'900', letterSpacing:m.mono?'0':'-0.8px', color:'var(--t1)', fontFamily:m.mono?'monospace':'inherit', lineHeight:1, marginBottom:'4px' }}>{m.val}</div>
-                    <div style={{ fontSize:'10px', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'0.6px', fontWeight:'600' }}>{m.label}</div>
-                  </div>
-                ))}
+      {/* ── Summary ──────────────────────────── */}
+      <div className="results-hero" style={{ marginBottom:'16px', padding:'28px 32px', display:'grid', gridTemplateColumns:'minmax(260px, 1fr) 2fr', gap:'32px' }}>
+        <div>
+          <ScoreBlock summary={summary} />
+          <div style={{ display:'flex', gap:'18px', marginTop:'22px', flexWrap:'wrap' }}>
+            {['critical','high','medium','low','safe'].map(k => (
+              <div key={k}>
+                <div style={{ fontFamily:'Georgia, serif', fontSize:'24px', color: SEV_META[k.toUpperCase()].color }}>{summary[k] ?? 0}</div>
+                <div style={{ fontSize:'11px', color:'var(--t3)', textTransform:'capitalize' }}>{k}</div>
               </div>
-            </div>
-
-            {results.length > 0 && (
-              <div style={{ borderTop:'1px solid var(--b1)', paddingTop:'16px' }}>
-                <div style={{ fontSize:'10px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.9px', color:'var(--t3)', marginBottom:'10px' }}>Findings by Category</div>
-                <CategoryChart results={results} />
-              </div>
-            )}
+            ))}
           </div>
+          {summary.errors > 0 && (
+            <p style={{ fontSize:'12px', color:'#a15c07', marginTop:'14px' }}>
+              {summary.errors} attack{summary.errors!==1?'s':''} couldn’t be completed and {summary.errors!==1?'aren’t':'isn’t'} counted in the score.
+            </p>
+          )}
+          <p style={{ fontSize:'12px', color:'var(--t3)', marginTop:'14px', lineHeight:1.5 }}>
+            Any critical finding caps the score at 49, any high at 69, any medium at 89.
+          </p>
+        </div>
+        <div>
+          <div style={{ fontSize:'10px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.9px', color:'var(--t3)', marginBottom:'10px' }}>Failed attacks by category</div>
+          <CategoryTable results={results} cats={cats} />
         </div>
       </div>
+
+      <Recommendations recs={scan.recommendations} />
+      <FixIt scan={scan} failedCount={counts.FAILED} />
 
       {/* ── Findings ─────────────────────────── */}
-      {results.length > 0 && (
-        <div className="card-glow" style={{ overflow:'hidden', marginBottom:'4px' }}>
-          {/* Header + filters */}
-          <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--b1)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
-            <div>
-              <span style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)' }}>All Findings</span>
-              <span style={{ fontSize:'12px', color:'var(--t3)', marginLeft:'8px' }}>({totalFindings})</span>
-            </div>
-            <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
-              {['ALL',...SEV_ORDER].map(sev=>{
-                const cnt = sevCounts[sev];
-                if (cnt===0 && sev!=='ALL') return null;
-                const active = sevFilter===sev;
-                const m = SEV_META[sev];
-                return (
-                  <button key={sev}
-                    onClick={()=>setSevFilter(sev)}
-                    style={{
-                      padding:'5px 11px', borderRadius:'20px', fontSize:'11px', fontWeight:'700',
-                      cursor:'pointer', fontFamily:'inherit', letterSpacing:'0.3px',
-                      transition:'all 0.12s', border:'1px solid',
-                      borderColor: active && m ? m.border : 'var(--b1)',
-                      background:  active && m ? m.bg : 'transparent',
-                      color:       active && m ? m.color : active ? 'var(--blue)' : 'var(--t3)',
-                    }}
-                  >
-                    {sev==='ALL' ? `All (${cnt})` : `${sev[0]+sev.slice(1).toLowerCase()} (${cnt})`}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Findings list */}
-          <div style={{ padding:'14px' }}>
-            {(sevFilter==='ALL' ? SEV_ORDER : [sevFilter]).map(sev=>{
-              const items = filteredResults.filter(r=>r.severity===sev);
-              if (!items.length) return null;
-              const m = SEV_META[sev];
+      <div className="card-glow" style={{ overflow:'hidden', marginTop:'16px' }}>
+        <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--b1)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+          <span style={{ fontSize:'15px', fontWeight:'700' }}>Findings</span>
+          <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
+            {['FAILED','ALL',...SEV_ORDER].map(sev => {
+              if (!['FAILED','ALL'].includes(sev) && !counts[sev]) return null;
+              const label = sev === 'FAILED' ? 'Failed' : sev === 'ALL' ? 'All' : SEV_META[sev].label;
               return (
-                <div key={sev} style={{ marginBottom:'18px' }}>
-                  {sevFilter==='ALL' && (
-                    <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'8px', paddingLeft:'2px' }}>
-                      <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:m.color, boxShadow:`0 0 6px ${m.color}80` }} />
-                      <span style={{ fontSize:'12px', fontWeight:'700', color:m.color }}>{m.label}</span>
-                      <span style={{ fontSize:'12px', color:'var(--t3)' }}>{items.length} finding{items.length!==1?'s':''}</span>
-                    </div>
-                  )}
-                  <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
-                    {items.slice(0,8).map((item,i)=><FindingCard key={i} item={item} index={i} />)}
-                    {items.length>8 && (
-                      <button style={{ width:'100%', padding:'12px', background:'var(--s2)', border:'1px solid var(--b1)', borderRadius:'8px', cursor:'pointer', color:'var(--t3)', fontSize:'13px', fontFamily:'inherit', transition:'all 0.15s' }}
-                        onClick={()=>window.open(`${API_URL}/download/${id}`,'_blank')}
-                        onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--b2)';e.currentTarget.style.color='var(--t1)';}}
-                        onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--b1)';e.currentTarget.style.color='var(--t3)';}}
-                      >
-                        +{items.length-8} more findings — <span style={{ color:'var(--blue)', fontWeight:'600' }}>download the full PDF report →</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
+                <button key={sev} className={`filter-btn${sevFilter===sev?' active':''}`} style={{ padding:'4px 11px', fontSize:'11px' }}
+                  onClick={()=>{ setSevFilter(sev); setShown(PAGE); }}>
+                  {label} ({counts[sev] || 0})
+                </button>
               );
             })}
           </div>
         </div>
-      )}
-
-      {results.length === 0 && (
-        <div className="card-glow" style={{ padding:'48px', textAlign:'center' }}>
-          <div style={{ fontSize:'32px', marginBottom:'12px' }}>🎉</div>
-          <div style={{ fontSize:'17px', fontWeight:'700', color:'#16a34a', marginBottom:'6px' }}>No Vulnerabilities Found</div>
-          <div style={{ fontSize:'14px', color:'var(--t3)' }}>Your AI application passed all adversarial tests with zero findings.</div>
+        <div style={{ padding:'4px 20px 14px' }}>
+          {visible.length === 0 ? (
+            <p style={{ fontSize:'13px', color:'var(--t3)', padding:'18px 0' }}>
+              {sevFilter === 'FAILED' ? 'No attack succeeded against this target.' : 'Nothing to show for this filter.'}
+            </p>
+          ) : visible.slice(0, shown).map((item, i) => <FindingCard key={`${item.category}-${i}-${item.attack.slice(0,20)}`} item={item} cats={cats} />)}
+          {visible.length > shown && (
+            <button className="btn-outline" style={{ width:'100%', marginTop:'12px' }} onClick={()=>setShown(n => n + PAGE)}>
+              Show {Math.min(PAGE, visible.length - shown)} more of {visible.length - shown} remaining
+            </button>
+          )}
         </div>
-      )}
-
-      {/* ── Recommendations ──────────────────── */}
-      <Recommendations score={score} summary={summary} />
-
+      </div>
     </div>
   );
 }

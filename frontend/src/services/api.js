@@ -12,6 +12,11 @@ export function clearAuth() {
   localStorage.removeItem(REFRESH_KEY);
 }
 
+export function saveTokens(data) {
+  if (data?.access_token)  localStorage.setItem(ACCESS_KEY, data.access_token);
+  if (data?.refresh_token) localStorage.setItem(REFRESH_KEY, data.refresh_token);
+}
+
 const api = axios.create({ baseURL: API_URL });
 
 // Attach JWT to every request
@@ -29,7 +34,8 @@ api.interceptors.response.use(
   res => res,
   async err => {
     const original = err.config;
-    if (err.response?.status === 401 && original && !original._retry) {
+    const isAuthCall = original?.url?.startsWith('/auth/login') || original?.url?.startsWith('/auth/refresh');
+    if (err.response?.status === 401 && original && !original._retry && !isAuthCall) {
       original._retry = true;
       const refresh = localStorage.getItem(REFRESH_KEY);
       if (!refresh) return Promise.reject(err);
@@ -38,11 +44,7 @@ api.interceptors.response.use(
         if (!refreshPromise) {
           refreshPromise = axios
             .post(`${API_URL}/auth/refresh`, { refresh_token: refresh })
-            .then(({ data }) => {
-              localStorage.setItem(ACCESS_KEY,  data.access_token);
-              localStorage.setItem(REFRESH_KEY, data.refresh_token);
-              return data.access_token;
-            })
+            .then(({ data }) => { saveTokens(data); return data.access_token; })
             .finally(() => { refreshPromise = null; });
         }
         const newToken = await refreshPromise;
@@ -58,29 +60,117 @@ api.interceptors.response.use(
   }
 );
 
+/** The API's error message, or a fallback. */
+export function errorMessage(err, fallback = 'Something went wrong. Please try again.') {
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg.replace(/^Value error, /, '');
+  if (err?.message === 'Network Error') return 'Can’t reach the server. Check your connection and retry.';
+  return fallback;
+}
+
+/** Saves a Blob as a file without opening it in the app's origin. */
+export function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const DOWNLOAD_PATHS = { pdf: '/download', html: '/download/html', md: '/download/md', json: '/download/json' };
+
+/**
+ * Downloads a report with the user's token (window.open can't send it).
+ * The file is saved, never rendered inside the app, so a malicious HTML
+ * report can't read the app's storage.
+ */
+export async function downloadReport(scanId, format = 'pdf') {
+  const res = await api.get(`${DOWNLOAD_PATHS[format]}/${scanId}`, { responseType: 'blob' });
+  const disposition = res.headers?.['content-disposition'] || '';
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
+  saveBlob(res.data, match ? match[1] : `LLM_Security_Report_${scanId}.${format}`);
+}
+
 // ── Auth ──────────────────────────────────────────────────────
 export const authAPI = {
-  login    : (username, password) =>
-    api.post('/auth/login',    { username, password }),
-  register : (username, email, password) =>
-    api.post('/auth/register', { username, email, password }),
+  login    : (username, password) => api.post('/auth/login', { username, password }),
+  register : (username, email, password) => api.post('/auth/register', { username, email, password }),
   me       : () => api.get('/auth/me'),
-  logout   : () => clearAuth(),
-  forgotPassword : email =>
-    api.post('/auth/forgot-password', { email }),
-  resetPassword  : (token, new_password) =>
-    api.post('/auth/reset-password', { token, new_password }),
-  changePassword : (current_password, new_password) =>
-    api.put('/auth/password', { current_password, new_password }),
+  logout   : async () => {
+    const refresh = localStorage.getItem(REFRESH_KEY);
+    clearAuth();
+    if (refresh) {
+      try { await axios.post(`${API_URL}/auth/logout`, { refresh_token: refresh }); } catch { /* offline: tokens expire anyway */ }
+    }
+  },
+  logoutEverywhere: () => api.post('/auth/logout', { refresh_token: localStorage.getItem(REFRESH_KEY), everywhere: true }),
+  forgotPassword : email => api.post('/auth/forgot-password', { email }),
+  resetPassword  : (token, new_password) => api.post('/auth/reset-password', { token, new_password }),
+  changePassword : (current_password, new_password) => api.put('/auth/password', { current_password, new_password }),
+  verifyEmail    : token => api.post('/auth/verify-email', { token }),
+  resendVerification: () => api.post('/auth/resend-verification'),
+  exportData     : () => api.get('/auth/me/export'),
+  deleteAccount  : password => api.delete('/auth/me', { data: { password } }),
 };
 
 // ── Scans ─────────────────────────────────────────────────────
 export const scansAPI = {
-  list   : ()       => api.get('/scans'),
+  list   : (params = {}) => api.get('/scans', { params: { limit: 200, ...params } }),
   get    : id       => api.get(`/scan/${id}`),
   start  : payload  => api.post('/scan', payload),
+  cancel : id       => api.post(`/scan/${id}/cancel`),
   delete : id       => api.delete(`/scan/${id}`),
   results: id       => api.get(`/results/${id}`),
+  compare: (baseId, headId) => api.get(`/scan/compare/${baseId}/${headId}`),
+  share  : (id, days = 7) => api.post(`/scan/${id}/share`, { days }),
+  remediate: (id, body = {}) => api.post(`/scan/${id}/remediate`, body),
+  retest : (id, body = {}) => api.post(`/scan/${id}/retest`, body),
+  unshare: id       => api.delete(`/scan/${id}/share`),
+  shared : token    => api.get(`/shared/${token}`),
+  categories: ()    => api.get('/categories'),
+  categoryStats: () => api.get('/analytics/categories'),
+  models: ()        => api.get('/models'),
+  testTarget: payload => api.post('/targets/test', payload),
+};
+
+// ── Saved targets, schedules, custom prompts ──────────────────
+export const targetsAPI = {
+  list  : ()          => api.get('/api/targets'),
+  create: payload     => api.post('/api/targets', payload),
+  update: (id, body)  => api.put(`/api/targets/${id}`, body),
+  remove: id          => api.delete(`/api/targets/${id}`),
+};
+
+export const schedulesAPI = {
+  list  : ()          => api.get('/api/schedules'),
+  create: payload     => api.post('/api/schedules', payload),
+  update: (id, body)  => api.put(`/api/schedules/${id}`, body),
+  remove: id          => api.delete(`/api/schedules/${id}`),
+};
+
+export const promptsAPI = {
+  list  : ()                  => api.get('/api/prompts'),
+  add   : (category, prompt)  => api.post('/api/prompts', { category, prompt }),
+  remove: id                  => api.delete(`/api/prompts/${id}`),
+};
+
+// ── API keys and webhook ──────────────────────────────────────
+export const keysAPI = {
+  list  : ()    => api.get('/api/keys'),
+  create: name  => api.post('/api/keys', { name }),
+  revoke: id    => api.delete(`/api/keys/${id}`),
+};
+
+export const webhookAPI = {
+  get   : ()    => api.get('/api/webhook'),
+  set   : url   => api.put('/api/webhook', { url: url || null }),
+  rotate: ()    => api.post('/api/webhook/rotate'),
+  test  : ()    => api.post('/api/webhook/test'),
 };
 
 // ── Health ────────────────────────────────────────────────────
@@ -90,14 +180,15 @@ export const healthAPI = {
 
 // ── Waitlist ──────────────────────────────────────────────────
 export const waitlistAPI = {
-  join : email => api.post(`/api/waitlist?email=${encodeURIComponent(email)}`),
-  count: ()    => api.get('/api/waitlist/count'),
+  join : (email, name) => api.post('/api/waitlist', { email, name }),
+  count: ()            => api.get('/api/waitlist/count'),
 };
 
 // ── Plans / Payment ───────────────────────────────────────────
 export const plansAPI = {
-  list    : ()              => api.get('/api/plans'),
-  checkout: (plan, email)   => api.post('/api/checkout', { plan, email }),
+  list    : ()   => api.get('/api/plans'),
+  checkout: plan => api.post('/api/checkout', { plan }),
+  portal  : ()   => api.post('/api/billing/portal'),
 };
 
 export default api;
