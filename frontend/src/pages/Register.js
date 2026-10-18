@@ -98,8 +98,8 @@ export default function Register() {
             <h2 className="auth-left-headline">
               Start Securing<br /><span>Your AI Today.</span>
             </h2>
-            <p style={{ fontSize:'14px', color:'rgba(17,24,39,0.35)', lineHeight:'1.6', marginTop:'16px', maxWidth:'340px' }}>
-              Free forever. No credit card. Get your first full security report in under 15 minutes.
+            <p style={{ fontSize:'14px', color:'var(--t3)', lineHeight:'1.6', marginTop:'16px', maxWidth:'340px' }}>
+              Free plan, no credit card. Your first full security report on the same day.
             </p>
           </div>
 
@@ -109,7 +109,7 @@ export default function Register() {
               <div className="auth-scan-dot" style={{ background:'#ef4444' }} />
               <div className="auth-scan-dot" style={{ background:'#f59e0b' }} />
               <div className="auth-scan-dot" style={{ background:'#22c55e' }} />
-              <span className="auth-scan-title">Live Scan — Banking AI Chatbot</span>
+              <span className="auth-scan-title">Example scan — banking chatbot</span>
               <span style={{ display:'flex', alignItems:'center', gap:'5px' }}>
                 <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:'var(--blue)', animation:'pulse-glow 1.8s ease-in-out infinite' }} />
                 <span style={{ fontSize:'10px', color:'rgba(37,99,235,0.9)', fontWeight:'700' }}>Running</span>
@@ -135,10 +135,10 @@ export default function Register() {
 
           <div className="auth-left-features">
             {[
-              '1000+ attack prompts across 21 vulnerability categories',
+              '1,000+ attack prompts across 22 vulnerability categories',
               'Free plan — no credit card required to start',
-              'Detailed PDF reports in under 15 minutes',
-              'Works with OpenAI, Groq, and any custom API',
+              'PDF, HTML, Markdown and JSON reports',
+              'Works with any OpenAI-compatible API or your own REST endpoint',
             ].map(f => (
               <div key={f} className="auth-left-feat">
                 <div className="auth-left-feat-dot" />

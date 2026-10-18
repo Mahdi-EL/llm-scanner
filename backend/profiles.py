@@ -1,6 +1,3 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
 from attacks.prompts import ATTACK_PROMPTS
 
 

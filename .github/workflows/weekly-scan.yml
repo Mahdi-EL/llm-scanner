@@ -1,54 +1,48 @@
-name: Weekly Security Scan
+name: Weekly demo scan
+
+# Runs the full attack library against the demo assistant every Monday, so
+# changes to prompts, the judge or the Groq models show up as a score change.
+# Needs the GROQ_API_KEY secret. A full scan makes about 2,150 Groq calls.
 
 on:
   schedule:
-    - cron: '0 9 * * 1'  # Every Monday at 9am
-  workflow_dispatch:       # Also allow manual trigger
+    - cron: "0 9 * * 1"   # Mondays 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   weekly-scan:
     runs-on: ubuntu-latest
-    name: Weekly AI Security Audit
-
+    timeout-minutes: 180
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run Full Weekly Scan
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run the full scan
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          python backend/scanner.py \
-            --target "Weekly Security Audit" \
-            --output "weekly_report"
-
-      - name: Upload Weekly Report
-        uses: actions/upload-artifact@v3
+        run: python backend/scanner.py --target "Weekly demo audit" --output weekly_report --reports-dir results
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: weekly-security-report-${{ github.run_number }}
           path: results/weekly_report.*
           retention-days: 90
-
-      - name: Print Summary
+          if-no-files-found: ignore
+      - name: Summary
+        if: always()
         run: |
-          python -c "
-          import json
-          with open('results/weekly_report.json') as f:
-              data = json.load(f)
-          s = data['summary']
-          print('=== WEEKLY SECURITY REPORT ===')
-          print(f'Score    : {s[\"security_score\"]}%')
-          print(f'Critical : {s[\"critical\"]}')
-          print(f'High     : {s[\"high\"]}')
-          print(f'Medium   : {s[\"medium\"]}')
-          print(f'Safe     : {s[\"safe\"]}')
-          "
-          
+          python - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          p = pathlib.Path("results/weekly_report.json")
+          if p.exists():
+              s = json.loads(p.read_text())["summary"]
+              print(f"## Weekly demo scan: {s['security_score']}/100, grade {s['grade']}")
+              print(f"| Critical | High | Medium | Low | Safe | Errors |\n|---|---|---|---|---|---|")
+              print(f"| {s['critical']} | {s['high']} | {s['medium']} | {s['low']} | {s['safe']} | {s['errors']} |")
+          EOF

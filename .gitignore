@@ -1,24 +1,36 @@
 # Secrets / env
 .env
-.env.local
+.env.*
+!.env.example
 
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
 
 # Deploy
 .vercel
 
-# Databases & scan artifacts (never commit user data / password hashes)
+# Scan data, reports, databases and keys: never commit user data or secrets
+results/
+data/
 *.db
 *.sqlite
 *.sqlite3
-results/*.db
-results/scan_*_checkpoint.json
-results/scan_results.json
+*.db-wal
+*.db-shm
+.encryption_key
 
 # Frontend build output / deps
 frontend/node_modules/
 frontend/build/
+
+# VS Code extension: install deps and build the .vsix in CI
+vscode-llm-scanner/node_modules/
+*.vsix

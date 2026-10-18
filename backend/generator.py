@@ -1,6 +1,4 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
+import groq_models
 from groq import Groq
 from dotenv import load_dotenv
 import os
@@ -97,7 +95,7 @@ Rules :
 Generate {count} new prompts now :"""
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=groq_models.default_model(),
         messages=[{"role": "user", "content": generation_prompt}],
         max_tokens=800
     )
@@ -153,7 +151,7 @@ Rules :
 Generate {count} domain-specific prompts now :"""
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=groq_models.default_model(),
         messages=[{"role": "user", "content": domain_prompt}],
         max_tokens=800
     )
@@ -195,7 +193,7 @@ SCORE: [number]
 REASON: [one sentence]"""
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=groq_models.default_model(),
         messages=[{"role": "user", "content": scoring_prompt}],
         max_tokens=80
     )
@@ -208,7 +206,7 @@ REASON: [one sentence]"""
         if line.startswith("SCORE:"):
             try:
                 score = int(line.replace("SCORE:", "").strip())
-            except:
+            except Exception:
                 score = 5
         elif line.startswith("REASON:"):
             reason = line.replace("REASON:", "").strip()
@@ -236,7 +234,7 @@ Make them realistic and varied.
 One prompt per line. No explanations."""
 
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=groq_models.default_model(),
             messages=[{"role": "user", "content": cve_prompt}],
             max_tokens=400
         )

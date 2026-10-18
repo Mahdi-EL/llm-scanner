@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { scansAPI } from '../services/api';
+import CustomPrompts from '../components/CustomPrompts';
 
 const CATEGORIES = [
   {
@@ -396,6 +398,11 @@ export default function ThreatIntel() {
   const [expanded,   setExpanded]   = useState(null);
   const [filterSev,  setFilterSev]  = useState('all');
   const [filterText, setFilterText] = useState('');
+  const [totalAttacks, setTotalAttacks] = useState(null);
+
+  useEffect(() => {
+    scansAPI.categories().then(r => setTotalAttacks(r.data.total_attacks)).catch(() => {});
+  }, []);
 
   const counts = {
     all      : CATEGORIES.length,
@@ -414,9 +421,9 @@ export default function ThreatIntel() {
     <div>
       {/* Header */}
       <div style={{ marginBottom:'32px' }}>
-        <h1 className="page-title">Threat Intelligence</h1>
+        <h1 className="page-title">Attack library</h1>
         <p className="page-subtitle" style={{ marginBottom:0 }}>
-          21 attack categories · understand how LLMs are exploited and how to defend them
+          The attack categories every scan runs, how LLMs are exploited, how to defend them, and your own custom attacks
         </p>
       </div>
 
@@ -427,7 +434,7 @@ export default function ThreatIntel() {
           { label:'Critical',        value: counts.critical,   color:'#dc2626' },
           { label:'High',            value: counts.high,       color:'#ea580c' },
           { label:'Medium',          value: counts.medium,     color:'#b45309' },
-          { label:'Attack Prompts',  value: '1 010+',          color:'var(--blue)' },
+          { label:'Attack Prompts',  value: totalAttacks ? totalAttacks.toLocaleString() : '—', color:'var(--blue)' },
         ].map(s => (
           <div key={s.label} className="ti-stat">
             <div className="ti-stat-val" style={{ color:s.color }}>{s.value}</div>
@@ -435,6 +442,8 @@ export default function ThreatIntel() {
           </div>
         ))}
       </div>
+
+      <CustomPrompts />
 
       {/* Filters */}
       <div style={{ display:'flex', gap:'10px', alignItems:'center', marginBottom:'20px', flexWrap:'wrap' }}>
@@ -484,7 +493,7 @@ export default function ThreatIntel() {
         <div>
           <div style={{ fontSize:'13px', fontWeight:'600', color:'var(--t1)', marginBottom:'4px' }}>About this data</div>
           <div style={{ fontSize:'12px', color:'var(--t3)', lineHeight:'1.7' }}>
-            LLMScanner tests against <strong style={{ color:'var(--t2)' }}>1 010 curated attack prompts</strong> across these 21 categories.
+            LLMScanner tests against <strong style={{ color:'var(--t2)' }}>{totalAttacks ? totalAttacks.toLocaleString() : 'over 1,000'} curated attack prompts</strong>, plus 15 multi-turn conversations for chat-style targets.
             Severity ratings reflect the typical impact on deployed production systems.
             New categories and prompts are added continuously as the threat landscape evolves.
           </div>

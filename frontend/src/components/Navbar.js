@@ -44,7 +44,7 @@ export default function Navbar() {
   });
 
   return (
-    <nav style={{
+    <nav className="site-nav" style={{
       height       : '60px',
       position     : 'sticky',
       top          : 0,
@@ -69,7 +69,7 @@ export default function Navbar() {
       </Link>
 
       {/* Nav links */}
-      <div style={{ display:'flex', gap:'32px', alignItems:'center' }}>
+      <div className="site-nav-links" style={{ display:'flex', gap:'32px', alignItems:'center' }}>
         {user ? (
           <>
             <Link to="/"         style={link('/')}>Dashboard</Link>

@@ -13,7 +13,7 @@ const SCAN_ATTACKS = [
 const TRUST = [
   { value:'1000+', label:'Attack prompts' },
   { value:'21',    label:'Vuln categories' },
-  { value:'<15m',  label:'Per scan' },
+  { value:'OWASP', label:'LLM Top 10 mapped' },
 ];
 
 const IcoEyeOff = () => (
@@ -57,7 +57,7 @@ export default function Login() {
         <div className="pw-aside-mid">
           <h2 className="pw-aside-title">Security testing for your AI, on autopilot.</h2>
           <p className="pw-aside-sub">
-            Fire 1000+ adversarial prompts across 21 attack categories and get a full
+            Fire 1000+ adversarial prompts across 22 attack categories and get a full
             security report in minutes.
           </p>
 

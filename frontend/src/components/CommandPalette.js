@@ -5,9 +5,9 @@ const NAV_COMMANDS = [
   { id:'nav-dash',         icon:'⊞', label:'Go to Dashboard',    sub:'Home',                   path:'/' },
   { id:'nav-scan',         icon:'⚡', label:'New Security Scan',  sub:'Launch a scan',          path:'/new-scan' },
   { id:'nav-reports',      icon:'📄', label:'Reports',            sub:'All scan reports',       path:'/reports' },
-  { id:'nav-integrations', icon:'🔌', label:'Integrations',       sub:'Connect AI targets',     path:'/integrations' },
+  { id:'nav-targets',      icon:'🔌', label:'Targets and CI',     sub:'Saved targets, schedules, CI', path:'/targets' },
   { id:'nav-analytics',    icon:'📊', label:'Analytics',          sub:'Trends & insights',      path:'/analytics' },
-  { id:'nav-threat-intel', icon:'🛡', label:'Threat Intelligence',sub:'21 attack categories',   path:'/threat-intel' },
+  { id:'nav-threat-intel', icon:'🛡', label:'Attack library',    sub:'Categories and custom attacks',   path:'/threat-intel' },
   { id:'nav-settings',     icon:'⚙', label:'Settings',           sub:'Account & security',     path:'/settings' },
   { id:'nav-pricing',      icon:'💎', label:'Pricing Plans',      sub:'Upgrade plan',           path:'/pricing' },
 ];
@@ -39,7 +39,7 @@ export default function CommandPalette({ open, onClose, recentScans = [] }) {
         id   : s.scan_id,
         icon : '🛡️',
         label: s.target_name,
-        sub  : `Score: ${s.results?.summary?.security_score ?? '—'} · ${new Date(s.created_at).toLocaleDateString()}`,
+        sub  : `Score: ${s.summary?.security_score ?? '—'} · ${new Date(s.created_at).toLocaleDateString()}`,
         path : `/results/${s.scan_id}`,
       }));
     const g = [];

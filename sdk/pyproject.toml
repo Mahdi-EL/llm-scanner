@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llmscanner"
+version = "3.0.0"
+description = "Python client and CLI for the LLM Scanner API: security scans for AI applications"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Mahdi EL" }]
+dependencies = ["requests>=2.32.4"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Security",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/Mahdi-EL/llm-scanner"
+
+[project.scripts]
+llmscanner = "llmscanner.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["llmscanner*"]

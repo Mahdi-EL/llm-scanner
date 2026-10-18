@@ -1,0 +1,15 @@
+target-version = "py311"
+line-length = 120
+extend-exclude = ["archive", "frontend", "vscode-llm-scanner", "results"]
+
+[lint]
+# Ruff's defaults (syntax errors, pyflakes, the most useful pycodestyle rules)
+# plus bugbear, which catches likely bugs such as mutable default arguments.
+select = ["E4", "E7", "E9", "F", "B"]
+ignore = [
+  "B008",   # FastAPI's Depends() in argument defaults is intended
+  "B904",   # `raise ... from` everywhere is noise for HTTPException re-raises
+]
+
+[lint.per-file-ignores]
+"backend/tests/*" = ["E402"]

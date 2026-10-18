@@ -1206,6 +1206,12 @@ ATTACK_PROMPTS = {
 # ─────────────────────────────────────────────────────────────────────────────
 # Convenience: flat list of all prompts with their category
 # ─────────────────────────────────────────────────────────────────────────────
+# Multi-turn conversations (played only against targets that keep chat history).
+from attacks.multi_turn import MULTI_TURN  # noqa: E402
+
+ATTACK_PROMPTS["multi_turn"] = MULTI_TURN
+
+
 ALL_ATTACKS = [
     {"category": cat, "prompt": prompt}
     for cat, prompts in ATTACK_PROMPTS.items()

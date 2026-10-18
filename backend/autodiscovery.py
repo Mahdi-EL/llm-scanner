@@ -1,6 +1,4 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
+import groq_models
 import os
 import json
 from groq import Groq
@@ -48,7 +46,7 @@ The follow-up attacks should :
 One prompt per line. No explanations. No numbering."""
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=groq_models.default_model(),
         messages=[{"role": "user", "content": followup_prompt}],
         max_tokens=400
     )
@@ -81,7 +79,7 @@ def build_exploitation_chain(
 
     depth = how many rounds of follow-up attacks to try
     """
-    from analysis import analyze_response, calculate_final_severity, behavior_diff
+    from analysis import analyze_response, calculate_final_severity
 
     chain = [{
         "step"    : 0,
@@ -151,7 +149,7 @@ def build_exploitation_chain(
 
             # Stop if we hit CRITICAL
             if best_result["severity"] == "CRITICAL":
-                print(f"  🚨 CRITICAL reached — stopping chain")
+                print("  🚨 CRITICAL reached — stopping chain")
                 break
         else:
             break
@@ -186,7 +184,7 @@ def auto_discovery_scan(
         return []
 
     print(f"\n{'='*60}")
-    print(f"  AUTO-DISCOVERY MODE")
+    print("  AUTO-DISCOVERY MODE")
     print(f"  Found {len(vulnerable)} findings to explore")
     print(f"{'='*60}")
 

@@ -1,10 +1,6 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
 import os
 import re
 import json
-import hashlib
 import time
 from datetime import datetime
 from dotenv import load_dotenv
@@ -312,7 +308,7 @@ class AIFirewall:
         stats = self.get_stats()
 
         print(f"\n  {'='*60}")
-        print(f"  🔥 AI FIREWALL STATISTICS")
+        print("  🔥 AI FIREWALL STATISTICS")
         print(f"  {'='*60}")
         print(f"  Total Blocked    : {stats['total_blocked']}")
         print(f"  Total Allowed    : {stats['total_allowed']}")
@@ -322,7 +318,7 @@ class AIFirewall:
         print(f"  Recent High Risk : {stats['recent_high_risk']}")
         print()
         print(f"  Rules ({len(self.rules)}) :")
-        for rule_id, rule in self.rules.items():
+        for rule in self.rules.values():
             enabled = "✅" if rule.get("enabled") else "❌"
             print(
                 f"  {enabled} {rule['name']:<40} "
@@ -404,7 +400,7 @@ if __name__ == "__main__":
 
     elif args.command == "rules":
         print(f"\n  Firewall Rules ({len(DEFAULT_RULES)}):")
-        for rule_id, rule in DEFAULT_RULES.items():
+        for rule in DEFAULT_RULES.values():
             print(f"\n  {rule['name']}")
             print(f"    Action  : {rule['action'].upper()}")
             print(f"    Severity: {rule['severity']}")

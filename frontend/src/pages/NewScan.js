@@ -1,321 +1,288 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { scansAPI } from '../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { scansAPI, targetsAPI, promptsAPI, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 const TARGET_TYPES = [
-  {
-    id     : 'simulation',
-    icon   : '🧪',
-    label  : 'Simulation',
-    desc   : 'Safe sandbox — no live API needed. Perfect for development & testing.',
-    tag    : 'Recommended',
-    color  : 'var(--blue)',
-    features: ['No API key required', 'Instant setup', 'Banking bot preset'],
-  },
-  {
-    id     : 'groq',
-    icon   : '⚡',
-    label  : 'Groq',
-    desc   : 'Ultra-fast inference with Llama, Mixtral and Gemma models.',
-    color  : '#f97316',
-    features: ['Llama 3 / Mixtral', 'gsk_ API key', 'Sub-second latency'],
-  },
-  {
-    id     : 'openai_compatible',
-    icon   : '🤖',
-    label  : 'OpenAI API',
-    desc   : 'GPT-4o, GPT-3.5-turbo or any OpenAI-compatible endpoint.',
-    color  : '#10a37f',
-    features: ['GPT-4o / GPT-3.5', 'Custom base URL', 'sk- API key'],
-  },
-  {
-    id     : 'custom_rest',
-    icon   : '🔌',
-    label  : 'Custom REST',
-    desc   : 'Any HTTP endpoint that accepts a chat-style JSON request body.',
-    color  : 'var(--purple)',
-    features: ['Any JSON API', 'Bearer token auth', 'Full flexibility'],
-  },
+  { id:'simulation', label:'Simulation', tag:'No key needed',
+    desc:'We run a Groq model with your system prompt (or a banking demo prompt) and attack it.',
+    defaultModel:'' },
+  { id:'groq', label:'Groq',
+    desc:'Your own Groq model, with your key and your system prompt.',
+    defaultModel:'' },
+  { id:'openai_compatible', label:'OpenAI-compatible API',
+    desc:'OpenAI, Azure OpenAI, Together, Groq’s OpenAI endpoint, or any /chat/completions API.',
+    defaultModel:'gpt-4o-mini' },
+  { id:'custom_rest', label:'Custom REST endpoint',
+    desc:'Any HTTP endpoint that takes a JSON message and returns a JSON reply.',
+    defaultModel:'' },
 ];
 
-const ATTACK_CATEGORIES = [
-  { label:'Prompt Injection',       sev:'critical', icon:'💉' },
-  { label:'Jailbreaks',             sev:'critical', icon:'🔓' },
-  { label:'System Prompt Leakage',  sev:'high',     icon:'🕵️' },
-  { label:'Data Exfiltration',      sev:'high',     icon:'📤' },
-  { label:'Authority Impersonation',sev:'high',     icon:'👤' },
-  { label:'Role Confusion',         sev:'high',     icon:'🎭' },
-  { label:'Logical Paradoxes',      sev:'medium',   icon:'♾️' },
-  { label:'Context Manipulation',   sev:'medium',   icon:'🌀' },
-  { label:'Encoding Attacks',       sev:'medium',   icon:'🔐' },
-  { label:'Token Smuggling',        sev:'medium',   icon:'📦' },
-  { label:'Multi-turn Exploits',    sev:'medium',   icon:'🔄' },
-  { label:'+ 10 more categories',   sev:'low',      icon:'⋯' },
-];
+const EMPTY = {
+  target_name:'', target_type:'simulation', system_prompt:'', api_url:'', api_key:'',
+  model:'', baseline_question:'', input_field:'', output_field:'',
+};
 
-const SEV_COLOR = { critical:'#dc2626', high:'#ea580c', medium:'#b45309', low:'var(--t3)' };
-
-const STEPS = [
-  { num:1, label:'Name Target' },
-  { num:2, label:'Select Type' },
-  { num:3, label:'Configure'   },
-];
-
-function StepProgress({ filled }) {
+function Section({ title, subtitle, children }) {
   return (
-    <div className="step-progress" style={{ marginBottom:'24px' }}>
-      {STEPS.map((s, i) => {
-        const done   = filled > i;
-        const active = filled === i;
-        return (
-          <React.Fragment key={s.num}>
-            <div className={`step-item${done ? ' is-done' : active ? ' is-active' : ''}`}>
-              <div className="step-num">{done ? (
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-              ) : s.num}</div>
-              <div className="step-label">{s.label}</div>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div style={{ flex:1, height:'1px', background: done ? 'var(--blue)' : 'var(--b1)', transition:'background 0.3s' }} />
-            )}
-          </React.Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-function SectionCard({ step, title, subtitle, children }) {
-  return (
-    <div style={{
-      background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'14px',
-      padding:'24px', marginBottom:'12px', position:'relative', overflow:'hidden',
-    }}>
-      <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(17,24,39,0.06),transparent)' }} />
-      <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'20px' }}>
-        <div style={{
-          width:'26px', height:'26px', background:'var(--blue-soft)', border:'1px solid rgba(37,99,235,0.25)',
-          borderRadius:'7px', display:'flex', alignItems:'center', justifyContent:'center',
-          fontSize:'11px', fontWeight:'800', color:'var(--blue)', flexShrink:0,
-        }}>{step}</div>
-        <div>
-          <div style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)' }}>{title}</div>
-          <div style={{ fontSize:'12px', color:'var(--t3)', marginTop:'1px' }}>{subtitle}</div>
-        </div>
-      </div>
+    <section style={{ background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'10px', padding:'22px 24px', marginBottom:'12px' }}>
+      <h2 style={{ fontSize:'15px', fontWeight:'700', marginBottom:'2px' }}>{title}</h2>
+      {subtitle && <p style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'16px' }}>{subtitle}</p>}
       {children}
-    </div>
+    </section>
   );
 }
 
 export default function NewScan() {
   const navigate = useNavigate();
   const toast    = useToast();
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
-    target_name  : '',
-    target_type  : 'simulation',
-    system_prompt: '',
-    api_url      : '',
-    api_key      : '',
-  });
+  const { user } = useAuth();
+  const [params] = useSearchParams();
+  const [form, setForm]         = useState(EMPTY);
+  const [loading, setLoading]   = useState(false);
+  const [testing, setTesting]   = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [chosen, setChosen]     = useState(null);        // null = all categories
+  const [targets, setTargets]   = useState([]);
+  const [targetId, setTargetId] = useState(params.get('target') || '');
+  const [saveTarget, setSaveTarget] = useState(false);
+  const [customCount, setCustomCount] = useState(0);
+  const [includeCustom, setIncludeCustom] = useState(true);
+  const [models, setModels] = useState({ default_target: '', groq: [] });
 
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  useEffect(() => {
+    scansAPI.categories().then(r => setCategories(r.data.categories)).catch(() => {});
+    targetsAPI.list().then(r => setTargets(r.data.targets)).catch(() => {});
+    promptsAPI.list().then(r => setCustomCount(r.data.prompts.length)).catch(() => {});
+    scansAPI.models().then(r => setModels(r.data)).catch(() => {});
+  }, []);
 
-  const filledSteps = form.target_name.trim() ? 2 : 0;
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setTestResult(null); };
+  const type = TARGET_TYPES.find(t => t.id === form.target_type);
+  const needsURL = form.target_type === 'openai_compatible' || form.target_type === 'custom_rest';
+  const savedTarget = targets.find(t => t.id === targetId);
+
+  useEffect(() => {
+    if (savedTarget && !form.target_name) setForm(f => ({ ...f, target_name: savedTarget.name }));
+  }, [savedTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const attackCount = useMemo(() => {
+    const pool = chosen ? categories.filter(c => chosen.includes(c.id)) : categories;
+    return pool.reduce((n, c) => n + c.attacks, 0) + (includeCustom ? customCount : 0);
+  }, [categories, chosen, includeCustom, customCount]);
+
+  const payload = () => {
+    const out = { target_type: form.target_type };
+    ['system_prompt','api_url','api_key','model','baseline_question','input_field','output_field']
+      .forEach(k => { if (form[k]?.trim()) out[k] = form[k].trim(); });
+    return out;
+  };
+
+  const validate = () => {
+    if (!form.target_name.trim()) return 'Give the target a name.';
+    if (savedTarget) return null;
+    if (needsURL && !form.api_url.trim()) return 'Enter the API URL.';
+    if (needsURL && !/^https?:\/\//i.test(form.api_url.trim())) return 'The URL must start with http:// or https://';
+    if (form.target_type === 'groq' && !form.api_key.trim()) return 'Enter your Groq API key.';
+    if (chosen && chosen.length === 0) return 'Pick at least one attack category.';
+    return null;
+  };
+
+  const testConnection = async () => {
+    const problem = needsURL && !form.api_url.trim() ? 'Enter the API URL first.' : null;
+    if (problem) { toast(problem, 'error'); return; }
+    setTesting(true); setTestResult(null);
+    try { const { data } = await scansAPI.testTarget(payload()); setTestResult(data); }
+    catch (e) { setTestResult({ ok:false, error: errorMessage(e) }); }
+    finally { setTesting(false); }
+  };
 
   const handleSubmit = async () => {
-    if (!form.target_name.trim()) { toast('Please enter a target name.', 'error'); return; }
+    const problem = validate();
+    if (problem) { toast(problem, 'error'); return; }
     setLoading(true);
     try {
-      const res = await scansAPI.start({
-        target_name  : form.target_name,
-        target_type  : form.target_type,
-        system_prompt: form.system_prompt || null,
-        api_url      : form.api_url       || null,
-        api_key      : form.api_key       || null,
-      });
-      toast('Scan started successfully!', 'success');
+      let useTarget = targetId || null;
+      if (!useTarget && saveTarget) {
+        const { data } = await targetsAPI.create({ name: form.target_name.trim(), ...payload() });
+        useTarget = data.id;
+      }
+      const body = useTarget
+        ? { target_name: form.target_name.trim(), target_id: useTarget }
+        : { target_name: form.target_name.trim(), ...payload() };
+      if (chosen) body.categories = chosen;
+      body.include_custom_prompts = includeCustom;
+      const res = await scansAPI.start(body);
+      toast('Scan queued.', 'success');
       navigate(`/results/${res.data.scan_id}`);
-    } catch {
-      toast('Failed to start scan. Make sure the API is running.', 'error');
+    } catch (e) {
+      toast(errorMessage(e, 'Failed to start the scan.'), 'error', 6000);
       setLoading(false);
     }
   };
 
-  const needsURL = form.target_type === 'openai_compatible' || form.target_type === 'custom_rest';
-  const needsKey = form.target_type !== 'simulation';
+  const toggleCategory = id => {
+    setChosen(c => {
+      const current = c || categories.map(x => x.id);
+      return current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+    });
+  };
+
+  const quota = user?.scan_limit == null ? null : `${user.scans_this_month ?? 0} of ${user.scan_limit} scans used this month`;
 
   return (
-    <div style={{ maxWidth:'700px' }}>
-
-      {/* Header */}
-      <div style={{ marginBottom:'28px' }}>
-        <h1 className="page-title">New Security Scan</h1>
+    <div style={{ maxWidth:'720px' }}>
+      <div style={{ marginBottom:'24px' }}>
+        <h1 className="page-title">New security scan</h1>
         <p className="page-subtitle" style={{ marginBottom:0 }}>
-          Configure a target and launch a full adversarial assessment against your AI
+          Point the scanner at an AI application and fire {attackCount ? attackCount.toLocaleString() : 'its'} adversarial prompts at it.
+          {quota && <span style={{ color:'var(--t3)' }}> · {quota}</span>}
         </p>
       </div>
 
-      <StepProgress filled={filledSteps} />
+      {targets.length > 0 && (
+        <Section title="Saved target" subtitle="Re-scan a target you saved before, with its stored settings and key.">
+          <div className="form-group" style={{ marginBottom:0 }}>
+            <select value={targetId} onChange={e => { setTargetId(e.target.value); setTestResult(null); }} style={{ width:'100%' }}>
+              <option value="">— Configure a new target below —</option>
+              {targets.map(t => <option key={t.id} value={t.id}>{t.name} ({t.config.target_type?.replace(/_/g,' ')})</option>)}
+            </select>
+          </div>
+        </Section>
+      )}
 
-      {/* Step 1: Name */}
-      <SectionCard step={1} title="Name your target" subtitle="Give a descriptive name for this AI application">
+      <Section title="Name" subtitle="Shown in reports and used to compare scans of the same target.">
         <div className="form-group" style={{ marginBottom:0 }}>
-          <label>Target Name</label>
-          <input
-            value={form.target_name}
-            onChange={e => set('target_name', e.target.value)}
-            placeholder="e.g. Banking AI Chatbot, Customer Support Bot, HR Assistant…"
-            style={{ fontSize:'14px' }}
-            autoFocus
-          />
+          <input value={form.target_name} onChange={e => set('target_name', e.target.value)} maxLength={120}
+            placeholder="e.g. Support chatbot (production)" autoFocus aria-label="Target name" />
         </div>
-      </SectionCard>
+      </Section>
 
-      {/* Step 2: Type */}
-      <SectionCard step={2} title="Select target type" subtitle="Choose how to connect to your AI application">
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' }}>
-          {TARGET_TYPES.map(t => {
-            const active = form.target_type === t.id;
-            return (
-              <button key={t.id} onClick={() => set('target_type', t.id)} style={{
-                padding:'16px', background: active ? `${t.color}10` : 'var(--s2)',
-                border:`1px solid ${active ? `${t.color}55` : 'var(--b1)'}`,
-                borderRadius:'10px', cursor:'pointer', textAlign:'left',
-                position:'relative', transition:'all 0.15s',
-              }}
-                onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = 'var(--b2)'; }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = 'var(--b1)'; }}
-              >
-                {t.tag && (
-                  <span style={{ position:'absolute', top:'9px', right:'9px', fontSize:'9px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.5px', color:'var(--blue)', background:'var(--blue-soft)', border:'1px solid rgba(37,99,235,0.2)', borderRadius:'10px', padding:'2px 7px' }}>
-                    {t.tag}
-                  </span>
-                )}
-                {active && (
-                  <div style={{ position:'absolute', top:'10px', left:'10px', width:'7px', height:'7px', borderRadius:'50%', background:t.color, boxShadow:`0 0 6px ${t.color}80` }} />
-                )}
-                <div style={{ fontSize:'20px', marginBottom:'8px', marginTop: active ? '2px' : '0' }}>{t.icon}</div>
-                <div style={{ fontSize:'13px', fontWeight:'700', color: active ? t.color : 'var(--t1)', marginBottom:'4px' }}>{t.label}</div>
-                <div style={{ fontSize:'11px', color:'var(--t3)', lineHeight:'1.4', marginBottom:'10px' }}>{t.desc}</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:'3px' }}>
-                  {t.features.map(f => (
-                    <div key={f} style={{ display:'flex', alignItems:'center', gap:'5px', fontSize:'11px', color: active ? 'var(--t2)' : 'var(--t3)' }}>
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={active ? t.color : 'var(--t3)'} strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                      {f}
+      {!savedTarget && (
+        <>
+          <Section title="Target type">
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'10px' }}>
+              {TARGET_TYPES.map(t => {
+                const active = form.target_type === t.id;
+                return (
+                  <button key={t.id} type="button" onClick={() => set('target_type', t.id)} aria-pressed={active}
+                    style={{ padding:'14px 16px', textAlign:'left', cursor:'pointer', borderRadius:'8px', fontFamily:'inherit',
+                             background: active ? 'var(--s2)' : 'transparent',
+                             border: `1px solid ${active ? 'var(--t1)' : 'var(--b1)'}` }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', gap:'8px' }}>
+                      <span style={{ fontSize:'13px', fontWeight:'700', color:'var(--t1)' }}>{t.label}</span>
+                      {t.tag && <span style={{ fontSize:'10px', color:'var(--t3)' }}>{t.tag}</span>}
                     </div>
-                  ))}
+                    <div style={{ fontSize:'12px', color:'var(--t3)', lineHeight:1.45, marginTop:'4px' }}>{t.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+
+          <Section title="Connection" subtitle={needsURL ? 'Where to send attacks and how to authenticate.' : 'What the simulated assistant is told.'}>
+            {needsURL && (
+              <div className="form-group">
+                <label>API URL *</label>
+                <input value={form.api_url} onChange={e => set('api_url', e.target.value)} maxLength={2048}
+                  placeholder={form.target_type === 'openai_compatible' ? 'https://api.openai.com/v1' : 'https://api.yourapp.com/chat'} />
+              </div>
+            )}
+            {form.target_type !== 'simulation' && (
+              <div className="form-group">
+                <label>{form.target_type === 'groq' ? 'Groq API key *' : `API key or bearer token${form.target_type === 'custom_rest' ? ' (optional)' : ''}`}</label>
+                <input type="password" autoComplete="off" value={form.api_key} onChange={e => set('api_key', e.target.value)} maxLength={1000}
+                  placeholder={form.target_type === 'groq' ? 'gsk_…' : 'sk-… or token'} />
+              </div>
+            )}
+            {form.target_type !== 'custom_rest' && (
+              <div className="form-group">
+                <label>Model</label>
+                <input value={form.model} onChange={e => set('model', e.target.value)} maxLength={100}
+                  list={form.target_type === 'openai_compatible' ? undefined : 'groq-models'}
+                  placeholder={`Default: ${type.defaultModel || models.default_target || 'chosen by the server'}`} />
+                <datalist id="groq-models">{models.groq.map(m => <option key={m} value={m} />)}</datalist>
+              </div>
+            )}
+            {form.target_type === 'custom_rest' && (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'10px' }}>
+                <div className="form-group">
+                  <label>Request field</label>
+                  <input value={form.input_field} onChange={e => set('input_field', e.target.value)} placeholder="message" />
                 </div>
+                <div className="form-group">
+                  <label>Response field</label>
+                  <input value={form.output_field} onChange={e => set('output_field', e.target.value)} placeholder="response" />
+                </div>
+              </div>
+            )}
+            <div className="form-group">
+              <label>{form.target_type === 'simulation' || form.target_type === 'groq'
+                ? 'System prompt to test (optional)' : 'Your system prompt (optional, improves leak detection)'}</label>
+              <textarea value={form.system_prompt} onChange={e => set('system_prompt', e.target.value)} maxLength={20000}
+                style={{ minHeight:'90px' }}
+                placeholder={form.target_type === 'simulation'
+                  ? 'Leave empty to use the demo banking assistant.'
+                  : 'If you paste it, any reply that repeats it word for word is flagged.'} />
+            </div>
+            <div className="form-group" style={{ marginBottom:'12px' }}>
+              <label>Baseline question (optional)</label>
+              <input value={form.baseline_question} onChange={e => set('baseline_question', e.target.value)} maxLength={1000}
+                placeholder="A normal question for this app. Default: “Hi! What can you help me with?”" />
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
+              <button type="button" className="btn-outline" onClick={testConnection} disabled={testing}>
+                {testing ? 'Testing…' : 'Test connection'}
               </button>
+              {testResult && (testResult.ok
+                ? <span style={{ fontSize:'12px', color:'#16a34a' }}>Connected in {testResult.latency_ms} ms. Reply: “{testResult.reply_preview?.slice(0, 90)}”</span>
+                : <span style={{ fontSize:'12px', color:'#b42318' }}>{testResult.error}</span>)}
+            </div>
+            <label style={{ display:'flex', gap:'8px', alignItems:'center', fontSize:'13px', marginTop:'14px' }}>
+              <input type="checkbox" checked={saveTarget} onChange={e => setSaveTarget(e.target.checked)} />
+              Save this target for one-click re-scans and schedules (its key is stored encrypted)
+            </label>
+          </Section>
+        </>
+      )}
+
+      <Section title="Attack categories" subtitle={chosen ? `${chosen.length} of ${categories.length} categories selected` : `All ${categories.length || 21} categories`}>
+        <div style={{ display:'flex', gap:'8px', marginBottom:'10px' }}>
+          <button type="button" className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => setChosen(null)}>Select all</button>
+          <button type="button" className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => setChosen([])}>Clear</button>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(210px, 1fr))', gap:'6px' }}>
+          {categories.map(c => {
+            const on = !chosen || chosen.includes(c.id);
+            return (
+              <label key={c.id} title={c.tests} style={{ display:'flex', gap:'8px', alignItems:'flex-start', fontSize:'12px', padding:'7px 9px', border:'1px solid var(--b1)', borderRadius:'6px', cursor:'pointer' }}>
+                <input type="checkbox" checked={on} onChange={() => toggleCategory(c.id)} style={{ marginTop:'2px' }} />
+                <span>
+                  <span style={{ display:'block', color:'var(--t1)' }}>{c.title}</span>
+                  <span style={{ color:'var(--t3)' }}>{c.attacks} attacks · {c.owasp[0]?.split(' ')[0]}</span>
+                </span>
+              </label>
             );
           })}
         </div>
-      </SectionCard>
-
-      {/* Step 3: Config */}
-      <SectionCard step={3} title={needsURL ? 'API configuration' : 'System prompt (optional)'} subtitle={needsURL ? 'Enter your endpoint URL and credentials' : 'Customize the behavior of your simulated AI'}>
-
-        {form.target_type === 'simulation' && (
-          <div className="form-group" style={{ marginBottom:0 }}>
-            <label>Custom System Prompt</label>
-            <textarea
-              value={form.system_prompt}
-              onChange={e => set('system_prompt', e.target.value)}
-              placeholder="Leave empty to use the default banking chatbot simulation…&#10;&#10;Example: You are a helpful customer service assistant for Acme Corp. You have access to order history and can process refunds..."
-              style={{ minHeight:'100px' }}
-            />
-          </div>
+        {customCount > 0 && (
+          <label style={{ display:'flex', gap:'8px', alignItems:'center', fontSize:'13px', marginTop:'12px' }}>
+            <input type="checkbox" checked={includeCustom} onChange={e => setIncludeCustom(e.target.checked)} />
+            Include my {customCount} custom attack prompt{customCount !== 1 ? 's' : ''}
+          </label>
         )}
+      </Section>
 
-        {needsURL && (
-          <div className="form-group">
-            <label>API Endpoint URL *</label>
-            <input value={form.api_url} onChange={e => set('api_url', e.target.value)} placeholder="https://api.yourapp.com/v1/chat/completions" />
-          </div>
-        )}
-
-        {needsKey && !needsURL && form.target_type === 'groq' && (
-          <div className="form-group" style={{ marginBottom:0 }}>
-            <label>Groq API Key</label>
-            <input value={form.api_key} onChange={e => set('api_key', e.target.value)} placeholder="gsk_…" type="password" />
-          </div>
-        )}
-
-        {needsKey && needsURL && (
-          <div className="form-group" style={{ marginBottom:0 }}>
-            <label>API Key / Bearer Token {form.target_type === 'custom_rest' ? '(optional)' : ''}</label>
-            <input value={form.api_key} onChange={e => set('api_key', e.target.value)} placeholder={form.target_type === 'openai_compatible' ? 'sk-…' : 'Bearer token or API key'} type="password" />
-          </div>
-        )}
-      </SectionCard>
-
-      {/* Attack preview */}
-      <div style={{
-        background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'14px',
-        padding:'20px 24px', marginBottom:'16px', position:'relative', overflow:'hidden',
-      }}>
-        <div style={{ position:'absolute', top:0, left:0, right:0, height:'1px', background:'linear-gradient(90deg,transparent,rgba(17,24,39,0.06),transparent)' }} />
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' }}>
-          <div>
-            <div style={{ fontSize:'13px', fontWeight:'700', color:'var(--t1)' }}>Attack Coverage</div>
-            <div style={{ fontSize:'12px', color:'var(--t3)', marginTop:'2px' }}>1,010+ prompts across 21 categories</div>
-          </div>
-          <div style={{ display:'flex', gap:'16px', fontSize:'12px' }}>
-            {[['#dc2626','Critical'],['#ea580c','High'],['#b45309','Medium']].map(([c,l]) => (
-              <div key={l} style={{ display:'flex', alignItems:'center', gap:'5px', color:'var(--t3)' }}>
-                <div style={{ width:'8px', height:'8px', borderRadius:'2px', background:c }} />
-                {l}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'6px' }}>
-          {ATTACK_CATEGORIES.map(cat => (
-            <div key={cat.label} style={{
-              display:'flex', alignItems:'center', gap:'7px',
-              padding:'7px 10px', background:'var(--s2)', borderRadius:'8px',
-              border:`1px solid ${SEV_COLOR[cat.sev]}20`,
-            }}>
-              <span style={{ fontSize:'13px' }}>{cat.icon}</span>
-              <span style={{ fontSize:'11px', color:cat.sev === 'low' ? 'var(--t3)' : 'var(--t2)', fontWeight: cat.sev !== 'low' ? '600' : '400' }}>
-                {cat.label}
-              </span>
-              <div style={{ marginLeft:'auto', width:'6px', height:'6px', borderRadius:'50%', background:SEV_COLOR[cat.sev], flexShrink:0 }} />
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop:'14px', display:'flex', gap:'24px', fontSize:'12px', color:'var(--t3)' }}>
-          <span>⏱ Est. time: <strong style={{ color:'var(--t2)' }}>15–25 min</strong></span>
-          <span>🛡 Categories: <strong style={{ color:'var(--t2)' }}>21</strong></span>
-          <span>📝 Prompts: <strong style={{ color:'var(--t2)' }}>1,010+</strong></span>
-          <span>📄 PDF report included</span>
-        </div>
-      </div>
-
-      {/* Launch button */}
-      <button
-        className="btn-primary"
-        onClick={handleSubmit}
-        disabled={loading || !form.target_name.trim()}
-        style={{ width:'100%', padding:'15px', fontSize:'15px', justifyContent:'center', borderRadius:'10px', letterSpacing:'0.2px', position:'relative', overflow:'hidden' }}
-      >
-        {loading ? (
-          <><span className="spinner" style={{ borderTopColor:'#fff' }} />&nbsp; Starting scan…</>
-        ) : (
-          <>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            &nbsp; Launch Security Scan
-            {form.target_name.trim() && (
-              <span style={{ marginLeft:'8px', opacity:0.7, fontSize:'13px' }}>→ {form.target_name}</span>
-            )}
-          </>
-        )}
+      <button className="btn-primary" onClick={handleSubmit} disabled={loading}
+        style={{ width:'100%', padding:'14px', fontSize:'15px', justifyContent:'center', borderRadius:'8px' }}>
+        {loading ? 'Starting scan…' : `Launch scan${attackCount ? ` · ${attackCount.toLocaleString()} attacks` : ''}`}
       </button>
 
-      <p style={{ fontSize:'11px', color:'var(--t3)', textAlign:'center', marginTop:'12px', lineHeight:'1.5' }}>
-        By launching you agree that this is an authorized security test. API keys are never stored on our servers.
+      <p style={{ fontSize:'11px', color:'var(--t3)', textAlign:'center', marginTop:'12px', lineHeight:1.6 }}>
+        Only scan applications you own or are authorized to test. Your target’s API key is stored encrypted while the scan runs
+        and deleted when it ends, unless you save the target. Attack replies are kept with your scan until you delete it.
       </p>
     </div>
   );

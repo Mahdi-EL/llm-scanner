@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { scansAPI } from '../services/api';
+import { scoreColor } from '../utils/format';
 
 /* ── SVG Area chart ──────────────────────────────────────────── */
 function AreaChart({ data, color = 'var(--blue)', height = 160 }) {
@@ -11,7 +12,7 @@ function AreaChart({ data, color = 'var(--blue)', height = 160 }) {
 
   if (data.length < 2) return (
     <div style={{ height, display:'flex', alignItems:'center', justifyContent:'center', color:'var(--t3)', fontSize:'13px' }}>
-      Not enough data — complete more scans
+      A trend needs at least two completed scans
     </div>
   );
 
@@ -58,7 +59,7 @@ function AreaChart({ data, color = 'var(--blue)', height = 160 }) {
       {/* Points + labels */}
       {pts.map((p, i) => {
         const score = data[i].score;
-        const dotColor = score >= 70 ? '#16a34a' : score >= 40 ? '#b45309' : '#dc2626';
+        const dotColor = scoreColor(score);
         return (
           <g key={i}>
             <circle cx={p[0]} cy={p[1]} r="5" fill={dotColor} stroke="var(--bg)" strokeWidth="2"
@@ -129,12 +130,12 @@ function Trend({ value, label }) {
 }
 
 /* ── Category heatmap cell ───────────────────────────────────── */
-function HeatCell({ label, count, max }) {
-  const pct  = max > 0 ? count / max : 0;
+function HeatCell({ label, count, rate }) {
+  const pct  = rate;
   const bg   = pct > 0.7 ? 'rgba(248,113,113,0.35)' : pct > 0.4 ? 'rgba(250,204,21,0.25)' : pct > 0.1 ? 'rgba(37,99,235,0.2)' : 'rgba(17,24,39,0.04)';
   const border = pct > 0.7 ? 'rgba(248,113,113,0.4)' : pct > 0.4 ? 'rgba(250,204,21,0.3)' : 'rgba(17,24,39,0.08)';
   return (
-    <div title={`${label}: ${count} findings`} style={{
+    <div title={`${label}: ${count} failed attacks (${Math.round(rate * 100)}%)`} style={{
       background: bg, border:`1px solid ${border}`,
       borderRadius:'6px', padding:'8px 10px',
       fontSize:'10px', fontWeight:'600', color:'var(--t2)',
@@ -144,7 +145,7 @@ function HeatCell({ label, count, max }) {
       onMouseEnter={e => e.currentTarget.style.transform='scale(1.05)'}
       onMouseLeave={e => e.currentTarget.style.transform='none'}
     >
-      <div style={{ fontSize:'15px', marginBottom:'3px' }}>{count}</div>
+      <div style={{ fontSize:'15px', marginBottom:'3px' }}>{Math.round(rate * 100)}%</div>
       <div style={{ fontSize:'9px', color:'var(--t3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textTransform:'capitalize' }}>{label.replace(/_/g,' ')}</div>
     </div>
   );
@@ -153,21 +154,26 @@ function HeatCell({ label, count, max }) {
 /* ── Main Analytics page ─────────────────────────────────────── */
 export default function Analytics() {
   const [scans,   setScans]   = useState([]);
+  const [catStats, setCatStats] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
-      try { const r = await scansAPI.list(); setScans(r.data.scans.reverse()); }
-      catch {} finally { setLoading(false); }
+      try {
+        const [list, cats] = await Promise.all([scansAPI.list(), scansAPI.categoryStats()]);
+        setScans([...list.data.scans].reverse());      // oldest first, for the charts
+        setCatStats(cats.data.categories);
+      } catch { /* empty state below */ }
+      finally { setLoading(false); }
     })();
   }, []);
 
-  const completed = scans.filter(s => s.status === 'complete' && s.results?.summary?.security_score != null);
+  const completed = scans.filter(s => s.status === 'complete' && s.summary?.security_score != null);
 
   /* Score trend */
   const trendData = completed.slice(-12).map((s, i) => ({
-    score: s.results.summary.security_score,
+    score: s.summary.security_score,
     label: new Date(s.created_at).toLocaleDateString('en-US', { month:'short', day:'numeric' }),
   }));
 
@@ -178,11 +184,11 @@ export default function Analytics() {
 
   /* Stats */
   const total     = scans.length;
-  const avgScore  = completed.length ? Math.round(completed.reduce((a,s) => a + s.results.summary.security_score, 0) / completed.length) : null;
-  const totalCrit = completed.reduce((a,s) => a + (s.results.summary.critical || 0), 0);
-  const totalHigh = completed.reduce((a,s) => a + (s.results.summary.high || 0), 0);
-  const totalMed  = completed.reduce((a,s) => a + (s.results.summary.medium || 0), 0);
-  const totalLow  = completed.reduce((a,s) => a + (s.results.summary.low || 0), 0);
+  const avgScore  = completed.length ? Math.round(completed.reduce((a,s) => a + s.summary.security_score, 0) / completed.length) : null;
+  const totalCrit = completed.reduce((a,s) => a + (s.summary.critical || 0), 0);
+  const totalHigh = completed.reduce((a,s) => a + (s.summary.high || 0), 0);
+  const totalMed  = completed.reduce((a,s) => a + (s.summary.medium || 0), 0);
+  const totalLow  = completed.reduce((a,s) => a + (s.summary.low || 0), 0);
   const totalFindings = totalCrit + totalHigh + totalMed + totalLow;
 
   /* Risk distribution for donut */
@@ -195,16 +201,8 @@ export default function Analytics() {
     ...r, pct: totalFindings > 0 ? Math.round((r.count / totalFindings) * 100) : 0,
   }));
 
-  /* Category heatmap */
-  const catCounts = {};
-  completed.forEach(s => {
-    (s.results?.results || []).forEach(r => {
-      const cat = r.category || 'unknown';
-      catCounts[cat] = (catCounts[cat] || 0) + 1;
-    });
-  });
-  const catEntries = Object.entries(catCounts).sort((a,b) => b[1] - a[1]);
-  const catMax     = catEntries[0]?.[1] || 1;
+  /* Category heatmap: share of attacks that succeeded, per category */
+  const catEntries = catStats.filter(c => c.attacks > 0);
 
   /* Scan frequency (last 30 days) */
   const now = Date.now();
@@ -248,7 +246,7 @@ export default function Analytics() {
       <div className="stats-row" style={{ marginBottom:'20px' }}>
         {[
           { label:'Total Scans',       val: total,        color:'var(--t1)',   suffix:'' },
-          { label:'Avg Security Score',val: avgScore,     color: avgScore >= 70 ? '#16a34a' : avgScore >= 40 ? '#b45309' : avgScore != null ? '#dc2626' : 'var(--t3)', suffix:'/100' },
+          { label:'Avg Security Score',val: avgScore,     color: avgScore >= 80 ? '#16a34a' : avgScore >= 50 ? '#b45309' : avgScore != null ? '#dc2626' : 'var(--t3)', suffix:'/100' },
           { label:'Total Findings',    val: totalFindings,color: totalFindings > 0 ? '#ea580c' : 'var(--t3)', suffix:'' },
           { label:'Critical Issues',   val: totalCrit,    color: totalCrit > 0 ? '#dc2626' : 'var(--t3)', suffix:'' },
         ].map(k => (
@@ -281,7 +279,7 @@ export default function Analytics() {
           {trendData.length < 2 && (
             <div style={{ marginTop:'16px', textAlign:'center' }}>
               <button className="btn-primary" onClick={() => navigate('/new-scan')} style={{ fontSize:'12px', padding:'7px 16px' }}>
-                Run your first scan →
+                {trendData.length === 0 ? 'Run your first scan →' : 'Run another scan →'}
               </button>
             </div>
           )}
@@ -340,14 +338,14 @@ export default function Analytics() {
         {/* Category heatmap */}
         <div style={cardStyle}>
           {shine}
-          <div style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)', marginBottom:'4px' }}>Vulnerability Heatmap</div>
-          <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'16px' }}>Findings grouped by attack category — darker = more findings</div>
+          <div style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)', marginBottom:'4px' }}>Weakest categories</div>
+          <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'16px' }}>Share of attacks that succeeded in each category, across all your scans</div>
           {catEntries.length === 0 ? (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100px', color:'var(--t3)', fontSize:'13px' }}>No findings recorded yet</div>
           ) : (
             <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:'6px' }}>
-              {catEntries.slice(0, 15).map(([cat, cnt]) => (
-                <HeatCell key={cat} label={cat} count={cnt} max={catMax} />
+              {catEntries.slice(0, 15).map(c => (
+                <HeatCell key={c.id} label={c.title} count={c.failed} rate={c.rate} />
               ))}
             </div>
           )}
@@ -360,23 +358,26 @@ export default function Analytics() {
           {shine}
           <div style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)', marginBottom:'4px' }}>Score Distribution</div>
           <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'20px' }}>How many scans fell in each score range</div>
-          <div style={{ display:'flex', gap:'8px' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:'8px' }}>
             {[
-              { label:'0–29 Critical', color:'#dc2626', bg:'rgba(248,113,113,0.12)', range:[0,29] },
-              { label:'30–49 High',    color:'#ea580c', bg:'rgba(251,146,60,0.12)',  range:[30,49] },
-              { label:'50–69 Moderate',color:'#b45309', bg:'rgba(250,204,21,0.12)', range:[50,69] },
-              { label:'70–84 Low',     color:'#16a34a', bg:'rgba(74,222,128,0.12)', range:[70,84] },
-              { label:'85–100 Secure', color:'#2dd4bf', bg:'rgba(45,212,191,0.12)', range:[85,100] },
+              { label:'0–49 · grade F',  color:'#dc2626', bg:'rgba(248,113,113,0.12)', range:[0,49] },
+              { label:'50–69 · grade D', color:'#b45309', bg:'rgba(250,204,21,0.12)', range:[50,69] },
+              { label:'70–79 · grade C', color:'#b45309', bg:'rgba(250,204,21,0.12)', range:[70,79] },
+              { label:'80–89 · grade B', color:'#16a34a', bg:'rgba(74,222,128,0.12)', range:[80,89] },
+              { label:'90–100 · grade A',color:'#16a34a', bg:'rgba(74,222,128,0.12)', range:[90,100] },
             ].map(bucket => {
               const count = completed.filter(s => {
-                const sc = s.results.summary.security_score;
+                const sc = s.summary.security_score;
                 return sc >= bucket.range[0] && sc <= bucket.range[1];
               }).length;
               const pct = completed.length > 0 ? Math.round((count / completed.length) * 100) : 0;
               return (
-                <div key={bucket.label} style={{ flex: pct > 0 ? Math.max(pct, 8) : 1, background:bucket.bg, border:`1px solid ${bucket.color}30`, borderRadius:'10px', padding:'16px 14px', textAlign:'center', minWidth:0, transition:'flex 0.8s ease' }}>
-                  <div style={{ fontSize:'22px', fontWeight:'800', color:bucket.color, letterSpacing:'-0.5px' }}>{count}</div>
-                  <div style={{ fontSize:'10px', color:'var(--t3)', marginTop:'3px', lineHeight:'1.4' }}>{bucket.label}</div>
+                <div key={bucket.label} style={{ background: count ? bucket.bg : 'transparent', border:`1px solid ${bucket.color}30`, borderRadius:'10px', padding:'16px 14px', textAlign:'center', minWidth:0 }}>
+                  <div style={{ fontSize:'22px', fontWeight:'800', color: count ? bucket.color : 'var(--t3)', letterSpacing:'-0.5px' }}>{count}</div>
+                  <div style={{ fontSize:'11px', color:'var(--t3)', marginTop:'3px', lineHeight:'1.4' }}>{bucket.label}</div>
+                  <div style={{ height:'4px', background:'var(--s2)', borderRadius:'2px', marginTop:'10px', overflow:'hidden' }}>
+                    <div style={{ width:`${pct}%`, height:'100%', background:bucket.color, transition:'width 0.8s ease' }} />
+                  </div>
                 </div>
               );
             })}

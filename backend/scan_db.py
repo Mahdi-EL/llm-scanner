@@ -1,87 +1,72 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
+"""Scan records: create, update, list, and the views the API returns.
 
-import sqlite3
+Internal rows hold secrets (the encrypted target key) and large blobs
+(results, checkpoints). public_scan() is the only shape the API returns.
+"""
 import json
 import uuid
-import os
-from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-from database import DB_PATH
+
+import scoring
+from db import transaction, utcnow
+
+ACTIVE = ("pending", "running")
+
+# Columns update_scan() may write. Field names are code, never user input,
+# but the whitelist keeps the f-string SQL safe regardless.
+_WRITABLE = {
+    "status", "progress", "error_message", "results_json", "json_path", "pdf_path",
+    "html_path", "md_path", "security_score", "total_attacks", "critical_count",
+    "high_count", "medium_count", "low_count", "safe_count", "completed_at",
+    "duration_seconds", "config_json", "api_key_enc", "checkpoint_json",
+    "completed_attacks", "current_category", "started_at", "model", "grade",
+    "error_count", "llm_calls", "target_id", "schedule_id",
+}
+
+# What list endpoints return: summary columns only, never results or secrets.
+_LIST_COLUMNS = (
+    "scan_id, user_id, target_name, target_type, status, progress, completed_attacks, "
+    "total_attacks, current_category, security_score, grade, critical_count, high_count, "
+    "medium_count, low_count, safe_count, error_count, created_at, started_at, completed_at, "
+    "duration_seconds, error_message, model, target_id, schedule_id"
+)
 
 
-# ── Connection factory ─────────────────────────────────────────
-@contextmanager
-def _db():
-    """Opens a connection, commits on success, rolls back on error, always closes."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    # WAL + busy timeout: avoid "database is locked" when a background scan
-    # writes while the API reads concurrently.
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+def new_scan_id() -> str:
+    return uuid.uuid4().hex
 
 
-# ── Migration (safe, idempotent) ───────────────────────────────
-def _migrate():
-    with _db() as conn:
-        # Guard: only migrate if the scans table already exists (init_db runs first)
-        tables = {r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()}
-        if "scans" not in tables:
-            return
-        existing = {row[1] for row in conn.execute("PRAGMA table_info(scans)").fetchall()}
-        if "progress"      not in existing:
-            conn.execute("ALTER TABLE scans ADD COLUMN progress      INTEGER DEFAULT 0")
-        if "error_message" not in existing:
-            conn.execute("ALTER TABLE scans ADD COLUMN error_message TEXT")
-        if "results_json"  not in existing:
-            conn.execute("ALTER TABLE scans ADD COLUMN results_json  TEXT")
-        if "user_id"       not in existing:
-            conn.execute("ALTER TABLE scans ADD COLUMN user_id       TEXT")
-        # Create the user_id index here (not in init_db) so it is built only
-        # after the column is guaranteed to exist on pre-ownership-model DBs.
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans (user_id)")
-
-
-# ── CRUD ──────────────────────────────────────────────────────
-def create_scan(target_name: str, target_type: str = "simulation",
-                user_id: Optional[str] = None) -> str:
-    scan_id = str(uuid.uuid4())[:8]
-    with _db() as conn:
+def create_scan(target_name: str, target_type: str = "simulation", user_id: Optional[str] = None,
+                config: Optional[dict] = None, api_key_enc: Optional[str] = None,
+                total_attacks: int = 0, model: Optional[str] = None,
+                target_id: Optional[str] = None, schedule_id: Optional[str] = None) -> str:
+    scan_id = new_scan_id()
+    with transaction() as conn:
         conn.execute("""
-            INSERT INTO scans (scan_id, user_id, target_name, target_type, status, created_at, progress)
-            VALUES (?, ?, ?, ?, 'pending', ?, 0)
-        """, (scan_id, user_id, target_name, target_type, datetime.now().isoformat()))
+            INSERT INTO scans (scan_id, user_id, target_name, target_type, status, created_at, progress,
+                               config_json, api_key_enc, total_attacks, model, target_id, schedule_id)
+            VALUES (?, ?, ?, ?, 'pending', ?, 0, ?, ?, ?, ?, ?, ?)
+        """, (scan_id, user_id, target_name, target_type, utcnow(),
+              json.dumps(config or {}), api_key_enc, total_attacks, model, target_id, schedule_id))
     return scan_id
 
 
 def update_scan(scan_id: str, **fields):
     if not fields:
         return
+    unknown = set(fields) - _WRITABLE
+    if unknown:
+        raise ValueError(f"Unknown scan fields: {sorted(unknown)}")
     set_clause = ", ".join(f"{k} = ?" for k in fields)
-    with _db() as conn:
-        conn.execute(
-            f"UPDATE scans SET {set_clause} WHERE scan_id = ?",
-            [*fields.values(), scan_id]
-        )
+    with transaction() as conn:
+        conn.execute(f"UPDATE scans SET {set_clause} WHERE scan_id = ?", [*fields.values(), scan_id])
 
 
 def get_scan(scan_id: str) -> Optional[dict]:
-    with _db() as conn:
-        row = conn.execute(
-            "SELECT * FROM scans WHERE scan_id = ?", (scan_id,)
-        ).fetchone()
+    """Full internal row, with results parsed. Never return this to a client as-is."""
+    with transaction() as conn:
+        row = conn.execute("SELECT * FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()
     if not row:
         return None
     d = dict(row)
@@ -89,96 +74,150 @@ def get_scan(scan_id: str) -> Optional[dict]:
     return d
 
 
-def list_scans(user_id: Optional[str] = None, limit: int = 50, offset: int = 0) -> list:
-    """Lists scans, newest first. If user_id is given, only that user's scans."""
-    limit  = max(1, min(limit, 200))   # clamp to a sane page size
-    offset = max(0, offset)
-    with _db() as conn:
-        if user_id is None:
-            rows = conn.execute(
-                "SELECT * FROM scans ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM scans WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (user_id, limit, offset),
-            ).fetchall()
-    result = []
-    for row in rows:
-        d = dict(row)
-        d["results"] = json.loads(d["results_json"]) if d.get("results_json") else None
-        result.append(d)
-    return result
+def summary_of(scan: dict) -> dict:
+    return {
+        "security_score": scan.get("security_score") or 0,
+        "grade"         : scan.get("grade") or (scoring.grade(scan.get("security_score") or 0)
+                                                if scan.get("status") == "complete" else None),
+        "critical"      : scan.get("critical_count") or 0,
+        "high"          : scan.get("high_count") or 0,
+        "medium"        : scan.get("medium_count") or 0,
+        "low"           : scan.get("low_count") or 0,
+        "safe"          : scan.get("safe_count") or 0,
+        "errors"        : scan.get("error_count") or 0,
+    }
+
+
+def public_scan(scan: dict, include_results: bool = False) -> dict:
+    """The scan as the API shows it: no secrets, no raw blobs."""
+    out = {k: scan.get(k) for k in _LIST_COLUMNS.replace(" ", "").split(",")}
+    out["summary"] = summary_of(scan)
+    config = scan.get("config_json")
+    if config:
+        try:
+            cfg = json.loads(config)
+            out["config"] = {k: cfg.get(k) for k in ("target_type", "model", "api_url", "categories",
+                                                     "baseline_question", "input_field", "output_field")
+                             if cfg.get(k) is not None}
+            out["config"]["has_system_prompt"] = bool(cfg.get("system_prompt"))
+            out["config"]["retest"] = bool(cfg.get("attacks"))
+        except (TypeError, ValueError):
+            pass
+    if include_results:
+        out["results"] = scan.get("results")
+    return out
+
+
+def list_scans(user_id: str, limit: int = 50, offset: int = 0, status: Optional[str] = None,
+               target_name: Optional[str] = None) -> list:
+    """Newest first, summary columns only."""
+    limit, offset = max(1, min(limit, 200)), max(0, offset)
+    where, args = ["user_id = ?"], [user_id]
+    if status:
+        where.append("status = ?")
+        args.append(status)
+    if target_name:
+        where.append("target_name = ?")
+        args.append(target_name)
+    with transaction() as conn:
+        rows = conn.execute(
+            f"SELECT {_LIST_COLUMNS} FROM scans WHERE {' AND '.join(where)} "
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?", (*args, limit, offset)).fetchall()
+    return [{**dict(r), "summary": summary_of(dict(r))} for r in rows]
+
+
+def count_user_scans(user_id: str, status: Optional[str] = None) -> int:
+    with transaction() as conn:
+        if status:
+            return conn.execute("SELECT COUNT(*) FROM scans WHERE user_id = ? AND status = ?",
+                                (user_id, status)).fetchone()[0]
+        return conn.execute("SELECT COUNT(*) FROM scans WHERE user_id = ?", (user_id,)).fetchone()[0]
 
 
 def count_scans_this_month(user_id: str) -> int:
-    """Number of scans the user created since the start of the current month.
-    Uses naive-local time to match how created_at is stored (datetime.now())."""
-    month_start = datetime.now().replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    ).isoformat()
-    with _db() as conn:
+    """Scans created since the start of the current month (UTC) that count toward the quota.
+    A scan that failed or was cancelled before its first attack doesn't count."""
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    with transaction() as conn:
         return conn.execute(
-            "SELECT COUNT(*) FROM scans WHERE user_id = ? AND created_at >= ?",
-            (user_id, month_start),
-        ).fetchone()[0]
+            "SELECT COUNT(*) FROM scans WHERE user_id = ? AND created_at >= ? "
+            "AND NOT (status IN ('failed', 'cancelled') AND COALESCE(completed_attacks, 0) = 0)",
+            (user_id, month_start.isoformat(timespec="seconds"))).fetchone()[0]
+
+
+def count_scans() -> int:
+    with transaction() as conn:
+        return conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
+
+
+def count_active_for_user(user_id: str) -> int:
+    with transaction() as conn:
+        return conn.execute("SELECT COUNT(*) FROM scans WHERE user_id = ? AND status IN ('pending', 'running')",
+                            (user_id,)).fetchone()[0]
+
+
+def count_running_scans() -> int:
+    """Scans waiting or running: both use capacity."""
+    with transaction() as conn:
+        return conn.execute("SELECT COUNT(*) FROM scans WHERE status IN ('pending', 'running')").fetchone()[0]
+
+
+def active_scan_ids() -> list:
+    """Scans to resume after a restart, oldest first."""
+    with transaction() as conn:
+        rows = conn.execute("SELECT scan_id FROM scans WHERE status IN ('pending', 'running') "
+                            "ORDER BY created_at").fetchall()
+    return [r["scan_id"] for r in rows]
 
 
 def fail_interrupted_scans() -> int:
-    """On startup, any scan still 'pending'/'running' was killed by a restart.
-    Mark them failed so the UI doesn't show a perpetual 'running' state."""
-    with _db() as conn:
-        cur = conn.execute(
-            "UPDATE scans SET status = 'failed', "
-            "error_message = 'Interrupted by a server restart' "
-            "WHERE status IN ('pending', 'running')"
-        )
+    """Marks every pending/running scan as failed (used when resuming isn't possible)."""
+    with transaction() as conn:
+        cur = conn.execute("UPDATE scans SET status = 'failed', "
+                           "error_message = 'Interrupted by a server restart' "
+                           "WHERE status IN ('pending', 'running')")
         return cur.rowcount
 
 
 def delete_scan(scan_id: str):
-    with _db() as conn:
+    with transaction() as conn:
         conn.execute("DELETE FROM findings WHERE scan_id = ?", (scan_id,))
-        conn.execute("DELETE FROM scans    WHERE scan_id = ?", (scan_id,))
+        conn.execute("DELETE FROM share_links WHERE scan_id = ?", (scan_id,))
+        conn.execute("DELETE FROM scans WHERE scan_id = ?", (scan_id,))
 
 
-def count_scans() -> int:
-    with _db() as conn:
-        return conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
+def user_scan_ids(user_id: str) -> list:
+    with transaction() as conn:
+        return [r["scan_id"] for r in conn.execute("SELECT scan_id FROM scans WHERE user_id = ?", (user_id,))]
 
 
-def count_running_scans() -> int:
-    with _db() as conn:
-        return conn.execute(
-            "SELECT COUNT(*) FROM scans WHERE status = 'running'"
-        ).fetchone()[0]
+def previous_complete_scan(user_id: str, target_name: str, before_scan_id: str) -> Optional[dict]:
+    """The latest finished scan of the same target before this one (for comparisons and alerts)."""
+    with transaction() as conn:
+        ref = conn.execute("SELECT created_at FROM scans WHERE scan_id = ?", (before_scan_id,)).fetchone()
+        if not ref:
+            return None
+        row = conn.execute(
+            "SELECT scan_id FROM scans WHERE user_id = ? AND target_name = ? AND status = 'complete' "
+            "AND scan_id != ? AND created_at <= ? ORDER BY created_at DESC LIMIT 1",
+            (user_id, target_name, before_scan_id, ref["created_at"])).fetchone()
+    return get_scan(row["scan_id"]) if row else None
 
 
 def save_findings(scan_id: str, results: list):
-    """Persists individual findings after a scan completes."""
-    with _db() as conn:
+    """Stores individual findings (truncated) for analytics, plus the global counters."""
+    with transaction() as conn:
+        conn.execute("DELETE FROM findings WHERE scan_id = ?", (scan_id,))
         conn.executemany("""
             INSERT INTO findings
                 (scan_id, category, attack, response, score, severity, reason, behavior_changed, confidence)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [
-            (
-                scan_id,
-                r.get("category", ""),
-                r.get("attack",   "")[:500],
-                r.get("response", "")[:500],
-                r.get("score",    0),
-                r.get("severity", "SAFE"),
-                r.get("reason",   "")[:300],
-                1 if r.get("behavior_changed") else 0,
-                r.get("confidence", "LOW"),
-            )
+            (scan_id, r.get("category", ""), (r.get("attack") or "")[:500], (r.get("response") or "")[:500],
+             r.get("score", 0), r.get("severity", "SAFE"), (r.get("reason") or "")[:300],
+             1 if r.get("behavior_changed") else 0, r.get("confidence", "LOW"))
             for r in results
         ])
-
-        # Update global stats
-        summary = {}
         if results:
             conn.execute("""
                 UPDATE global_stats SET
@@ -189,12 +228,13 @@ def save_findings(scan_id: str, results: list):
                     avg_security_score  = (SELECT AVG(security_score) FROM scans WHERE status = 'complete'),
                     last_updated        = ?
                 WHERE id = 1
-            """, (
-                len(results),
-                sum(1 for r in results if r.get("severity") == "CRITICAL"),
-                sum(1 for r in results if r.get("severity") in ("CRITICAL", "HIGH")),
-                datetime.now().isoformat(),
-            ))
+            """, (len(results),
+                  sum(1 for r in results if r.get("severity") == "CRITICAL"),
+                  sum(1 for r in results if r.get("severity") in ("CRITICAL", "HIGH")),
+                  utcnow()))
 
 
-# _migrate() is called from api.py startup event AFTER init_db() creates tables
+def _migrate():
+    """Kept for older callers: migrations now run in database.init_db()."""
+    import database
+    database.init_db()

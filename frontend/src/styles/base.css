@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Fonts are loaded once, from index.html. */
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    DESIGN TOKENS
@@ -547,3 +547,22 @@ button { cursor:pointer; }
 
 .theme-toggle { display:none; }
 
+
+/* Default look for any input in the app that isn't inside a .form-group.
+   :where() keeps specificity at zero, so .form-group rules and inline styles still win. */
+:where(.main-content) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea) {
+  padding      : 10px 12px;
+  background   : var(--s2);
+  border       : 1px solid var(--b1);
+  border-radius: var(--r-sm);
+  color        : var(--t1);
+  font-size    : 14px;
+  font-family  : inherit;
+  outline      : none;
+  transition   : border-color 0.15s, box-shadow 0.15s;
+}
+:where(.main-content) :where(input, select, textarea):focus-visible {
+  border-color: var(--blue);
+  box-shadow  : 0 0 0 3px var(--blue-soft);
+}
+:where(.main-content) :where(input, textarea)::placeholder { color: var(--t3); }

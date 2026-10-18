@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { scansAPI, API_URL } from '../services/api';
+import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { riskLabel } from '../utils/format';
 
 const SEV_COLOR = { CRITICAL:'#dc2626', HIGH:'#ea580c', MEDIUM:'#b45309', LOW:'#16a34a' };
 
@@ -16,7 +17,7 @@ function relTime(ts) {
 
 function ScoreBar({ score }) {
   if (score == null) return <span style={{ color:'var(--t3)' }}>—</span>;
-  const color = score >= 70 ? '#16a34a' : score >= 40 ? '#b45309' : '#dc2626';
+  const color = score >= 80 ? '#16a34a' : score >= 50 ? '#b45309' : '#dc2626';
   return (
     <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
       <div style={{ flex:1, height:'4px', background:'var(--s3)', borderRadius:'4px', overflow:'hidden', minWidth:'48px' }}>
@@ -29,9 +30,9 @@ function ScoreBar({ score }) {
 
 function RiskBadge({ score }) {
   if (score == null) return null;
-  const label = score >= 70 ? 'Low Risk' : score >= 40 ? 'Moderate' : 'High Risk';
-  const color = score >= 70 ? '#16a34a' : score >= 40 ? '#b45309' : '#dc2626';
-  const bg    = score >= 70 ? 'rgba(74,222,128,0.1)' : score >= 40 ? 'rgba(250,204,21,0.1)' : 'rgba(248,113,113,0.1)';
+  const label = riskLabel(score);
+  const color = score >= 80 ? '#16a34a' : score >= 50 ? '#b45309' : '#dc2626';
+  const bg    = score >= 80 ? 'rgba(74,222,128,0.1)' : score >= 50 ? 'rgba(250,204,21,0.1)' : 'rgba(248,113,113,0.1)';
   return (
     <span style={{ background:bg, color, border:`1px solid ${color}30`, borderRadius:'20px', padding:'2px 9px', fontSize:'11px', fontWeight:'700', letterSpacing:'0.3px', whiteSpace:'nowrap' }}>
       {label}
@@ -74,9 +75,11 @@ export default function Reports() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await scansAPI.list();
-        setScans(res.data.scans.reverse());
-      } catch {}
+        const res = await scansAPI.list({ status: 'complete' });
+        setScans(res.data.scans);
+      } catch (e) {
+        toast(errorMessage(e, 'Couldn\u2019t load your reports.'), 'error');
+      }
       finally { setLoading(false); }
     })();
   }, []);
@@ -84,32 +87,32 @@ export default function Reports() {
   const completed = useMemo(() => scans.filter(s => s.status === 'complete'), [scans]);
 
   const stats = useMemo(() => {
-    const totalCritical = completed.reduce((a,s) => a + (s.results?.summary?.critical || 0), 0);
-    const totalHigh     = completed.reduce((a,s) => a + (s.results?.summary?.high || 0), 0);
-    const scores        = completed.map(s => s.results?.summary?.security_score).filter(Boolean);
+    const totalCritical = completed.reduce((a,s) => a + (s.summary?.critical || 0), 0);
+    const totalHigh     = completed.reduce((a,s) => a + (s.summary?.high || 0), 0);
+    const scores        = completed.map(s => s.summary?.security_score).filter(Boolean);
     const avgScore      = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : null;
-    const lowRisk       = completed.filter(s => (s.results?.summary?.security_score||0) >= 70).length;
-    const highRisk      = completed.filter(s => (s.results?.summary?.security_score||0) < 40).length;
+    const lowRisk       = completed.filter(s => (s.summary?.security_score||0) >= 80).length;
+    const highRisk      = completed.filter(s => (s.summary?.security_score||0) < 50).length;
     return { totalCritical, totalHigh, avgScore, lowRisk, highRisk };
   }, [completed]);
 
   const filtered = useMemo(() => {
     let list = completed.filter(s => {
-      const score  = s.results?.summary?.security_score;
+      const score  = s.summary?.security_score;
       const nameOk = s.target_name.toLowerCase().includes(search.toLowerCase());
       if (!nameOk) return false;
       if (filter === 'ALL')      return true;
-      if (filter === 'LOW RISK') return score >= 70;
-      if (filter === 'MODERATE') return score >= 40 && score < 70;
-      if (filter === 'HIGH RISK')return score < 40;
+      if (filter === 'LOW RISK') return score >= 80;
+      if (filter === 'MODERATE') return score >= 50 && score < 80;
+      if (filter === 'HIGH RISK')return score < 50;
       return true;
     });
 
     list = [...list].sort((a, b) => {
       let va, vb;
       if (sortBy === 'score') {
-        va = a.results?.summary?.security_score ?? -1;
-        vb = b.results?.summary?.security_score ?? -1;
+        va = a.summary?.security_score ?? -1;
+        vb = b.summary?.security_score ?? -1;
       } else if (sortBy === 'name') {
         va = a.target_name.toLowerCase();
         vb = b.target_name.toLowerCase();
@@ -134,7 +137,7 @@ export default function Reports() {
     return <span style={{ fontSize:'10px', marginLeft:'3px', color:'var(--blue)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
   };
 
-  const scoreColor = stats.avgScore >= 70 ? '#16a34a' : stats.avgScore >= 40 ? '#b45309' : stats.avgScore != null ? '#dc2626' : 'var(--t3)';
+  const scoreColor = stats.avgScore >= 80 ? '#16a34a' : stats.avgScore >= 50 ? '#b45309' : stats.avgScore != null ? '#dc2626' : 'var(--t3)';
 
   return (
     <div>
@@ -213,10 +216,9 @@ export default function Reports() {
         {/* Toolbar */}
         <div style={{ padding:'14px 20px', borderBottom:'1px solid var(--b1)', display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
           <div style={{ position:'relative', flex:1, minWidth:'180px', maxWidth:'280px' }}>
-            <svg style={{ position:'absolute', left:'10px', top:'50%', transform:'translateY(-50%)', color:'var(--t3)' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input
               className="search-bar"
-              style={{ marginBottom:0, paddingLeft:'32px', height:'34px', fontSize:'13px' }}
+              style={{ marginBottom:0, height:'34px', fontSize:'13px', paddingLeft:'38px', backgroundPosition:'12px center' }}
               placeholder="Search by target…"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -266,7 +268,7 @@ export default function Reports() {
             </div>
 
             {filtered.map(scan => {
-              const sum   = scan.results?.summary || {};
+              const sum   = scan.summary || {};
               const score = sum.security_score;
               return (
                 <div
@@ -299,9 +301,9 @@ export default function Reports() {
                     <button
                       className="btn-ghost"
                       style={{ padding:'5px 10px', fontSize:'12px', display:'flex', alignItems:'center', gap:'4px' }}
-                      onClick={() => {
-                        window.open(`${API_URL}/download/${scan.scan_id}`, '_blank');
-                        toast('Downloading PDF report…', 'info');
+                      onClick={async () => {
+                        try { await downloadReport(scan.scan_id, 'pdf'); }
+                        catch (e) { toast(errorMessage(e, 'Download failed.'), 'error'); }
                       }}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
