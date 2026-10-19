@@ -4,6 +4,7 @@ import { targetsAPI, schedulesAPI, scansAPI, API_URL, errorMessage } from '../se
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { relTime, shortDate, TARGET_TYPES } from '../utils/format';
+import FirewallPanel from '../components/FirewallPanel';
 
 const TYPES = TARGET_TYPES;
 
@@ -255,6 +256,8 @@ jobs:
       <Snippet title="curl" code={curl} />
       <Snippet title="Python SDK" code={python} />
       <Snippet title="GitHub Actions" code={action} />
+
+      <FirewallPanel Snippet={Snippet} />
     </div>
   );
 }

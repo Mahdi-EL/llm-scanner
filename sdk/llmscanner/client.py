@@ -136,3 +136,24 @@ class Client:
     def categories(self) -> list:
         """The built-in attack categories."""
         return self._json("GET", "/categories")["categories"]
+
+    # ── Runtime AI firewall ──────────────────────────────────
+    def check_input(self, text: str, threshold: float = 0.8) -> dict:
+        """Screens a user message before it reaches your model.
+        Returns {"verdict": "allow" | "review" | "block", "score", "reasons", "usage", ...}."""
+        return self._json("POST", "/api/firewall/check", json={"text": text, "threshold": threshold})
+
+    def check_output(self, text: str, system_prompt: Optional[str] = None, canary: Optional[str] = None) -> dict:
+        """Screens a model reply before it reaches your user: leaked secrets, the canary, the system prompt.
+        Returns {"verdict", "reasons", "findings", "redacted", "masked"}: "redacted" is the reply with
+        secrets, card numbers and the canary replaced by [REDACTED]; "masked" is how many were replaced."""
+        body = {"text": text}
+        if system_prompt:
+            body["system_prompt"] = system_prompt
+        if canary:
+            body["canary"] = canary
+        return self._json("POST", "/api/firewall/check-output", json=body)
+
+    def firewall_usage(self) -> dict:
+        """{"used", "limit"}: firewall checks used today (UTC) and your plan's daily allowance."""
+        return self._json("GET", "/api/firewall/usage")

@@ -253,7 +253,9 @@ def check_input(text: str, threshold: float = 0.8, client=None) -> dict:
         guard = guard_score(scanned, client)
     except RuntimeError as e:
         degraded = True
-        reasons.append(f"Prompt Guard didn't answer ({e}), so only the rules were applied.")
+        log.warning("Prompt Guard unavailable: %s", e)
+        why = "hit its rate limit" if "rate limit" in str(e) else "wasn't available"
+        reasons.append(f"The Prompt Guard model {why}, so only the rules were applied.")
     score = guard["score"]
     if score is not None and score >= min(threshold, REVIEW_SCORE):
         verdict = max(verdict, "block" if score >= threshold else "review", key=VERDICT_RANK.get)
