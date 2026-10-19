@@ -113,11 +113,31 @@ function ProtectedRoute({ children }) {
   return user ? children : <Navigate to={`/login?next=${encodeURIComponent(pathname + search)}`} replace />;
 }
 
+/* ── Browser tab titles ─────────────────────────────────────── */
+
+const TITLES = {
+  '/new-scan': 'New scan', '/reports': 'Reports', '/targets': 'Targets and CI', '/analytics': 'Analytics',
+  '/threat-intel': 'Attack library', '/settings': 'Settings', '/pricing': 'Pricing', '/login': 'Sign in',
+  '/register': 'Create account', '/forgot-password': 'Reset password', '/reset-password': 'Reset password',
+  '/verify-email': 'Confirm email', '/results/': 'Scan results', '/shared/': 'Shared report',
+};
+const BASE_TITLE = 'LLM Scanner: red-team your AI applications';
+
+function useDocumentTitle(signedIn) {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const key = Object.keys(TITLES).find(k => k.endsWith('/') ? pathname.startsWith(k) : pathname === k);
+    const page = key ? TITLES[key] : pathname === '/' && signedIn ? 'Dashboard' : null;
+    document.title = page ? `${page} · LLM Scanner` : BASE_TITLE;
+  }, [pathname, signedIn]);
+}
+
 /* ── Routes ─────────────────────────────────────────────────── */
 
 function AppRoutes() {
   const { user, loading, offline, refreshUser } = useAuth();
   const { search } = useLocation();
+  useDocumentTitle(!!user);
   const next = safeNext(new URLSearchParams(search).get('next'));
 
   if (loading) return <Loading />;
