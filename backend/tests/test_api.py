@@ -645,3 +645,22 @@ def test_custom_prompt_limit_is_enforced(client):
     added = [store.add_prompt(user_id, "refunds", f"prompt {i}") for i in range(store.MAX_PROMPTS + 3)]
     assert sum(1 for a in added if a) == store.MAX_PROMPTS
     assert added[-1] is None and len(store.list_prompts(user_id)) == store.MAX_PROMPTS
+
+
+def test_rate_limit_answer_is_readable(client):
+    api.limiter.reset()
+    api.limiter.enabled = True
+    try:
+        codes = [client.post("/auth/login", json={"username": "nobody_rl", "password": "wrongpass1"})
+                 for _ in range(11)]
+    finally:
+        api.limiter.enabled = False
+    last = codes[-1]
+    assert last.status_code == 429
+    assert last.json()["detail"].startswith("Too many requests") and last.headers["Retry-After"] == "60"
+
+
+def test_bad_username_gets_a_readable_message(client):
+    r = client.post("/auth/register", json={"username": "a b", "email": "ab@example.com", "password": "password123"})
+    assert r.status_code == 422
+    assert "letters, numbers" in r.json()["detail"][0]["msg"]

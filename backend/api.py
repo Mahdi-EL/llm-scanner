@@ -6,6 +6,7 @@ Interactive docs at /docs.
 import json
 import logging
 import os
+import re
 import socket   # noqa: F401  (tests patch api.socket.getaddrinfo)
 import sys
 import time
@@ -19,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
@@ -108,7 +109,15 @@ app = FastAPI(
     lifespan   =lifespan,
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limited(request: Request, exc: RateLimitExceeded):
+    """A readable "detail" like every other error, and Retry-After so clients know when to retry."""
+    period = str(exc.detail).rsplit(" per ", 1)[-1] if " per " in str(exc.detail) else "minute"
+    seconds = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}.get(period.split()[-1].rstrip("s"), 60)
+    return JSONResponse({"detail": f"Too many requests. Please wait a moment and try again ({exc.detail})."},
+                        status_code=429, headers={"Retry-After": str(seconds)})
 
 
 @app.middleware("http")
@@ -263,9 +272,16 @@ class UserLogin(BaseModel):
 
 
 class UserRegister(BaseModel):
-    username: str = Field(..., pattern=r"^[A-Za-z0-9_.-]{3,32}$")
+    username: str
     email   : EmailStr
     password: str = Field(..., max_length=200)
+
+    @field_validator("username")
+    @classmethod
+    def _username(cls, v: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", v or ""):
+            raise ValueError("Usernames are 3 to 32 characters: letters, numbers, dots, dashes or underscores")
+        return v
 
 
 class EmailBody(BaseModel):
