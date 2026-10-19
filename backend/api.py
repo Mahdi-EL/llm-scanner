@@ -27,6 +27,7 @@ from slowapi.util import get_remote_address
 import config    # first: loads .env and refuses to start with a placeholder SECRET_KEY
 import analysis
 import auth_db
+import logsafe
 import database
 import email_service
 import firewall
@@ -50,8 +51,9 @@ from target import DEFAULT_BASELINE_QUESTION, Target
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-logging.basicConfig(level=config.LOG_LEVEL,
-                    format="%(asctime)s %(levelname)s %(name)s %(message)s")
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
+logging.basicConfig(level=config.LOG_LEVEL, format=LOG_FORMAT)
+logsafe.install(LOG_FORMAT)
 log = logging.getLogger("llmscanner.api")
 
 VERSION   = "3.0.0"
@@ -61,7 +63,8 @@ if config.SENTRY_DSN:
     try:
         import sentry_sdk
         sentry_sdk.init(dsn=config.SENTRY_DSN, send_default_pii=False, traces_sample_rate=0.0,
-                        environment=config.ENV, release=f"llmscanner@{VERSION}")
+                        environment=config.ENV, release=f"llmscanner@{VERSION}",
+                        before_send=logsafe.sentry_before_send)
     except ImportError:
         log.warning("SENTRY_DSN is set but sentry-sdk isn't installed")
 
