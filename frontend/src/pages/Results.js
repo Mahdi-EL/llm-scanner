@@ -289,8 +289,8 @@ function PreviousComparison({ scan }) {
   return (
     <div className="card-glow" style={{ padding:'14px 18px', marginBottom:'16px', display:'flex', gap:'18px', alignItems:'center', flexWrap:'wrap', fontSize:'13px' }}>
       <span style={{ fontWeight:700 }}>Since the previous scan</span>
-      <span style={{ color: delta > 0 ? '#16a34a' : delta < 0 ? '#b42318' : 'var(--t3)', fontWeight:700 }}>
-        {delta > 0 ? '+' : ''}{delta} points
+      <span style={{ color: delta > 0 ? '#15803d' : delta < 0 ? '#b42318' : 'var(--t3)', fontWeight:700 }}>
+        {delta === 0 ? 'Score unchanged' : `${delta > 0 ? '+' : '−'}${Math.abs(delta)} point${Math.abs(delta) !== 1 ? 's' : ''}`}
       </span>
       <span>{diff.introduced_count} new failure{diff.introduced_count!==1?'s':''}</span>
       <span>{diff.resolved_count} fixed</span>
