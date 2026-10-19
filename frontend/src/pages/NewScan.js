@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { scansAPI, targetsAPI, promptsAPI, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import { fmtNum } from '../utils/format';
+import { fmtNum, typeLabel } from '../utils/format';
 
 const TARGET_TYPES = [
   { id:'simulation', label:'Simulation', tag:'No key needed',
@@ -148,7 +148,7 @@ export default function NewScan() {
           <div className="form-group" style={{ marginBottom:0 }}>
             <select value={targetId} onChange={e => { setTargetId(e.target.value); setTestResult(null); }} style={{ width:'100%' }}>
               <option value="">— Configure a new target below —</option>
-              {targets.map(t => <option key={t.id} value={t.id}>{t.name} ({t.config.target_type?.replace(/_/g,' ')})</option>)}
+              {targets.map(t => <option key={t.id} value={t.id}>{t.name} ({typeLabel(t.config.target_type)})</option>)}
             </select>
           </div>
         </Section>

@@ -23,6 +23,15 @@ export function shortDate(dateStr, withYear = false) {
 /** 1,090 rather than the browser locale's "1 090". */
 export const fmtNum = n => Number(n).toLocaleString('en-US');
 
+/** Display names of target types. */
+export const TARGET_TYPES = {
+  simulation       : 'Simulation',
+  groq             : 'Groq',
+  openai_compatible: 'OpenAI-compatible',
+  custom_rest      : 'Custom REST',
+};
+export const typeLabel = t => TARGET_TYPES[t] || (t || '').replace(/_/g, ' ');
+
 /** Score colour, matching the grade bands (A/B green, C/D amber, F red). */
 export function scoreColor(score) {
   if (score == null) return 'var(--t3)';
