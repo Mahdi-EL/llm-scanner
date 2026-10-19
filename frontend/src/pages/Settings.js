@@ -186,17 +186,17 @@ export default function Settings() {
       <Section title="Password" desc="Changing it signs you out on every other device.">
         <div style={{ padding:'20px', display:'grid', gap:'12px' }}>
           <div className="form-group" style={{ marginBottom:0 }}>
-            <label>Current password</label>
-            <input type="password" autoComplete="current-password" value={pwForm.current} onChange={e => setPwForm(p => ({ ...p, current:e.target.value }))} />
+            <label htmlFor="set-current-password">Current password</label>
+            <input id="set-current-password" type="password" autoComplete="current-password" value={pwForm.current} onChange={e => setPwForm(p => ({ ...p, current:e.target.value }))} />
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'12px', alignItems:'end' }}>
             <div className="form-group" style={{ marginBottom:0 }}>
-              <label>New password</label>
-              <input type="password" autoComplete="new-password" placeholder="8 to 72 characters" value={pwForm.next} onChange={e => setPwForm(p => ({ ...p, next:e.target.value }))} />
+              <label htmlFor="set-new-password">New password</label>
+              <input id="set-new-password" type="password" autoComplete="new-password" placeholder="8 to 72 characters" value={pwForm.next} onChange={e => setPwForm(p => ({ ...p, next:e.target.value }))} />
             </div>
             <div className="form-group" style={{ marginBottom:0 }}>
-              <label>Confirm new password</label>
-              <input type="password" autoComplete="new-password" value={pwForm.confirm} onChange={e => setPwForm(p => ({ ...p, confirm:e.target.value }))}
+              <label htmlFor="set-confirm-new-password">Confirm new password</label>
+              <input id="set-confirm-new-password" type="password" autoComplete="new-password" value={pwForm.confirm} onChange={e => setPwForm(p => ({ ...p, confirm:e.target.value }))}
                 style={{ borderColor: pwForm.confirm && pwForm.next !== pwForm.confirm ? '#b42318' : '' }} />
             </div>
           </div>
@@ -207,7 +207,7 @@ export default function Settings() {
       <Section title="API keys" desc="For CI pipelines, the SDK and the VS Code extension. Send the key in an X-API-Key header.">
         {newKey && <SecretBox value={newKey} onDone={() => setNewKey(null)} note="Copy this key now. For your safety we only store its hash, so it won’t be shown again." />}
         <div style={{ display:'flex', gap:'8px', padding:'16px 20px', borderBottom:'1px solid var(--b1)', flexWrap:'wrap' }}>
-          <input value={keyName} onChange={e => setKeyName(e.target.value)} maxLength={60} placeholder="Key name, e.g. GitHub Actions" style={{ flex:'1 1 200px', minWidth:0 }} />
+          <input aria-label="API key name" value={keyName} onChange={e => setKeyName(e.target.value)} maxLength={60} placeholder="Key name, e.g. GitHub Actions" style={{ flex:'1 1 200px', minWidth:0 }} />
           <button className="btn-primary" style={{ fontSize:'12px' }} disabled={busy==='key'} onClick={createKey}>Create key</button>
         </div>
         {keys.length === 0 ? (
@@ -224,7 +224,7 @@ export default function Settings() {
       <Section title="Webhook" desc="We POST scan.completed, scan.failed and scan.regression events to this URL, signed with HMAC-SHA256 (X-LLMScanner-Signature).">
         {newSecret && <SecretBox value={newSecret} onDone={() => setNewSecret(null)} note="This is your signing secret. Use it to verify that events come from us. It won’t be shown again." />}
         <div style={{ display:'flex', gap:'8px', padding:'16px 20px', flexWrap:'wrap' }}>
-          <input value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} maxLength={2048} placeholder="https://hooks.example.com/llm-scanner" style={{ flex:1, minWidth:'240px' }} />
+          <input aria-label="Webhook URL" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} maxLength={2048} placeholder="https://hooks.example.com/llm-scanner" style={{ flex:1, minWidth:'240px' }} />
           <button className="btn-primary" style={{ fontSize:'12px' }} disabled={busy==='webhook'} onClick={saveWebhook}>Save</button>
           {user?.webhook_url && <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy==='test'} onClick={testWebhook}>Send test</button>}
           {user?.has_webhook_secret && <button className="btn-ghost" style={{ fontSize:'12px' }} disabled={busy==='rotate'} onClick={rotateSecret}>New secret</button>}
@@ -242,7 +242,7 @@ export default function Settings() {
 
       <Section title="Delete account" desc="Deletes your account, every scan and every report, and cancels any subscription. This can’t be undone." danger>
         <div style={{ display:'flex', gap:'8px', padding:'16px 20px', flexWrap:'wrap' }}>
-          <input type="password" autoComplete="current-password" value={deletePw} onChange={e => setDeletePw(e.target.value)} placeholder="Your password" style={{ flex:1, minWidth:'200px' }} />
+          <input aria-label="Your password, to confirm deletion" type="password" autoComplete="current-password" value={deletePw} onChange={e => setDeletePw(e.target.value)} placeholder="Your password" style={{ flex:1, minWidth:'200px' }} />
           <button onClick={deleteAccount} disabled={busy==='delete'}
             style={{ padding:'8px 16px', fontSize:'12px', fontWeight:'600', background:'rgba(180,35,24,0.08)', border:'1px solid rgba(180,35,24,0.4)', color:'#b42318', borderRadius:'6px', cursor:'pointer' }}>
             {busy==='delete' ? 'Deleting…' : 'Delete my account'}

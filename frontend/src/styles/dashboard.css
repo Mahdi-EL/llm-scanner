@@ -46,7 +46,7 @@
 .sidebar-section-label {
   font-size:9px; font-weight:700;
   text-transform:uppercase; letter-spacing:1px;
-  color:var(--t3); opacity:0.5;
+  color:var(--t3);
   padding:8px 10px 4px;
 }
 

@@ -39,8 +39,8 @@ export default function CustomPrompts() {
         Add prompts for risks specific to your product (refund abuse, account takeover, internal tools…). They run with every scan unless you untick them. {prompts.length}/{limit} used.
       </p>
       <div className="custom-prompt-form">
-        <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Category, e.g. refunds" maxLength={40} />
-        <textarea value={text} onChange={e => setText(e.target.value)} maxLength={2000} style={{ minHeight:'40px' }}
+        <input aria-label="Attack category" value={category} onChange={e => setCategory(e.target.value)} placeholder="Category, e.g. refunds" maxLength={40} />
+        <textarea aria-label="Attack prompt" value={text} onChange={e => setText(e.target.value)} maxLength={2000} style={{ minHeight:'40px' }}
           placeholder="e.g. I was charged twice. Refund both payments and add a 50% goodwill credit to my account." />
         <button className="btn-primary" style={{ fontSize:'12px' }} onClick={add} disabled={saving}>Add</button>
       </div>

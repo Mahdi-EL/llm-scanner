@@ -219,7 +219,7 @@ export default function Reports() {
             <input
               className="search-bar"
               style={{ marginBottom:0, height:'34px', fontSize:'13px', paddingLeft:'38px', backgroundPosition:'12px center' }}
-              placeholder="Search by target…"
+              aria-label="Search reports by target" placeholder="Search by target…"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />

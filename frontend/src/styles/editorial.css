@@ -515,7 +515,7 @@ body:has(.landing-editorial)::before {
   --paper-2 : #f5f6f9;
   --ink     : #14161c;
   --ink-2   : #545b68;
-  --ink-3   : #8b93a3;
+  --ink-3   : #646b78;
   --line    : rgba(17,24,39,0.09);
   --edge    : rgba(37,99,235,0.22);
   --blue    : #2563eb;
@@ -574,7 +574,7 @@ body:has(.landing-editorial)::before {
 
 /* ── Headlines + accent marks glow ───────────────────────── */
 .landing-editorial .ed-display { color:var(--ink); isolation:isolate; }
-.landing-editorial .ed-mark { color:#3b82f6; text-shadow: 0 0 26px rgba(37,99,235,0.55); }
+.landing-editorial .ed-mark { color:#2563eb; text-shadow: 0 0 26px rgba(37,99,235,0.55); }
 .landing-editorial .ed-ul::after {
   background: linear-gradient(90deg, #2563eb, #6366f1);
   height: 0.3em; border-radius: 3px;

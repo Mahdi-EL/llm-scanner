@@ -146,15 +146,15 @@ function FixIt({ scan, failedCount }) {
       </p>
       {needsPastedPrompt && !suggestion && (
         <div className="form-group">
-          <label>Your system prompt</label>
-          <textarea value={pasted} onChange={e => setPasted(e.target.value)} maxLength={20000} style={{ minHeight:'80px' }}
+          <label htmlFor="res-your-system-prompt">Your system prompt</label>
+          <textarea id="res-your-system-prompt" value={pasted} onChange={e => setPasted(e.target.value)} maxLength={20000} style={{ minHeight:'80px' }}
             placeholder="This target’s prompt wasn’t stored with the scan. Paste it here." />
         </div>
       )}
       {needsKey && (
         <div className="form-group">
-          <label>Target API key (needed to re-test)</label>
-          <input type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} />
+          <label htmlFor="res-target-api-key">Target API key (needed to re-test)</label>
+          <input id="res-target-api-key" type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} />
         </div>
       )}
       <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>

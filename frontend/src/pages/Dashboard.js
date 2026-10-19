@@ -451,7 +451,7 @@ export default function Dashboard() {
             <div style={{ display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap' }}>
               <div style={{ position:'relative', flex:'1 1 180px', maxWidth:'280px' }}>
                 <input className="search-bar" style={{ marginBottom:0, height:'34px', fontSize:'13px', paddingLeft:'38px', backgroundPosition:'12px center' }}
-                  placeholder="Search by target name…" value={search}
+                  aria-label="Search scans by target name" placeholder="Search by target name…" value={search}
                   onChange={e=>{setSearch(e.target.value);setPage(1);}} />
               </div>
               <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
