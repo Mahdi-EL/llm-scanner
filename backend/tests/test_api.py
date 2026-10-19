@@ -534,8 +534,8 @@ def test_stripe_event_is_retried_after_a_failure(client, monkeypatch):
     def boom(*a, **k):
         raise RuntimeError("database is locked")
     monkeypatch.setattr(auth_db, "update_plan", boom)
-    with pytest.raises(RuntimeError):
-        _stripe_event(client, monkeypatch, "customer.subscription.created", sub, event_id="evt_retry")
+    failed = _stripe_event(client, monkeypatch, "customer.subscription.created", sub, event_id="evt_retry")
+    assert failed.status_code == 500                # non-2xx, so Stripe sends the event again
     monkeypatch.setattr(auth_db, "update_plan", real)
     assert _stripe_event(client, monkeypatch, "customer.subscription.created", sub, event_id="evt_retry").status_code == 200
     assert auth_db.get_user_by_id(user_id)["plan"] == "pro"
@@ -582,3 +582,31 @@ def test_scan_emails_only_go_to_confirmed_addresses(client, monkeypatch):
     auth_db.mark_email_verified(user_id)
     notifications.scan_finished(_seed_complete_scan(user_id))
     assert sent == [auth_db.get_user_by_id(user_id)["email"]]
+
+
+def test_remediate_provider_failure_is_a_clear_502(client, monkeypatch):
+    import remediation
+
+    class Down:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    raise ConnectionError("groq is down")
+    real = remediation.suggest
+    monkeypatch.setattr(remediation, "suggest", lambda prompt, results: real(prompt, results, client=Down))
+    monkeypatch.setattr(remediation, "call_with_retry", lambda fn: fn())
+    user_id, headers = _register(client)
+    sim = _seed_with_config(user_id, {"target_type": "simulation", "system_prompt": "You are Acme's bot."})
+    r = client.post(f"/scan/{sim}/remediate", headers=headers, json={})
+    assert r.status_code == 502 and "isn't answering" in r.json()["detail"]
+
+
+def test_unexpected_errors_are_json_with_cors_headers(client, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("bug")
+    monkeypatch.setattr(api.auth_db, "list_api_keys", boom)
+    _, headers = _register(client)
+    r = client.get("/api/keys", headers={**headers, "Origin": "http://localhost:3000"})
+    assert r.status_code == 500 and r.json()["detail"].startswith("Something went wrong")
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"

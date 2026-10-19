@@ -17,7 +17,7 @@ import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -113,7 +113,12 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        # Answer here, inside CORS, so the browser shows the error instead of a CORS failure.
+        log.exception("Unhandled error on %s %s", request.method, request.url.path)
+        response = JSONResponse({"detail": "Something went wrong on our side. Please try again."}, status_code=500)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
     response.headers.setdefault("X-Frame-Options", "DENY")
@@ -823,6 +828,8 @@ def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user:
         raise HTTPException(status_code=400, detail="Paste your system prompt: it wasn't stored with this scan")
     try:
         return remediation.suggest(prompt, _report_data(scan).get("results", []))
+    except remediation.ProviderError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except remediation.RemediationError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

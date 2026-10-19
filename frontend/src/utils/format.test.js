@@ -1,4 +1,4 @@
-import { toCSV, gradeOf, scoreColor, isActive, formatDuration } from './format';
+import { toCSV, gradeOf, scoreColor, isActive, formatDuration, shortDate, fmtNum } from './format';
 import { errorMessage } from '../services/api';
 
 test('CSV cells are quoted and formulas are neutralized', () => {
@@ -31,4 +31,13 @@ test('API error messages are readable', () => {
     .toBe('Target name can\'t be empty');
   expect(errorMessage({ message: 'Network Error' })).toMatch(/reach the server/);
   expect(errorMessage({}, 'fallback')).toBe('fallback');
+});
+
+describe('shortDate / fmtNum', () => {
+  it('formats in English whatever the browser locale', () => {
+    expect(shortDate('2026-10-19T08:00:00Z')).toBe('Oct 19');
+    expect(shortDate('2026-10-19T08:00:00Z', true)).toBe('Oct 19, 2026');
+    expect(shortDate(null)).toBe('—');
+    expect(fmtNum(1090)).toBe('1,090');
+  });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useInView, useCountUp } from '../utils/hooks';
+import { fmtNum } from '../utils/format';
 
 /* ── Data ─────────────────────────────────────────────────── */
 const FEATURES = [
@@ -71,7 +72,7 @@ function CountStat({ target, suffix = '', label }) {
   const value = useCountUp(inView ? target : 0, 1400);
   return (
     <div className="ed-stat" ref={ref}>
-      <div className="ed-stat-num">{value.toLocaleString()}{suffix}</div>
+      <div className="ed-stat-num">{fmtNum(value)}{suffix}</div>
       <div className="ed-stat-label">{label}</div>
     </div>
   );
