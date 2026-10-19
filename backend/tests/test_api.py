@@ -637,3 +637,11 @@ def test_parallel_scan_requests_cannot_exceed_the_limits(client, monkeypatch):
         started = [s for s in pool.map(start, range(8)) if s]
     assert len(started) == services.MAX_ACTIVE_PER_USER
     assert scan_db.count_active_for_user(user_id) == services.MAX_ACTIVE_PER_USER
+
+
+def test_custom_prompt_limit_is_enforced(client):
+    import store
+    user_id, _ = _register(client)
+    added = [store.add_prompt(user_id, "refunds", f"prompt {i}") for i in range(store.MAX_PROMPTS + 3)]
+    assert sum(1 for a in added if a) == store.MAX_PROMPTS
+    assert added[-1] is None and len(store.list_prompts(user_id)) == store.MAX_PROMPTS
