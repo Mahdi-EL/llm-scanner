@@ -29,6 +29,7 @@ import analysis
 import auth_db
 import logsafe
 import database
+import detectors
 import email_service
 import firewall
 import groq_models
@@ -843,9 +844,10 @@ def unshare_scan(scan_id: str, user: dict = Depends(require_user)):
 @app.get("/shared/{token}")
 @limiter.limit("60/minute")
 def view_shared(request: Request, token: str):
-    """A shared report: findings and summary only, never the target's configuration."""
-    scan_id = store.resolve_share(token[:100])
-    scan = scan_db.get_scan(scan_id) if scan_id else None
+    """A shared report: findings and summary only, never the target's configuration. Secrets
+    the model leaked in its replies (keys, tokens, card numbers) are masked for link holders."""
+    link = store.resolve_share(token[:100])
+    scan = scan_db.get_scan(link["scan_id"]) if link else None
     if not scan or scan["status"] != "complete":
         raise HTTPException(status_code=404, detail="This link is invalid or has expired")
     data = _report_data(scan)
@@ -855,7 +857,9 @@ def view_shared(request: Request, token: str):
         "scan_date"      : data.get("scan_date"),
         "summary"        : scoring.ensure_summary(data),
         "recommendations": report.recommendations(data.get("results", [])),
-        "results"        : [{k: r.get(k) for k in keep} for r in data.get("results", [])],
+        "results"        : [{**{k: r.get(k) for k in keep}, "response": detectors.redact(r.get("response") or "")[0]}
+                            for r in data.get("results", [])],
+        "expires_at"     : link["expires_at"],
     }
 
 

@@ -194,13 +194,14 @@ def create_share(user_id: str, scan_id: str, days: int) -> dict:
     return {"token": token, "expires_at": expires}
 
 
-def resolve_share(token: str) -> Optional[str]:
+def resolve_share(token: str) -> Optional[dict]:
+    """{"scan_id", "expires_at"} for a live share link, else None."""
     with transaction() as conn:
         row = conn.execute("SELECT scan_id, expires_at FROM share_links WHERE token_hash = ?",
                            (token_hash(token),)).fetchone()
     if not row or parse_ts(row["expires_at"]) < datetime.now(timezone.utc):
         return None
-    return row["scan_id"]
+    return {"scan_id": row["scan_id"], "expires_at": row["expires_at"]}
 
 
 def revoke_share(user_id: str, scan_id: str) -> bool:
