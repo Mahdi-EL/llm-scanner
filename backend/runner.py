@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import config
 import detectors
+import errors
 import notifications
 import report
 import scan_db
@@ -135,14 +136,9 @@ def build_target(scan: dict):
     return target, canary, system_prompt
 
 
-def _friendly(exc: Exception) -> str:
-    status = getattr(getattr(exc, "response", None), "status_code", None) or getattr(exc, "status_code", None)
-    if status in (401, 403):
-        return f"The target rejected our credentials ({status}). Check the API key."
-    if status == 404:
-        return "The target URL or model wasn't found (404). Check the URL and the model name."
-    text = f"{type(exc).__name__}: {exc}"
-    return text[:500]
+def _friendly(exc: Exception, target_type: str = None) -> str:
+    # Simulation targets run on this server's own Groq key, not the user's.
+    return errors.explain(exc, server_side=target_type == "simulation")
 
 
 def execute(scan_id: str) -> None:
@@ -215,7 +211,8 @@ def execute(scan_id: str) -> None:
                             error_message=str(e), api_key_enc=None, completed_at=utcnow())
     except Exception as e:
         log.exception("Scan %s failed", scan_id)
-        scan_db.update_scan(scan_id, status="failed", error_message=_friendly(e),
+        scan_db.update_scan(scan_id, status="failed",
+                            error_message=_friendly(e, cfg.get("target_type") or scan["target_type"]),
                             api_key_enc=None, completed_at=utcnow())
 
     alert_drop = None

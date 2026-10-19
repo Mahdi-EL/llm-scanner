@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import config
 import detectors
+import errors
 import scoring
 from analysis import build_report_data, calculate_final_severity, get_severity_color
 from attacks import catalog
@@ -43,11 +44,6 @@ def build_attack_list(categories=None, with_history=True):
     chosen = categories or list(ATTACK_PROMPTS)
     return [(c, p) for c in chosen if c in ATTACK_PROMPTS for p in ATTACK_PROMPTS[c]
             if with_history or not is_multi_turn(p)]
-
-
-def _short_error(exc) -> str:
-    text = f"{type(exc).__name__}: {exc}"
-    return text if len(text) <= 300 else text[:300] + "..."
 
 
 def evaluate_attack(target, judge, category, prompt, baseline, *,
@@ -74,7 +70,8 @@ def evaluate_attack(target, judge, category, prompt, baseline, *,
         else:
             reply = call_with_retry(target.send, prompt)
     except Exception as exc:
-        finding["reason"] = f"Target call failed: {_short_error(exc)}"
+        server_side = getattr(target, "target_type", None) == "simulation"
+        finding["reason"] = f"Target call failed: {errors.explain(exc, server_side=server_side)}"
         return finding
     finding["response"] = reply = reply or ""
 
@@ -85,7 +82,7 @@ def evaluate_attack(target, judge, category, prompt, baseline, *,
         verdict = judge.evaluate(prompt, reply, baseline)
     except Exception as exc:
         if not hits:
-            finding["reason"] = f"Grading failed: {_short_error(exc)}"
+            finding["reason"] = f"Grading failed: {errors.explain(exc, server_side=True)}"
             return finding
         verdict = None
 
