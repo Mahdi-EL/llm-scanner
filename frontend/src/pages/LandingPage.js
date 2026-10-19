@@ -113,7 +113,7 @@ export default function LandingPage() {
               <Link to="/login" className="ed-btn ed-btn-line">Sign in</Link>
             </div>
             <div className="ed-hero-meta">
-              <div className="ed-meta-item"><strong>1000+</strong><span>attack prompts / scan</span></div>
+              <div className="ed-meta-item"><strong>1,000+</strong><span>attack prompts / scan</span></div>
               <div className="ed-meta-item"><strong>22</strong><span>attack categories</span></div>
               <div className="ed-meta-item"><strong>OWASP</strong><span>LLM Top 10 mapping</span></div>
             </div>

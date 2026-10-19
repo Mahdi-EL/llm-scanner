@@ -43,7 +43,7 @@
           "type": "array",
           "items": { "type": "string" },
           "default": ["direct_override", "extraction", "social_engineering", "boundary_testing"],
-          "description": "Attack categories to run (empty = all 21). Fewer categories make scans faster and cheaper."
+          "description": "Attack categories to run (empty = all 22). Fewer categories make scans faster and cheaper."
         },
         "llmscanner.autoScan": {
           "type": "boolean",
