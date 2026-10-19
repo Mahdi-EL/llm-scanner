@@ -699,3 +699,14 @@ def test_wrong_current_password_is_403_not_401(client):
     r = client.put("/auth/password", headers=headers,
                    json={"current_password": "wrong-one-1", "new_password": "brand-new-pass-1"})
     assert r.status_code == 403 and r.json()["detail"] == "Current password is incorrect"
+
+
+def test_api_reference_lists_every_route():
+    """docs/api-reference.md is a table of every route; this keeps it from drifting."""
+    from pathlib import Path
+
+    from fastapi.routing import APIRoute
+    doc = (Path(__file__).resolve().parents[2] / "docs" / "api-reference.md").read_text(encoding="utf-8")
+    missing = [f"{m} {r.path}" for r in api.app.routes if isinstance(r, APIRoute) and r.path != "/openapi.json"
+               for m in r.methods - {"HEAD"} if f"| {m} | `{r.path}` |" not in doc]
+    assert not missing, f"Add these to docs/api-reference.md: {missing}"
