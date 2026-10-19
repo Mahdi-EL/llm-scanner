@@ -550,7 +550,8 @@ def change_password(request: Request, body: PasswordChangeRequest, user: dict = 
     """Changes the password, signs out every other session, and returns fresh tokens."""
     _check_new_password(body.new_password)
     if not auth_db.verify_password(body.current_password, user["hashed_password"]):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
+        # 403, not 401: the caller is signed in; a 401 would make clients refresh and retry.
+        raise HTTPException(status_code=403, detail="Current password is incorrect")
     auth_db.set_password(user["id"], body.new_password)
     return {"message": "Password updated successfully", **_token_response(auth_db.get_user_by_id(user["id"]))}
 
@@ -601,7 +602,7 @@ def export_account(request: Request, user: dict = Depends(require_user)):
 def delete_account(request: Request, body: DeleteAccountRequest, user: dict = Depends(require_user)):
     """Deletes the account, its scans and report files. Cancels any subscription."""
     if not auth_db.verify_password(body.password, user["hashed_password"]):
-        raise HTTPException(status_code=401, detail="Password is incorrect")
+        raise HTTPException(status_code=403, detail="Password is incorrect")
     payment.cancel_subscription(user.get("stripe_subscription_id"))
     for scan_id in scan_db.user_scan_ids(user["id"]):
         _delete_scan_everything(scan_db.get_scan(scan_id))
