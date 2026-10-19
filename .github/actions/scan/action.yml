@@ -75,26 +75,41 @@ runs:
     - name: Run the scan
       id: scan
       shell: bash
+      # Inputs reach the script only as environment variables, never spliced into it,
+      # so a workflow that passes untrusted text (a PR title...) can't inject commands.
       env:
         LLMSCANNER_API_KEY: ${{ inputs.api-key }}
         LLMSCANNER_API_URL: ${{ inputs.api-url }}
-        TARGET_KEY: ${{ inputs.target-key }}
+        LLMSCANNER_TARGET_KEY: ${{ inputs.target-key }}
+        IN_NAME: ${{ inputs.target-name }}
+        IN_TYPE: ${{ inputs.target-type }}
+        IN_URL: ${{ inputs.target-url }}
+        IN_TARGET_ID: ${{ inputs.target-id }}
+        IN_MODEL: ${{ inputs.model }}
+        IN_PROMPT_FILE: ${{ inputs.system-prompt-file }}
+        IN_CATEGORIES: ${{ inputs.categories }}
+        IN_FAIL_ON: ${{ inputs.fail-on }}
+        IN_MIN_SCORE: ${{ inputs.min-score }}
+        IN_FORMAT: ${{ inputs.report-format }}
+        IN_TIMEOUT: ${{ inputs.timeout }}
       run: |
-        args=(scan --name "${{ inputs.target-name }}" --wait --poll 15 --timeout "${{ inputs.timeout }}")
-        if [ -n "${{ inputs.target-id }}" ]; then
-          args+=(--target-id "${{ inputs.target-id }}")
+        args=(scan --name "$IN_NAME" --wait --poll 15 --timeout "$IN_TIMEOUT")
+        if [ -n "$IN_TARGET_ID" ]; then
+          args+=(--target-id "$IN_TARGET_ID")
         else
-          args+=(--type "${{ inputs.target-type }}")
-          [ -n "${{ inputs.target-url }}" ] && args+=(--url "${{ inputs.target-url }}")
-          [ -n "$TARGET_KEY" ] && args+=(--target-key "$TARGET_KEY")
-          [ -n "${{ inputs.model }}" ] && args+=(--model "${{ inputs.model }}")
-          [ -n "${{ inputs.system-prompt-file }}" ] && args+=(--prompt-file "${{ inputs.system-prompt-file }}")
+          args+=(--type "$IN_TYPE")
+          [ -n "$IN_URL" ] && args+=(--url "$IN_URL")
+          [ -n "$IN_MODEL" ] && args+=(--model "$IN_MODEL")
+          [ -n "$IN_PROMPT_FILE" ] && args+=(--prompt-file "$IN_PROMPT_FILE")
         fi
-        [ -n "${{ inputs.categories }}" ] && args+=(--categories ${{ inputs.categories }})
-        [ -n "${{ inputs.fail-on }}" ] && args+=(--fail-on "${{ inputs.fail-on }}")
-        [ -n "${{ inputs.min-score }}" ] && args+=(--min-score "${{ inputs.min-score }}")
-        if [ -n "${{ inputs.report-format }}" ]; then
-          args+=(--download "${{ inputs.report-format }}" --out "llm-scanner-report.${{ inputs.report-format }}")
+        if [ -n "$IN_CATEGORIES" ]; then
+          read -ra categories <<< "$IN_CATEGORIES"
+          args+=(--categories "${categories[@]}")
+        fi
+        [ -n "$IN_FAIL_ON" ] && args+=(--fail-on "$IN_FAIL_ON")
+        [ -n "$IN_MIN_SCORE" ] && args+=(--min-score "$IN_MIN_SCORE")
+        if [ -n "$IN_FORMAT" ]; then
+          args+=(--download "$IN_FORMAT" --out "llm-scanner-report.$IN_FORMAT")
         fi
         llmscanner "${args[@]}"
 

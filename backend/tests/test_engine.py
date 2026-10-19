@@ -396,6 +396,29 @@ def test_resolve_keeps_the_configured_model_when_the_list_is_unavailable():
     assert groq_models.generation_params("openai/gpt-oss-120b")["max_tokens"] >= 1000
 
 
+def test_a_failed_model_listing_is_not_retried_by_every_scan():
+    import groq_models
+    groq_models.clear_cache()
+    calls = []
+
+    class Flaky:
+        def list(self):
+            calls.append(1)
+            raise ConnectionError("groq unreachable")
+    client = type("C", (), {"models": Flaky()})()
+    assert groq_models.available(None, client) is None
+    assert groq_models.available(None, client) is None
+    assert len(calls) == 1
+
+
+def test_judge_on_another_provider_never_asks_groq_for_models(monkeypatch):
+    import groq_models
+    monkeypatch.setattr(config, "JUDGE_BASE_URL", "https://llm.example.com/v1")
+    monkeypatch.setattr(groq_models, "available", lambda *a, **k: pytest.fail("listed Groq models"))
+    assert Judge()._resolve_model is False
+    assert groq_models.judge_model() == config.JUDGE_MODEL
+
+
 # ── Multi-turn attacks ────────────────────────────────────────
 class HistoryTarget(FakeTarget):
     supports_history = True

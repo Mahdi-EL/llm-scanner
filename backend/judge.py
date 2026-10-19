@@ -143,7 +143,7 @@ class Judge:
         self._lock          = threading.Lock()
         self.calls          = 0
         # Check Groq's live model list only for our own client on Groq's default endpoint.
-        self._resolve_model = client is None and base_url is None and model is None
+        self._resolve_model = client is None and self._base_url is None and model is None
         self._resolved      = False
 
     @property

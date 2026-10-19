@@ -125,7 +125,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--type", default="simulation",
                       choices=["simulation", "groq", "openai_compatible", "custom_rest"])
     scan.add_argument("--url", help="target API URL")
-    scan.add_argument("--target-key", help="the target's own API key")
+    scan.add_argument("--target-key", default=os.getenv("LLMSCANNER_TARGET_KEY"),
+                      help="the target's own API key (default: $LLMSCANNER_TARGET_KEY)")
     scan.add_argument("--model")
     scan.add_argument("--prompt", help="system prompt (simulation/groq) or known prompt for leak detection")
     scan.add_argument("--prompt-file")

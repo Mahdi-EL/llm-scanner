@@ -19,6 +19,7 @@ JUDGE_PREFERENCES  = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss
 
 _NOT_CHAT = ("whisper", "orpheus", "prompt-guard", "tts", "guard", "allam")
 _CACHE_SECONDS = 3600
+_FAILURE_CACHE_SECONDS = 300      # don't make every scan wait on a listing that just failed
 _cache = {}
 _lock = threading.Lock()
 
@@ -30,7 +31,7 @@ def available(api_key: Optional[str], client=None) -> Optional[set]:
     cache_key = api_key or id(client)
     with _lock:
         hit = _cache.get(cache_key)
-        if hit and time.time() - hit[0] < _CACHE_SECONDS:
+        if hit and time.time() - hit[0] < (_CACHE_SECONDS if hit[1] is not None else _FAILURE_CACHE_SECONDS):
             return hit[1]
     try:
         if client is None:
@@ -40,6 +41,8 @@ def available(api_key: Optional[str], client=None) -> Optional[set]:
                   if getattr(m, "active", True) and not any(tag in m.id for tag in _NOT_CHAT)}
     except Exception:
         log.warning("Couldn't list Groq models; using the configured ones as-is", exc_info=True)
+        with _lock:
+            _cache[cache_key] = (time.time(), None)
         return None
     with _lock:
         _cache[cache_key] = (time.time(), models)
@@ -73,6 +76,8 @@ def default_model(api_key: Optional[str] = None) -> str:
 
 def judge_model(api_key: Optional[str] = None) -> str:
     import config
+    if config.JUDGE_BASE_URL:            # another provider: Groq's model list says nothing about it
+        return config.JUDGE_MODEL
     return resolve(config.JUDGE_MODEL, JUDGE_PREFERENCES, api_key or config.JUDGE_API_KEY)
 
 
