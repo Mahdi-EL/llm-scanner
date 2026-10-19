@@ -539,3 +539,46 @@ def test_stripe_event_is_retried_after_a_failure(client, monkeypatch):
     monkeypatch.setattr(auth_db, "update_plan", real)
     assert _stripe_event(client, monkeypatch, "customer.subscription.created", sub, event_id="evt_retry").status_code == 200
     assert auth_db.get_user_by_id(user_id)["plan"] == "pro"
+
+
+# ── Password reset by email ───────────────────────────────────
+def test_forgot_password_without_email_delivery_says_so(client):
+    r = client.post("/auth/forgot-password", json={"email": "nobody@example.com"})
+    assert r.status_code == 503
+
+
+def test_forgot_password_then_reset(client, monkeypatch):
+    import email_service
+    sent = {}
+    monkeypatch.setattr(email_service, "enabled", lambda: True)
+    monkeypatch.setattr(email_service, "send_password_reset", lambda to, token: sent.update(to=to, token=token))
+    user_id, _ = _register(client)
+    email = auth_db.get_user_by_id(user_id)["email"]
+
+    unknown = client.post("/auth/forgot-password", json={"email": "nobody@example.com"})
+    known = client.post("/auth/forgot-password", json={"email": email})
+    assert unknown.status_code == known.status_code == 200
+    assert unknown.json() == known.json()          # no account enumeration
+    assert sent["to"] == email
+
+    r = client.post("/auth/reset-password", json={"token": sent["token"], "new_password": "brand-new-pass-1"})
+    assert r.status_code == 200
+    again = client.post("/auth/reset-password", json={"token": sent["token"], "new_password": "another-pass-22"})
+    assert again.status_code == 400                # tokens are single use
+    username = auth_db.get_user_by_id(user_id)["username"]
+    assert client.post("/auth/login", json={"username": username, "password": "brand-new-pass-1"}).status_code == 200
+
+
+def test_scan_emails_only_go_to_confirmed_addresses(client, monkeypatch):
+    import email_service
+    sent = []
+    monkeypatch.setattr(email_service, "send_scan_complete", lambda to, *a, **k: sent.append(to))
+    monkeypatch.setattr(notifications, "send_webhook", lambda *a, **k: None)
+    user_id, _ = _register(client)
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET email_verified = 0 WHERE id = ?", (user_id,))
+    notifications.scan_finished(_seed_complete_scan(user_id))
+    assert sent == []
+    auth_db.mark_email_verified(user_id)
+    notifications.scan_finished(_seed_complete_scan(user_id))
+    assert sent == [auth_db.get_user_by_id(user_id)["email"]]

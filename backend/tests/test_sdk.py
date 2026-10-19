@@ -92,7 +92,8 @@ def test_scan_status_results_download_and_quota(base_url, account, tmp_path):
     assert report.worst_severity() == "HIGH"
 
     pdf = client.download(done, "pdf", str(tmp_path / "r.pdf"))
-    assert open(pdf, "rb").read(4) == b"%PDF"
+    with open(pdf, "rb") as f:
+        assert f.read(4) == b"%PDF"
     assert client.list()["total"] == 2      # the queued scan and the seeded one
     with pytest.raises(QuotaError):         # FREE_SCAN_LIMIT is 2 in conftest
         client.scan("one too many")

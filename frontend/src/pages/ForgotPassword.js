@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { authAPI } from '../services/api';
+import { authAPI, errorMessage } from '../services/api';
 
 export default function ForgotPassword() {
   const [email,   setEmail]   = useState('');
   const [sent,    setSent]    = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
 
   const submit = async e => {
     e.preventDefault();
+    setError('');
     setLoading(true);
-    try { await authAPI.forgotPassword(email); }
-    finally { setSent(true); setLoading(false); }
+    try { await authAPI.forgotPassword(email.trim()); setSent(true); }
+    catch (err) { setError(errorMessage(err, 'Could not send the reset link. Please try again.')); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -62,9 +65,10 @@ export default function ForgotPassword() {
           </div>
         ) : (
           <form onSubmit={submit}>
+            {error && <div className="alert-error" role="alert" style={{ marginBottom:'16px' }}>{error}</div>}
             <div className="form-group">
-              <label>Email address</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
+              <label htmlFor="fp-email">Email address</label>
+              <input id="fp-email" type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
             </div>
             <button type="submit" className="btn-primary" disabled={loading}
               style={{ width:'100%', padding:'13px', fontSize:'14px', justifyContent:'center', borderRadius:'8px' }}>

@@ -479,6 +479,9 @@ def get_me(user: dict = Depends(require_user)):
 @limiter.limit("3/minute")
 def forgot_password(request: Request, body: EmailBody):
     """Emails a password reset link (always answers the same, to avoid revealing accounts)."""
+    if not email_service.enabled():
+        raise HTTPException(status_code=503, detail="Password reset by email isn't set up on this server. "
+                                                    "Ask the administrator to reset your password.")
     token = auth_db.create_reset_token(body.email)
     if token:
         email_service.send_password_reset(body.email, token)
