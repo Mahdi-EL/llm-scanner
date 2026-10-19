@@ -12,14 +12,14 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, EmailStr, Field, field_validator
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -236,15 +236,40 @@ FIELD_PATTERN = r"^[A-Za-z0-9_.-]{1,64}$"
 SLUG_PATTERN  = r"^[a-z0-9_-]{1,40}$"
 
 
+def _must_match(pattern: str, message: str):
+    def check(value: str) -> str:
+        if not re.fullmatch(pattern, value):
+            raise ValueError(message)
+        return value
+    return AfterValidator(check)
+
+
+def _strip(value):
+    return value.strip() if isinstance(value, str) else value
+
+
+def _slugify(value):
+    """"Refund abuse" -> "refund_abuse": the UI takes free text, the API stores slugs."""
+    return re.sub(r"\s+", "_", value.strip().lower()) if isinstance(value, str) else value
+
+
+ModelName = Annotated[str, BeforeValidator(_strip), _must_match(
+    MODEL_PATTERN, "Model names use letters, numbers and . _ : / @ + - (up to 100 characters)")]
+FieldName = Annotated[str, BeforeValidator(_strip), _must_match(
+    FIELD_PATTERN, "Field names use letters, numbers, dots, dashes or underscores (up to 64 characters)")]
+Slug = Annotated[str, BeforeValidator(_slugify), _must_match(
+    SLUG_PATTERN, "Categories use letters, numbers, dashes or underscores (up to 40 characters)")]
+
+
 class TargetConfig(BaseModel):
     target_type      : TargetType = "simulation"
     system_prompt    : Optional[str] = Field(None, max_length=20000)
     api_url          : Optional[str] = Field(None, max_length=2048)
     api_key          : Optional[str] = Field(None, max_length=1000)
-    model            : Optional[str] = Field(None, pattern=MODEL_PATTERN)
+    model            : Optional[ModelName] = None
     baseline_question: Optional[str] = Field(None, max_length=1000)
-    input_field      : Optional[str] = Field(None, pattern=FIELD_PATTERN)
-    output_field     : Optional[str] = Field(None, pattern=FIELD_PATTERN)
+    input_field      : Optional[FieldName] = None
+    output_field     : Optional[FieldName] = None
 
     def target_config(self) -> dict:
         return self.model_dump(exclude={"api_key"}, exclude_none=True,
@@ -344,10 +369,10 @@ class TargetUpdate(BaseModel):
     api_url          : Optional[str] = Field(None, max_length=2048)
     api_key          : Optional[str] = Field(None, max_length=1000)
     clear_api_key    : bool = False
-    model            : Optional[str] = Field(None, pattern=MODEL_PATTERN)
+    model            : Optional[ModelName] = None
     baseline_question: Optional[str] = Field(None, max_length=1000)
-    input_field      : Optional[str] = Field(None, pattern=FIELD_PATTERN)
-    output_field     : Optional[str] = Field(None, pattern=FIELD_PATTERN)
+    input_field      : Optional[FieldName] = None
+    output_field     : Optional[FieldName] = None
 
 
 class ScheduleCreate(BaseModel):
@@ -365,7 +390,7 @@ class ScheduleUpdate(BaseModel):
 
 
 class PromptCreate(BaseModel):
-    category: str = Field(..., pattern=SLUG_PATTERN)
+    category: Slug
     prompt  : str = Field(..., min_length=1, max_length=2000)
 
 
