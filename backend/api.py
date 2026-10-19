@@ -256,6 +256,15 @@ def _slugify(value):
     return re.sub(r"\s+", "_", value.strip().lower()) if isinstance(value, str) else value
 
 
+def _one_line(value):
+    """Names shown in emails, reports and headers: one line, no control characters."""
+    if not isinstance(value, str):
+        return value
+    return " ".join("".join(ch if ch.isprintable() else " " for ch in value).split())
+
+
+DisplayName = Annotated[str, BeforeValidator(_one_line)]
+
 ModelName = Annotated[str, BeforeValidator(_strip), _must_match(
     MODEL_PATTERN, "Model names use letters, numbers and . _ : / @ + - (up to 100 characters)")]
 FieldName = Annotated[str, BeforeValidator(_strip), _must_match(
@@ -280,7 +289,7 @@ class TargetConfig(BaseModel):
 
 
 class ScanRequest(TargetConfig):
-    target_name           : str = Field(..., min_length=1, max_length=120)
+    target_name           : DisplayName = Field(..., max_length=120)
     categories            : Optional[List[str]] = Field(None, max_length=50)
     target_id             : Optional[str] = Field(None, max_length=64)
     include_custom_prompts: bool = True
@@ -354,7 +363,7 @@ class CheckoutRequest(BaseModel):
 
 
 class ApiKeyCreate(BaseModel):
-    name: Optional[str] = Field("", max_length=60)
+    name: Optional[DisplayName] = Field("", max_length=60)
 
 
 class WebhookBody(BaseModel):
@@ -362,11 +371,11 @@ class WebhookBody(BaseModel):
 
 
 class TargetCreate(TargetConfig):
-    name: str = Field(..., min_length=1, max_length=120)
+    name: DisplayName = Field(..., min_length=1, max_length=120)
 
 
 class TargetUpdate(BaseModel):
-    name             : Optional[str] = Field(None, min_length=1, max_length=120)
+    name             : Optional[DisplayName] = Field(None, min_length=1, max_length=120)
     target_type      : Optional[TargetType] = None
     system_prompt    : Optional[str] = Field(None, max_length=20000)
     api_url          : Optional[str] = Field(None, max_length=2048)
