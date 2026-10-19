@@ -448,3 +448,20 @@ def test_attack_library_page_lists_every_scanned_category():
     page = Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "ThreatIntel.js"
     ids = re.findall(r"^\s*id\s*:\s*'([a-z_]+)'", page.read_text(encoding="utf-8"), re.M)
     assert sorted(ids) == sorted(ATTACK_PROMPTS)
+
+
+def test_a_due_schedule_is_claimed_only_once():
+    """Two processes that both see the same due schedule start one scan, not two."""
+    import auth_db
+    import database
+    import store
+    from db import transaction
+    database.init_db()
+    created = auth_db.create_user("claim_" + os.urandom(3).hex(), f"{os.urandom(4).hex()}@example.com",
+                                  "password123", verified=True)
+    target = store.create_target(created["user_id"], "Bot", {"target_type": "simulation"}, None)
+    sched = store.create_schedule(created["user_id"], target["id"], "daily", [], 5)
+    with transaction() as conn:
+        conn.execute("UPDATE schedules SET next_run_at = '2000-01-01T00:00:00+00:00' WHERE id = ?", (sched["id"],))
+    seen_by_both = [s for s in store.due_schedules() if s["id"] == sched["id"]] * 2
+    assert [store.claim_schedule(s) for s in seen_by_both] == [True, False]
