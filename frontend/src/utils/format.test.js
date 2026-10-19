@@ -1,4 +1,4 @@
-import { toCSV, gradeOf, scoreColor, isActive, formatDuration, shortDate, fmtNum } from './format';
+import { toCSV, gradeOf, scoreColor, isActive, formatDuration, shortDate, fmtNum, safeNext } from './format';
 import { errorMessage } from '../services/api';
 
 test('CSV cells are quoted and formulas are neutralized', () => {
@@ -40,4 +40,10 @@ describe('shortDate / fmtNum', () => {
     expect(shortDate(null)).toBe('—');
     expect(fmtNum(1090)).toBe('1,090');
   });
+});
+
+test('safeNext only allows paths on this site', () => {
+  expect(safeNext('/reports?x=1')).toBe('/reports?x=1');
+  for (const bad of ['//evil.com', '/\\evil.com', 'https://evil.com', 'javascript:alert(1)', null, undefined, ''])
+    expect(safeNext(bad)).toBe('/');
 });

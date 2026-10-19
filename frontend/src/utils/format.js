@@ -23,6 +23,12 @@ export function shortDate(dateStr, withYear = false) {
 /** 1,090 rather than the browser locale's "1 090". */
 export const fmtNum = n => Number(n).toLocaleString('en-US');
 
+/** Where to go after signing in: a path on this site only (never "//evil.com" or a full URL). */
+export function safeNext(raw) {
+  return typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\')
+    ? raw : '/';
+}
+
 /** Display names of target types. */
 export const TARGET_TYPES = {
   simulation       : 'Simulation',
