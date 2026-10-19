@@ -14,10 +14,10 @@ const FEATURES = [
 ];
 
 const PREVIEW_ATTACKS = [
-  { name:'Prompt Injection',    count:24 },
-  { name:'Jailbreak Attempts',  count:18 },
-  { name:'Data Exfiltration',   count:15 },
-  { name:'Policy Bypass',       count:12 },
+  { name:'Instruction override',  count:24 },
+  { name:'Jailbreak templates',   count:18 },
+  { name:'Data exfiltration',     count:15 },
+  { name:'Prompt extraction',     count:11 },
 ];
 
 const ATTACK_PILLS = [
@@ -140,7 +140,7 @@ export default function LandingPage() {
                 <div className="ed-scan-stats">
                   <div className="ed-scan-stat"><b>7</b><span>Critical</span></div>
                   <div className="ed-scan-stat"><b>12</b><span>High</span></div>
-                  <div className="ed-scan-stat ed-accent"><b>34%</b><span>Score</span></div>
+                  <div className="ed-scan-stat ed-accent"><b>34</b><span>Score / 100</span></div>
                 </div>
               </div>
             </div>
