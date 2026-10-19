@@ -165,13 +165,15 @@ def list_prompts(user_id: str) -> list:
 
 
 def add_prompt(user_id: str, category: str, prompt: str) -> Optional[dict]:
+    prompt_id = uuid.uuid4().hex
     with transaction() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM custom_prompts WHERE user_id = ?", (user_id,)).fetchone()[0]
-        if count >= MAX_PROMPTS:
-            return None
-        prompt_id = uuid.uuid4().hex
-        conn.execute("INSERT INTO custom_prompts (id, user_id, category, prompt, created_at) VALUES (?, ?, ?, ?, ?)",
-                     (prompt_id, user_id, category, prompt, utcnow()))
+        # One statement, so parallel requests can't both pass the count.
+        added = conn.execute(
+            "INSERT INTO custom_prompts (id, user_id, category, prompt, created_at) "
+            "SELECT ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM custom_prompts WHERE user_id = ?) < ?",
+            (prompt_id, user_id, category, prompt, utcnow(), user_id, MAX_PROMPTS)).rowcount
+    if not added:
+        return None
     return {"id": prompt_id, "category": category, "prompt": prompt}
 
 
