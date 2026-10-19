@@ -28,9 +28,11 @@ jobs:
       - name: Run the scanner
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          CATEGORIES: ${{ inputs.categories }}
         run: |
+          read -ra categories <<< "$CATEGORIES"
           python backend/scanner.py --target "Demo assistant" --output ci_report \
-            --categories ${{ inputs.categories }} --reports-dir results
+            --categories "${categories[@]}" --reports-dir results
       - name: Summary
         if: always()
         run: |
