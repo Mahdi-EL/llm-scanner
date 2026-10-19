@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
@@ -112,6 +112,13 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
     });
   };
 
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const onKey = e => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileOpen, onClose]);
+
   const isActive = path =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
@@ -163,6 +170,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
             key={item.path}
             to={item.path}
             className={`sidebar-link${isActive(item.path) ? ' active' : ''}`}
+            aria-current={isActive(item.path) ? 'page' : undefined}
           >
             <span className="sidebar-link-icon">{item.icon}</span>
             <span className="sidebar-link-label">{item.label}</span>
@@ -175,6 +183,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
             key={item.path}
             to={item.path}
             className={`sidebar-link${isActive(item.path) ? ' active' : ''}`}
+            aria-current={isActive(item.path) ? 'page' : undefined}
           >
             <span className="sidebar-link-icon">{item.icon}</span>
             <span className="sidebar-link-label">{item.label}</span>
@@ -197,7 +206,8 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
 
       {/* ── Collapse button ────────────────── */}
       <div style={{ padding:'0 10px 4px' }}>
-        <button className="sidebar-collapse-btn" onClick={toggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+        <button className="sidebar-collapse-btn" onClick={toggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed}>
           {collapsed ? <IcoChevronRight /> : <IcoChevronLeft />}
         </button>
       </div>
