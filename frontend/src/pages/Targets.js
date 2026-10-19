@@ -3,14 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { targetsAPI, schedulesAPI, scansAPI, API_URL, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { relTime, shortDate } from '../utils/format';
+import { relTime, shortDate, TARGET_TYPES } from '../utils/format';
 
-const TYPES = {
-  simulation       : 'Simulation',
-  groq             : 'Groq',
-  openai_compatible: 'OpenAI-compatible',
-  custom_rest      : 'Custom REST',
-};
+const TYPES = TARGET_TYPES;
 
 const EMPTY = { name:'', target_type:'openai_compatible', api_url:'', api_key:'', model:'', system_prompt:'', input_field:'', output_field:'' };
 

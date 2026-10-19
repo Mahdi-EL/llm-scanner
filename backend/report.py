@@ -337,13 +337,14 @@ STYLES = {
     "title"  : _s("title", fontName="Times-Bold", fontSize=26, leading=30, spaceAfter=4),
     "sub"    : _s("sub", fontSize=10, textColor=C_TEXT2, spaceAfter=10),
     "big"    : _s("big", fontName="Times-Bold", fontSize=54, leading=58),
-    "h2"     : _s("h2", fontName="Times-Bold", fontSize=16, spaceBefore=14, spaceAfter=6),
+    "h2"     : _s("h2", fontName="Times-Bold", fontSize=16, leading=20, spaceBefore=14, spaceAfter=4),
     "h3"     : _s("h3", fontName="Helvetica-Bold", fontSize=10, spaceAfter=2),
     "body"   : _s("body", fontSize=9.5, leading=13.5, spaceAfter=4),
     "small"  : _s("small", fontSize=8, leading=11, textColor=C_TEXT2),
     "footer" : _s("footer", fontSize=7.5, textColor=C_TEXT3, alignment=TA_CENTER),
     "cell"   : _s("cell", fontSize=8, leading=10.5),
     "cellb"  : _s("cellb", fontName="Helvetica-Bold", fontSize=8, leading=10.5),
+    "count"  : _s("count", fontSize=16, leading=20),
 }
 
 
@@ -354,12 +355,12 @@ def _category_bars(rows, width=480):
     for i, row in enumerate(rows):
         y = height - (i + 1) * 16 + 4
         share = row["failed"] / row["attacks"] if row["attacks"] else 0
-        d.add(String(0, y + 2, _clip(row["title"], 32), fontSize=7, fillColor=C_TEXT2))
+        d.add(String(0, y + 2, _clip(row["title"], 32), fontName="Helvetica", fontSize=7, fillColor=C_TEXT2))
         d.add(Rect(label_w, y, bar_max, 9, fillColor=C_PAPER, strokeColor=None))
         color = SEV_COLORS.get(row["worst"], C_TEXT3) if row["failed"] else SEV_COLORS["SAFE"]
         d.add(Rect(label_w, y, max(bar_max * share, 1), 9, fillColor=color, strokeColor=None))
         d.add(String(label_w + bar_max + 6, y + 2, f"{row['failed']}/{row['attacks']}",
-                     fontSize=7, fillColor=C_TEXT2))
+                     fontName="Helvetica", fontSize=7, fillColor=C_TEXT2))
     return d
 
 
@@ -367,11 +368,11 @@ def build_pdf(data, output_path, target_name="AI Application"):
     summary = _summary(data)
     results = data.get("results") or []
     score   = summary["security_score"]
-    W = 17.4 * cm
     S = STYLES
     doc = SimpleDocTemplate(output_path, pagesize=A4, rightMargin=1.8 * cm, leftMargin=1.8 * cm,
                             topMargin=1.8 * cm, bottomMargin=2 * cm,
                             title=f"LLM Scanner report: {target_name}")
+    W = doc.width - 12          # the frame keeps 6pt of padding on each side
     story = [
         Paragraph("LLM SCANNER · SECURITY REPORT", S["kicker"]),
         Paragraph(_p(target_name), S["title"]),
@@ -388,12 +389,14 @@ def build_pdf(data, output_path, target_name="AI Application"):
     story += [score_table, Spacer(1, 0.3 * cm)]
 
     cells = [[Paragraph(f"<font size='16' color='{_HTML_SEV[s]}'><b>{summary.get(s.lower(), 0)}</b></font>"
-                        f"<br/><font size='8' color='#8a847a'>{s.title()}</font>", S["body"])
+                        f"<br/><font size='8' color='#8a847a'>{s.title()}</font>", S["count"])
               for s in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "SAFE"]]]
     counts = Table(cells, colWidths=[W / 5] * 5)
     counts.setStyle(TableStyle([("LINEABOVE", (0, 0), (-1, 0), 0.5, C_BORDER),
                                 ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_BORDER),
-                                ("TOPPADDING", (0, 0), (-1, -1), 6)]))
+                                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                                ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
     story += [counts, Spacer(1, 0.25 * cm)]
     if summary.get("errors"):
         story.append(Paragraph(_p(f"{summary['errors']} of {summary['total']} attacks could not be completed "
@@ -401,25 +404,8 @@ def build_pdf(data, output_path, target_name="AI Application"):
     story.append(Paragraph("The score weights failures by severity. Any critical finding caps it at 49, "
                            "any high at 69, any medium at 89.", S["small"]))
 
-    rows = category_rows(results)
-    story += [Paragraph("Results by category", S["h2"]),
-              Paragraph("Share of attacks that succeeded in each category.", S["small"]),
-              Spacer(1, 0.15 * cm), _category_bars(rows, width=int(W / cm * 28.35))]
-
-    table = [[Paragraph("<b>Category</b>", S["cell"]), Paragraph("<b>OWASP</b>", S["cell"]),
-              Paragraph("<b>Attacks</b>", S["cell"]), Paragraph("<b>Failed</b>", S["cell"]),
-              Paragraph("<b>Worst</b>", S["cell"])]]
-    for row in rows:
-        table.append([Paragraph(_p(row["title"]), S["cell"]), Paragraph(_p(", ".join(row["owasp"])), S["cell"]),
-                      Paragraph(str(row["attacks"]), S["cell"]), Paragraph(str(row["failed"]), S["cell"]),
-                      Paragraph(_p(row["worst"] if row["failed"] else "none"), S["cell"])])
-    t = Table(table, colWidths=[7 * cm, 3.4 * cm, 2.2 * cm, 2.2 * cm, 2.6 * cm], repeatRows=1)
-    t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.3, C_BORDER),
-                           ("VALIGN", (0, 0), (-1, -1), "TOP")]))
-    story += [Spacer(1, 0.3 * cm), t]
-
     # What to fix
-    story += [PageBreak(), Paragraph("What to fix first", S["h2"])]
+    story += [Paragraph("What to fix first", S["h2"])]
     recs = recommendations(results)
     if not recs:
         story.append(Paragraph("No attack succeeded. Re-scan after every change to the system prompt or model.",
@@ -434,6 +420,23 @@ def build_pdf(data, output_path, target_name="AI Application"):
             HRFlowable(width="100%", thickness=0.3, color=C_BORDER, spaceAfter=6),
         ]
         story.append(KeepTogether(block))
+
+    rows = category_rows(results)
+    story += [Paragraph("Results by category", S["h2"]),
+              Paragraph("Share of attacks that succeeded in each category.", S["small"]),
+              Spacer(1, 0.15 * cm), _category_bars(rows, width=int(W / cm * 28.35))]
+
+    table = [[Paragraph("<b>Category</b>", S["cell"]), Paragraph("<b>OWASP</b>", S["cell"]),
+              Paragraph("<b>Attacks</b>", S["cell"]), Paragraph("<b>Failed</b>", S["cell"]),
+              Paragraph("<b>Worst</b>", S["cell"])]]
+    for row in rows:
+        table.append([Paragraph(_p(row["title"]), S["cell"]), Paragraph(_p(", ".join(row["owasp"])), S["cell"]),
+                      Paragraph(str(row["attacks"]), S["cell"]), Paragraph(str(row["failed"]), S["cell"]),
+                      Paragraph(_p(row["worst"] if row["failed"] else "none"), S["cell"])])
+    t = Table(table, colWidths=[W * f for f in (0.40, 0.20, 0.13, 0.13, 0.14)], repeatRows=1)
+    t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.3, C_BORDER),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    story += [Spacer(1, 0.3 * cm), t]
 
     # Serious findings in detail
     serious = [r for r in _sorted_findings(results) if r.get("severity") in ("CRITICAL", "HIGH")]
@@ -465,7 +468,7 @@ def build_pdf(data, output_path, target_name="AI Application"):
             rows_ml.append([Paragraph(_p(r["severity"]), S["cellb"]),
                             Paragraph(_p(catalog.info(r.get("category", ""))["title"]), S["cell"]),
                             Paragraph(_p(_clip(r.get("reason"), 160)), S["cell"])])
-        tml = Table(rows_ml, colWidths=[2.2 * cm, 5 * cm, 10.2 * cm], repeatRows=1)
+        tml = Table(rows_ml, colWidths=[W * f for f in (0.13, 0.29, 0.58)], repeatRows=1)
         tml.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.3, C_BORDER),
                                  ("VALIGN", (0, 0), (-1, -1), "TOP")]))
         story.append(tml)

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { usePolling } from '../utils/hooks';
-import { scoreColor, isActive, formatDuration } from '../utils/format';
+import { scoreColor, isActive, formatDuration, typeLabel } from '../utils/format';
 
 const SEV_META = {
   CRITICAL: { color:'#b42318', bg:'rgba(180,35,24,0.08)', label:'Critical' },
@@ -412,7 +412,7 @@ export default function Results() {
           <p style={{ fontSize:'13px', color:'var(--t3)', margin:0 }}>
             {new Date(scan.created_at).toLocaleString('en-US',{ dateStyle:'long', timeStyle:'short' })}
             {scan.duration_seconds ? ` · took ${formatDuration(scan.duration_seconds)}` : ''}
-            {scan.config?.target_type ? ` · ${scan.config.target_type.replace(/_/g,' ')}` : ''}
+            {scan.config?.target_type ? ` · ${typeLabel(scan.config.target_type)}` : ''}
             {scan.config?.model ? ` · ${scan.config.model}` : ''}
           </p>
         </div>
