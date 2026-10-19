@@ -111,3 +111,10 @@ def test_cli_status_and_fail_on(base_url, account, monkeypatch, capsys):
     assert cli_main(args + ["scan", "--name", "x", "--wait", "--fail-on", "critical", "--poll", "0"]) == 1
     assert cli_main(args + ["scan", "--name", "x", "--wait", "--min-score", "10", "--poll", "0"]) == 0
     assert cli_main(["--api-key", "llmsk_bad", "--api-url", base_url, "status", done]) == 2
+
+
+def test_cli_reads_the_target_key_from_the_environment(monkeypatch):
+    """The GitHub Action passes the target key by env, so it never shows up in argv."""
+    from llmscanner import cli
+    monkeypatch.setenv("LLMSCANNER_TARGET_KEY", "sk-from-env")
+    assert cli.build_parser().parse_args(["scan", "--name", "x"]).target_key == "sk-from-env"
