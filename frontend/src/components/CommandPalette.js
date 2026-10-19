@@ -20,11 +20,12 @@ export default function CommandPalette({ open, onClose, recentScans = [] }) {
   const navigate  = useNavigate();
 
   useEffect(() => {
-    if (open) {
-      setQuery('');
-      setSelected(0);
-      setTimeout(() => inputRef.current?.focus(), 40);
-    }
+    if (!open) return undefined;
+    const returnTo = document.activeElement;      // give focus back on close
+    setQuery('');
+    setSelected(0);
+    const t = setTimeout(() => inputRef.current?.focus(), 40);
+    return () => { clearTimeout(t); returnTo?.focus?.(); };
   }, [open]);
 
   const q = query.toLowerCase();
@@ -62,6 +63,7 @@ export default function CommandPalette({ open, onClose, recentScans = [] }) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(s => Math.min(s + 1, totalItems - 1)); }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setSelected(s => Math.max(s - 1, 0)); }
       if (e.key === 'Enter') {
+        e.preventDefault();       // or the same Enter re-opens us via the refocused Search button
         let flat = 0;
         for (const g of groups) {
           for (const item of g.items) {
@@ -79,7 +81,7 @@ export default function CommandPalette({ open, onClose, recentScans = [] }) {
 
   return (
     <div className="cmd-backdrop" onClick={onClose}>
-      <div className="cmd-modal" onClick={e => e.stopPropagation()}>
+      <div className="cmd-modal" role="dialog" aria-modal="true" aria-label="Command palette" onClick={e => e.stopPropagation()}>
 
         {/* Search */}
         <div className="cmd-search-row">
@@ -89,27 +91,33 @@ export default function CommandPalette({ open, onClose, recentScans = [] }) {
           <input
             ref={inputRef}
             className="cmd-input"
+            aria-label="Search pages and scans"
+            role="combobox" aria-expanded="true" aria-controls="cmd-results"
+            aria-activedescendant={totalItems ? `cmd-opt-${selected}` : undefined}
             placeholder="Search pages, scans…"
             value={query}
             onChange={e => { setQuery(e.target.value); setSelected(0); }}
           />
-          <button className="cmd-esc" onClick={onClose}>Esc</button>
+          <button className="cmd-esc" onClick={onClose} aria-label="Close">Esc</button>
         </div>
 
         {/* Results */}
-        <div className="cmd-results">
+        <div className="cmd-results" id="cmd-results" role="listbox" aria-label="Results">
           {totalItems === 0 ? (
             <div className="cmd-empty">No results for "{query}"</div>
           ) : (
             groups.map(g => (
-              <div key={g.label}>
-                <div className="cmd-section-label">{g.label}</div>
+              <div key={g.label} role="group" aria-label={g.label}>
+                <div className="cmd-section-label" aria-hidden="true">{g.label}</div>
                 {g.items.map((item, i) => {
                   const idx = g.offset + i;
                   const sel = idx === selected;
                   return (
                     <div
                       key={item.id}
+                      id={`cmd-opt-${idx}`}
+                      role="option"
+                      aria-selected={sel}
                       className={`cmd-item${sel ? ' selected' : ''}`}
                       onClick={() => handleSelect(item)}
                       onMouseEnter={() => setSelected(idx)}
