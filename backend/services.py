@@ -1,5 +1,6 @@
 """Business rules shared by the API and the scheduler: quotas and starting a scan."""
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -21,6 +22,10 @@ log = logging.getLogger("llmscanner.services")
 MAX_ACTIVE_PER_USER = 2      # pending + running scans one user may have at once
 MAX_QUEUED_TOTAL    = 25     # pending + running scans across everyone
 
+# Checking the limits and inserting the scan happen together, one request at a time;
+# otherwise parallel requests all pass the check before any of them is inserted.
+_admission = threading.Lock()
+
 
 class ScanRejected(Exception):
     """A scan can't start. status is the HTTP status the API should answer with."""
@@ -38,16 +43,19 @@ def quota(user: dict) -> dict:
             "remaining": None if limit is None else max(0, limit - used)}
 
 
-def check_can_scan(user: dict) -> None:
+def check_can_scan(user: dict, *, already_inserted: bool = False) -> None:
+    """Raises ScanRejected when the user can't start a scan. already_inserted: the new scan is
+    in the database already and counts toward the limits, so they may be reached but not passed."""
     if config.REQUIRE_EMAIL_VERIFICATION and not user.get("email_verified"):
         raise ScanRejected(403, "Please confirm your email address before running scans.")
+    over = 1 if already_inserted else 0
     q = quota(user)
-    if q["limit"] is not None and q["used"] >= q["limit"]:
+    if q["limit"] is not None and q["used"] - over >= q["limit"]:
         raise ScanRejected(402, f"You've used all {q['limit']} scans of the {str(q['plan']).title()} plan "
                                 "this month. Upgrade your plan to run more scans.")
-    if scan_db.count_running_scans() >= MAX_QUEUED_TOTAL:
+    if scan_db.count_running_scans() - over >= MAX_QUEUED_TOTAL:
         raise ScanRejected(429, "The scanner is at capacity right now. Please retry in a few minutes.")
-    with_user = scan_db.count_active_for_user(user["id"])
+    with_user = scan_db.count_active_for_user(user["id"]) - over
     if with_user >= MAX_ACTIVE_PER_USER:
         raise ScanRejected(429, f"You already have {with_user} scans running. Wait for one to finish.")
 
@@ -56,7 +64,7 @@ def queue_scan(user: dict, cfg: dict, api_key: Optional[str] = None, *,
                target_name: str, target_id: Optional[str] = None,
                schedule_id: Optional[str] = None, include_custom_prompts: bool = True) -> str:
     """Validates, stores and queues a scan. Returns its scan_id or raises ScanRejected."""
-    check_can_scan(user)
+    check_can_scan(user)          # fail fast; checked again below, atomically with the insert
 
     target_type = cfg.get("target_type", "simulation")
     if target_type in ("openai_compatible", "custom_rest"):
@@ -89,11 +97,18 @@ def queue_scan(user: dict, cfg: dict, api_key: Optional[str] = None, *,
     from target import HISTORY_TYPES
     planned = attacks if attacks else build_attack_list(categories, with_history=target_type in HISTORY_TYPES)
     total = len(planned) + len(cfg.get("custom_prompts") or [])
-    scan_id = scan_db.create_scan(
-        target_name, target_type, user_id=user["id"], config=cfg,
-        api_key_enc=vault.encrypt(api_key), total_attacks=total, model=cfg.get("model"),
-        target_id=target_id, schedule_id=schedule_id,
-    )
+    with _admission:
+        check_can_scan(user)
+        scan_id = scan_db.create_scan(
+            target_name, target_type, user_id=user["id"], config=cfg,
+            api_key_enc=vault.encrypt(api_key), total_attacks=total, model=cfg.get("model"),
+            target_id=target_id, schedule_id=schedule_id,
+        )
+        try:                      # another process may have inserted at the same moment
+            check_can_scan(user, already_inserted=True)
+        except ScanRejected:
+            scan_db.delete_scan(scan_id)
+            raise
     auth_db.increment_scan_count(user["id"])
     runner.submit(scan_id)
     log.info("Scan %s queued for user %s (%s, %d attacks)", scan_id, user["id"], target_type, total)
