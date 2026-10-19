@@ -42,8 +42,9 @@ function Loading({ label = 'Loading…' }) {
 function PublicShell({ children }) {
   return (
     <div className="app">
+      <a href="#main" className="skip-link">Skip to content</a>
       <Navbar />
-      <Suspense fallback={<Loading />}>{children}</Suspense>
+      <main id="main" tabIndex={-1}><Suspense fallback={<Loading />}>{children}</Suspense></main>
     </div>
   );
 }
@@ -67,11 +68,14 @@ function AppShell({ children }) {
 
   return (
     <div className="app-with-sidebar">
+      <a href="#main" className="skip-link">Skip to content</a>
       <Sidebar mobileOpen={navOpen} onClose={() => setNavOpen(false)} />
       <div className="app-main">
         <TopBar onOpenCmd={() => setCmdOpen(true)} onOpenNav={() => setNavOpen(true)} />
-        <EmailBanner />
-        <div className="main-content"><Suspense fallback={<Loading />}>{children}</Suspense></div>
+        <main id="main" className="main-content" tabIndex={-1}>
+          <EmailBanner />
+          <Suspense fallback={<Loading />}>{children}</Suspense>
+        </main>
       </div>
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
@@ -83,7 +87,7 @@ function EmailBanner() {
   const { user } = useAuth();
   if (!user || user.email_verified) return null;
   return (
-    <div style={{ margin:'12px 24px 0', padding:'10px 14px', border:'1px solid var(--b1)', borderRadius:'8px', fontSize:'13px', color:'var(--t2)' }}>
+    <div style={{ marginBottom:'20px', padding:'10px 14px', border:'1px solid var(--b1)', borderRadius:'8px', fontSize:'13px', color:'var(--t2)' }}>
       Please confirm your email address. We sent a link to <strong>{user.email}</strong>.
       You can resend it from <Link to="/settings">Settings</Link>.
     </div>

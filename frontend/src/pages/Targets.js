@@ -42,47 +42,47 @@ function TargetForm({ onSaved, onCancel }) {
     <div style={{ padding:'20px', borderBottom:'1px solid var(--b1)', display:'grid', gap:'12px' }}>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
         <div className="form-group" style={{ marginBottom:0 }}>
-          <label>Name *</label>
-          <input value={form.name} onChange={e => set('name', e.target.value)} maxLength={120} placeholder="Support bot (prod)" />
+          <label htmlFor="tg-name">Name *</label>
+          <input id="tg-name" value={form.name} onChange={e => set('name', e.target.value)} maxLength={120} placeholder="Support bot (prod)" />
         </div>
         <div className="form-group" style={{ marginBottom:0 }}>
-          <label>Type</label>
-          <select value={form.target_type} onChange={e => set('target_type', e.target.value)}>
+          <label htmlFor="tg-type">Type</label>
+          <select id="tg-type" value={form.target_type} onChange={e => set('target_type', e.target.value)}>
             {Object.entries(TYPES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select>
         </div>
       </div>
       {needsURL && (
         <div className="form-group" style={{ marginBottom:0 }}>
-          <label>API URL *</label>
-          <input value={form.api_url} onChange={e => set('api_url', e.target.value)} placeholder="https://api.openai.com/v1" />
+          <label htmlFor="tg-api-url">API URL *</label>
+          <input id="tg-api-url" value={form.api_url} onChange={e => set('api_url', e.target.value)} placeholder="https://api.openai.com/v1" />
         </div>
       )}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
         {form.target_type !== 'simulation' && (
           <div className="form-group" style={{ marginBottom:0 }}>
-            <label>API key</label>
-            <input type="password" autoComplete="off" value={form.api_key} onChange={e => set('api_key', e.target.value)} placeholder="Stored encrypted" />
+            <label htmlFor="tg-api-key">API key</label>
+            <input id="tg-api-key" type="password" autoComplete="off" value={form.api_key} onChange={e => set('api_key', e.target.value)} placeholder="Stored encrypted" />
           </div>
         )}
         {form.target_type !== 'custom_rest' ? (
           <div className="form-group" style={{ marginBottom:0 }}>
-            <label>Model</label>
-            <input value={form.model} onChange={e => set('model', e.target.value)} placeholder={form.target_type === 'openai_compatible' ? 'gpt-4o-mini' : 'Server default'} />
+            <label htmlFor="tg-model">Model</label>
+            <input id="tg-model" value={form.model} onChange={e => set('model', e.target.value)} placeholder={form.target_type === 'openai_compatible' ? 'gpt-4o-mini' : 'Server default'} />
           </div>
         ) : (
           <div className="form-group" style={{ marginBottom:0 }}>
-            <label>Request / response fields</label>
+            <label htmlFor="tg-input-field">Request / response fields</label>
             <div style={{ display:'flex', gap:'6px' }}>
-              <input value={form.input_field} onChange={e => set('input_field', e.target.value)} placeholder="message" />
-              <input value={form.output_field} onChange={e => set('output_field', e.target.value)} placeholder="response" />
+              <input id="tg-input-field" value={form.input_field} onChange={e => set('input_field', e.target.value)} placeholder="message" />
+              <input aria-label="Response field" value={form.output_field} onChange={e => set('output_field', e.target.value)} placeholder="response" />
             </div>
           </div>
         )}
       </div>
       <div className="form-group" style={{ marginBottom:0 }}>
-        <label>System prompt (optional)</label>
-        <textarea value={form.system_prompt} onChange={e => set('system_prompt', e.target.value)} style={{ minHeight:'70px' }}
+        <label htmlFor="tg-system-prompt">System prompt (optional)</label>
+        <textarea id="tg-system-prompt" value={form.system_prompt} onChange={e => set('system_prompt', e.target.value)} style={{ minHeight:'70px' }}
           placeholder={form.target_type === 'simulation' || form.target_type === 'groq' ? 'The prompt to test' : 'Improves leak detection'} />
       </div>
       <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>

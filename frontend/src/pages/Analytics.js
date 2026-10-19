@@ -146,7 +146,7 @@ function HeatCell({ label, count, rate }) {
       onMouseLeave={e => e.currentTarget.style.transform='none'}
     >
       <div style={{ fontSize:'15px', marginBottom:'3px' }}>{Math.round(rate * 100)}%</div>
-      <div style={{ fontSize:'10px', lineHeight:'1.3', color:'var(--t3)', overflowWrap:'anywhere', textTransform:'capitalize' }}>{label.replace(/_/g,' ')}</div>
+      <div style={{ fontSize:'10px', lineHeight:'1.3', color:'var(--t2)', overflowWrap:'anywhere', textTransform:'capitalize' }}>{label.replace(/_/g,' ')}</div>
     </div>
   );
 }

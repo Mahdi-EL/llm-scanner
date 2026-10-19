@@ -99,7 +99,7 @@ export default function Login() {
       </aside>
 
       {/* ═══════════ RIGHT · sign-in form ═══════════ */}
-      <main className="pw-main">
+      <div className="pw-main">
         <div className="pw-form">
           <Link to="/landing" className="pw-brand pw-brand-mobile">
             <Logo size={26} />
@@ -152,7 +152,7 @@ export default function Login() {
             Encrypted connection · SOC 2-ready
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

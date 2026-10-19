@@ -96,7 +96,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
   const initial = (user?.username || 'U')[0].toUpperCase();
 
   return (
-    <div className="topbar">
+    <header className="topbar">
 
       {/* ── Left: page identity ─────────────── */}
       <div className="topbar-left">
@@ -199,6 +199,6 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
           {initial}
         </button>
       </div>
-    </div>
+    </header>
   );
 }

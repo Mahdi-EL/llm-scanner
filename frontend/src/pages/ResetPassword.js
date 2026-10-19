@@ -67,13 +67,13 @@ export default function ResetPassword() {
             {!error && (
               <form onSubmit={submit}>
                 <div className="form-group">
-                  <label>New Password</label>
-                  <input type="password" placeholder="Min. 8 characters"
+                  <label htmlFor="rp-new-password">New Password</label>
+                  <input id="rp-new-password" type="password" placeholder="Min. 8 characters"
                     value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label>Confirm Password</label>
-                  <input type="password" placeholder="••••••••"
+                  <label htmlFor="rp-confirm-password">Confirm Password</label>
+                  <input id="rp-confirm-password" type="password" placeholder="••••••••"
                     value={form.confirm} onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))}
                     style={{ borderColor: form.confirm && form.confirm !== form.password ? 'rgba(240,68,56,0.5)' : undefined }} />
                 </div>

@@ -186,22 +186,22 @@ export default function NewScan() {
           <Section title="Connection" subtitle={needsURL ? 'Where to send attacks and how to authenticate.' : 'What the simulated assistant is told.'}>
             {needsURL && (
               <div className="form-group">
-                <label>API URL *</label>
-                <input value={form.api_url} onChange={e => set('api_url', e.target.value)} maxLength={2048}
+                <label htmlFor="ns-api-url">API URL *</label>
+                <input id="ns-api-url" value={form.api_url} onChange={e => set('api_url', e.target.value)} maxLength={2048}
                   placeholder={form.target_type === 'openai_compatible' ? 'https://api.openai.com/v1' : 'https://api.yourapp.com/chat'} />
               </div>
             )}
             {form.target_type !== 'simulation' && (
               <div className="form-group">
-                <label>{form.target_type === 'groq' ? 'Groq API key *' : `API key or bearer token${form.target_type === 'custom_rest' ? ' (optional)' : ''}`}</label>
-                <input type="password" autoComplete="off" value={form.api_key} onChange={e => set('api_key', e.target.value)} maxLength={1000}
+                <label htmlFor="ns-api-key">{form.target_type === 'groq' ? 'Groq API key *' : `API key or bearer token${form.target_type === 'custom_rest' ? ' (optional)' : ''}`}</label>
+                <input id="ns-api-key" type="password" autoComplete="off" value={form.api_key} onChange={e => set('api_key', e.target.value)} maxLength={1000}
                   placeholder={form.target_type === 'groq' ? 'gsk_…' : 'sk-… or token'} />
               </div>
             )}
             {form.target_type !== 'custom_rest' && (
               <div className="form-group">
-                <label>Model</label>
-                <input value={form.model} onChange={e => set('model', e.target.value)} maxLength={100}
+                <label htmlFor="ns-model">Model</label>
+                <input id="ns-model" value={form.model} onChange={e => set('model', e.target.value)} maxLength={100}
                   list={form.target_type === 'openai_compatible' ? undefined : 'groq-models'}
                   placeholder={`Default: ${type.defaultModel || models.default_target || 'chosen by the server'}`} />
                 <datalist id="groq-models">{models.groq.map(m => <option key={m} value={m} />)}</datalist>
@@ -210,27 +210,27 @@ export default function NewScan() {
             {form.target_type === 'custom_rest' && (
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'10px' }}>
                 <div className="form-group">
-                  <label>Request field</label>
-                  <input value={form.input_field} onChange={e => set('input_field', e.target.value)} placeholder="message" />
+                  <label htmlFor="ns-request-field">Request field</label>
+                  <input id="ns-request-field" value={form.input_field} onChange={e => set('input_field', e.target.value)} placeholder="message" />
                 </div>
                 <div className="form-group">
-                  <label>Response field</label>
-                  <input value={form.output_field} onChange={e => set('output_field', e.target.value)} placeholder="response" />
+                  <label htmlFor="ns-response-field">Response field</label>
+                  <input id="ns-response-field" value={form.output_field} onChange={e => set('output_field', e.target.value)} placeholder="response" />
                 </div>
               </div>
             )}
             <div className="form-group">
-              <label>{form.target_type === 'simulation' || form.target_type === 'groq'
+              <label htmlFor="ns-system-prompt">{form.target_type === 'simulation' || form.target_type === 'groq'
                 ? 'System prompt to test (optional)' : 'Your system prompt (optional, improves leak detection)'}</label>
-              <textarea value={form.system_prompt} onChange={e => set('system_prompt', e.target.value)} maxLength={20000}
+              <textarea id="ns-system-prompt" value={form.system_prompt} onChange={e => set('system_prompt', e.target.value)} maxLength={20000}
                 style={{ minHeight:'90px' }}
                 placeholder={form.target_type === 'simulation'
                   ? 'Leave empty to use the demo banking assistant.'
                   : 'If you paste it, any reply that repeats it word for word is flagged.'} />
             </div>
             <div className="form-group" style={{ marginBottom:'12px' }}>
-              <label>Baseline question (optional)</label>
-              <input value={form.baseline_question} onChange={e => set('baseline_question', e.target.value)} maxLength={1000}
+              <label htmlFor="ns-baseline">Baseline question (optional)</label>
+              <input id="ns-baseline" value={form.baseline_question} onChange={e => set('baseline_question', e.target.value)} maxLength={1000}
                 placeholder="A normal question for this app. Default: “Hi! What can you help me with?”" />
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>

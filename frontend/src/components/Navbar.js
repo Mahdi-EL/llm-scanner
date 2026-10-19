@@ -131,7 +131,7 @@ export default function Navbar() {
                   boxShadow   : '0 12px 40px rgba(16,24,40,0.14), 0 0 0 1px rgba(17,24,39,0.05)',
                 }}>
                   <div style={{ padding:'9px 12px 10px', borderBottom:'1px solid rgba(17,24,39,0.07)', marginBottom:'4px' }}>
-                    <div style={{ fontSize:'11px', color:'#8b93a3', marginBottom:'1px', textTransform:'uppercase', letterSpacing:'0.5px' }}>Signed in as</div>
+                    <div style={{ fontSize:'11px', color:'var(--t3)', marginBottom:'1px', textTransform:'uppercase', letterSpacing:'0.5px' }}>Signed in as</div>
                     <div style={{ fontSize:'13px', color:'#14161c', fontWeight:'600' }}>{user.email || user.username}</div>
                   </div>
                   {[

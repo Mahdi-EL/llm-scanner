@@ -480,6 +480,7 @@ export default function ThreatIntel() {
           </svg>
           <input
             className="ti-search"
+            aria-label="Search categories"
             placeholder="Search categories…"
             value={filterText}
             onChange={e => { setFilterText(e.target.value); setExpanded(null); }}

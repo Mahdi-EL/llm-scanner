@@ -21,7 +21,7 @@
   /* Text */
   --t1        : #14161c;   /* headings / primary */
   --t2        : #545b68;   /* secondary */
-  --t3        : #8b93a3;   /* muted / labels */
+  --t3        : #646b78;   /* muted / labels (4.8:1 or better on every light surface) */
 
   /* Accents — primary blue (#2563EB, Vercel-ish) */
   --blue      : #2563eb;
@@ -360,7 +360,7 @@ button { cursor:pointer; }
   text-transform:uppercase; transition:all 0.12s;
 }
 .filter-btn:hover { border-color:var(--b2); color:var(--t2); }
-.filter-btn.active { background:var(--blue-soft); border-color:rgba(37,99,235,0.3); color:var(--blue); }
+.filter-btn.active { background:var(--blue-soft); border-color:rgba(37,99,235,0.3); color:#1d4ed8; }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    PAGINATION
@@ -566,3 +566,12 @@ button { cursor:pointer; }
   box-shadow  : 0 0 0 3px var(--blue-soft);
 }
 :where(.main-content) :where(input, textarea)::placeholder { color: var(--t3); }
+
+/* Keyboard users can jump past the navigation */
+.skip-link {
+  position:absolute; left:12px; top:-48px; z-index:1000;
+  padding:8px 14px; border-radius:6px; background:var(--t1, #111827); color:#fff;
+  font-size:13px; font-weight:600; text-decoration:none;
+}
+.skip-link:focus { top:12px; }
+#main:focus { outline:none; }
