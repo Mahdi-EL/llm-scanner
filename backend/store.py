@@ -140,10 +140,20 @@ def due_schedules(now: Optional[datetime] = None) -> list:
         return [_schedule_out(r) for r in rows]
 
 
-def mark_schedule_ran(schedule_id: str, frequency: str, scan_id: Optional[str]):
+def claim_schedule(schedule: dict) -> bool:
+    """Moves a due schedule to its next run. Only one caller can win the claim, so two
+    processes (a rolling deploy, several workers) never start the same run twice."""
     with transaction() as conn:
-        conn.execute("UPDATE schedules SET last_run_at = ?, next_run_at = ?, last_scan_id = COALESCE(?, last_scan_id) "
-                     "WHERE id = ?", (utcnow(), next_run(frequency), scan_id, schedule_id))
+        claimed = conn.execute("UPDATE schedules SET last_run_at = ?, next_run_at = ? "
+                               "WHERE id = ? AND next_run_at = ? AND enabled = 1",
+                               (utcnow(), next_run(schedule["frequency"]), schedule["id"],
+                                schedule["next_run_at"])).rowcount
+    return claimed == 1
+
+
+def record_schedule_scan(schedule_id: str, scan_id: str):
+    with transaction() as conn:
+        conn.execute("UPDATE schedules SET last_scan_id = ? WHERE id = ?", (scan_id, schedule_id))
 
 
 # ── Custom attack prompts ─────────────────────────────────────

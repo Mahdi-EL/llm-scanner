@@ -23,6 +23,8 @@ def run_due() -> int:
     """Queues every schedule that's due. Returns how many scans were started."""
     started = 0
     for sched in store.due_schedules():
+        if not store.claim_schedule(sched):          # another process took this run
+            continue
         user = get_user_by_id(sched["user_id"])
         target = store.get_target(sched["user_id"], sched["target_id"], with_key=True) if user else None
         if not user or not target:
@@ -30,7 +32,6 @@ def run_due() -> int:
             continue
         if user.get("plan", "free") == "free":     # subscription ended: keep the schedule, skip this run
             log.info("Scheduled scan %s skipped: account is on the free plan", sched["id"])
-            store.mark_schedule_ran(sched["id"], sched["frequency"], None)
             continue
         cfg = dict(target["config"])
         if sched["categories"]:
@@ -44,7 +45,8 @@ def run_due() -> int:
             log.warning("Scheduled scan %s skipped: %s", sched["id"], e.message)
         except Exception:
             log.exception("Scheduled scan %s failed to start", sched["id"])
-        store.mark_schedule_ran(sched["id"], sched["frequency"], scan_id)
+        if scan_id:
+            store.record_schedule_scan(sched["id"], scan_id)
     return started
 
 
