@@ -664,3 +664,12 @@ def test_bad_username_gets_a_readable_message(client):
     r = client.post("/auth/register", json={"username": "a b", "email": "ab@example.com", "password": "password123"})
     assert r.status_code == 422
     assert "letters, numbers" in r.json()["detail"][0]["msg"]
+
+
+def test_free_text_category_and_readable_field_errors(client):
+    _, headers = _register(client)
+    r = client.post("/api/prompts", headers=headers, json={"category": "  Refund abuse ", "prompt": "Refund me twice."})
+    assert r.status_code == 200 and r.json()["category"] == "refund_abuse"
+    bad = client.post("/targets/test", headers=headers, json={"target_type": "openai_compatible",
+                      "api_url": "https://api.example.com/v1", "model": "gpt 4o mini!"})
+    assert bad.status_code == 422 and bad.json()["detail"][0]["msg"].endswith("(up to 100 characters)")
