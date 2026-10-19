@@ -154,6 +154,7 @@ function HeatCell({ label, count, rate }) {
 /* ── Main Analytics page ─────────────────────────────────────── */
 export default function Analytics() {
   const [scans,   setScans]   = useState([]);
+  const [totalScans, setTotalScans] = useState(0);
   const [catStats, setCatStats] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -161,8 +162,9 @@ export default function Analytics() {
   useEffect(() => {
     (async () => {
       try {
-        const [list, cats] = await Promise.all([scansAPI.list(), scansAPI.categoryStats()]);
-        setScans([...list.data.scans].reverse());      // oldest first, for the charts
+        const [list, cats] = await Promise.all([scansAPI.listAll(), scansAPI.categoryStats()]);
+        setScans([...list.scans].reverse());           // oldest first, for the charts
+        setTotalScans(list.total);
         setCatStats(cats.data.categories);
       } catch { /* empty state below */ }
       finally { setLoading(false); }
@@ -183,7 +185,7 @@ export default function Analytics() {
     : null;
 
   /* Stats */
-  const total     = scans.length;
+  const total     = Math.max(totalScans, scans.length);
   const avgScore  = completed.length ? Math.round(completed.reduce((a,s) => a + s.summary.security_score, 0) / completed.length) : null;
   const totalCrit = completed.reduce((a,s) => a + (s.summary.critical || 0), 0);
   const totalHigh = completed.reduce((a,s) => a + (s.summary.high || 0), 0);

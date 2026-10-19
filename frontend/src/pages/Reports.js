@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
-import { riskLabel } from '../utils/format';
+import { riskLabel, fmtNum } from '../utils/format';
 
 const SEV_COLOR = { CRITICAL:'#dc2626', HIGH:'#ea580c', MEDIUM:'#b45309', LOW:'#16a34a' };
 
@@ -64,6 +64,7 @@ const RISK_FILTERS = [
 
 export default function Reports() {
   const [scans,   setScans]   = useState([]);
+  const [total,   setTotal]   = useState(0);
   const [loading, setLoading] = useState(true);
   const [search,  setSearch]  = useState('');
   const [filter,  setFilter]  = useState('ALL');
@@ -75,8 +76,9 @@ export default function Reports() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await scansAPI.list({ status: 'complete' });
-        setScans(res.data.scans);
+        const { scans: all, total } = await scansAPI.listAll({ status: 'complete' });
+        setScans(all);
+        setTotal(total);
       } catch (e) {
         toast(errorMessage(e, 'Couldn\u2019t load your reports.'), 'error');
       }
@@ -157,7 +159,7 @@ export default function Reports() {
       <div className="stats-row" style={{ marginBottom:'24px' }}>
         {[
           {
-            label:'Total Reports', value: completed.length, color:'var(--t1)', icon:(
+            label:'Total Reports', value: Math.max(total, completed.length), color:'var(--t1)', icon:(
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             ),
           },
@@ -233,6 +235,7 @@ export default function Reports() {
           </div>
           <div style={{ marginLeft:'auto', fontSize:'12px', color:'var(--t3)' }}>
             {filtered.length} report{filtered.length !== 1 ? 's' : ''}
+            {total > scans.length && ` · latest ${fmtNum(scans.length)} of ${fmtNum(total)} loaded`}
           </div>
         </div>
 
