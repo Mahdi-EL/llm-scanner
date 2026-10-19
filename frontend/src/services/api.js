@@ -52,7 +52,8 @@ api.interceptors.response.use(
         return api(original);
       } catch {
         clearAuth();
-        window.location.href = '/login';
+        const here = window.location.pathname + window.location.search;
+        window.location.href = here.startsWith('/login') ? '/login' : `/login?next=${encodeURIComponent(here)}`;
         return Promise.reject(err);
       }
     }

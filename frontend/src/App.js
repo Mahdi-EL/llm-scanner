@@ -10,6 +10,7 @@ import ErrorBoundary   from './components/ErrorBoundary';
 import LandingPage     from './pages/LandingPage';
 import Login           from './pages/Login';
 import Register        from './pages/Register';
+import { safeNext } from './utils/format';
 import './App.css';
 
 // The app's pages load on demand, so visitors to the landing page don't
@@ -108,13 +109,16 @@ function Offline({ onRetry }) {
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
-  return user ? children : <Navigate to="/login" replace />;
+  const { pathname, search } = useLocation();
+  return user ? children : <Navigate to={`/login?next=${encodeURIComponent(pathname + search)}`} replace />;
 }
 
 /* ── Routes ─────────────────────────────────────────────────── */
 
 function AppRoutes() {
   const { user, loading, offline, refreshUser } = useAuth();
+  const { search } = useLocation();
+  const next = safeNext(new URLSearchParams(search).get('next'));
 
   if (loading) return <Loading />;
   if (offline) return <Offline onRetry={refreshUser} />;
@@ -126,7 +130,7 @@ function AppRoutes() {
       {/* ── Public: marketing + auth ─────────────────── */}
       <Route path="/" element={user ? app(<Dashboard />) : <PublicShell><LandingPage /></PublicShell>} />
       <Route path="/landing"         element={<PublicShell><LandingPage /></PublicShell>} />
-      <Route path="/login"           element={user ? <Navigate to="/" replace /> : <PublicShell><Login /></PublicShell>} />
+      <Route path="/login"           element={user ? <Navigate to={next} replace /> : <PublicShell><Login /></PublicShell>} />
       <Route path="/register"        element={user ? <Navigate to="/" replace /> : <PublicShell><Register /></PublicShell>} />
       <Route path="/forgot-password" element={<PublicShell><ForgotPassword /></PublicShell>} />
       <Route path="/reset-password"  element={<PublicShell><ResetPassword /></PublicShell>} />

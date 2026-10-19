@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { safeNext } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/Logo';
 
@@ -30,6 +31,7 @@ export default function Login() {
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
+  const [params] = useSearchParams();
 
   const handle = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -38,7 +40,7 @@ export default function Login() {
     setError(''); setLoading(true);
     try {
       await login(form.username, form.password);
-      navigate('/');
+      navigate(safeNext(params.get('next')), { replace: true });
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid credentials. Please try again.');
     } finally { setLoading(false); }
