@@ -710,3 +710,14 @@ def test_api_reference_lists_every_route():
     missing = [f"{m} {r.path}" for r in api.app.routes if isinstance(r, APIRoute) and r.path != "/openapi.json"
                for m in r.methods - {"HEAD"} if f"| {m} | `{r.path}` |" not in doc]
     assert not missing, f"Add these to docs/api-reference.md: {missing}"
+
+
+def test_names_are_one_line(client, monkeypatch):
+    import services
+    monkeypatch.setattr(services.runner, "submit", lambda scan_id: None)
+    _, headers = _register(client)
+    r = client.post("/scan", headers=headers, json={"target_name": "Support\nbot\r\n\tprod\x07",
+                                                    "target_type": "simulation", "categories": ["extraction"]})
+    assert r.status_code == 200 and r.json()["target_name"] == "Support bot prod"
+    blank = client.post("/scan", headers=headers, json={"target_name": " \n ", "target_type": "simulation"})
+    assert blank.status_code == 422 and "can't be empty" in blank.json()["detail"][0]["msg"]
