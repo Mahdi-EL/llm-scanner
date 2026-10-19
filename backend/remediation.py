@@ -110,10 +110,10 @@ def suggest(system_prompt: str, results: list, client=None) -> dict:
     try:
         data = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip()))
     except json.JSONDecodeError:
-        raise RemediationError("The model's answer couldn't be read. Please try again.")
+        raise ProviderError("The model's answer couldn't be read. Please try again.")
     hardened = str(data.get("hardened_prompt") or "").strip()
     if len(hardened) < 20:
-        raise RemediationError("The model didn't return a usable prompt. Please try again.")
+        raise ProviderError("The model didn't return a usable prompt. Please try again.")
     return {
         "hardened_prompt"   : hardened[:20000],
         "changes"           : [str(c)[:400] for c in (data.get("changes") or [])][:15],
