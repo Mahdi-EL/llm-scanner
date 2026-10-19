@@ -16,7 +16,7 @@ const SEV_META = {
 const SEV_ORDER = ['CRITICAL','HIGH','MEDIUM','LOW','SAFE','ERROR'];
 const PAGE = 25;
 
-const titleOf = (cats, id) => cats[id]?.title || (id?.startsWith('custom:') ? `Custom: ${id.slice(7)}` : (id||'').replace(/_/g,' '));
+const titleOf = (cats, id) => cats[id]?.title || (id?.startsWith('custom:') ? `Custom: ${id.slice(7).replace(/_/g,' ')}` : (id||'').replace(/_/g,' '));
 
 /* ── Score block ─────────────────────────────────────────── */
 function ScoreBlock({ summary }) {
