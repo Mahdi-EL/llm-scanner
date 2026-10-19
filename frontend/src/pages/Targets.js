@@ -143,7 +143,7 @@ function Snippet({ title, code }) {
         <span style={{ fontSize:'13px', fontWeight:'600' }}>{title}</span>
         <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => { navigator.clipboard?.writeText(code); toast('Copied.', 'success', 1500); }}>Copy</button>
       </div>
-      <pre className="finding-pre" style={{ maxHeight:'none' }}>{code}</pre>
+      <pre className="finding-pre" style={{ maxHeight:'none', whiteSpace:'pre', wordBreak:'normal', overflowX:'auto' }}>{code}</pre>
     </div>
   );
 }

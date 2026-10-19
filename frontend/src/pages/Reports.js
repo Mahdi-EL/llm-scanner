@@ -189,9 +189,9 @@ export default function Reports() {
 
       {/* Score distribution */}
       {completed.length > 0 && (
-        <div className="card-glow" style={{ padding:'18px 24px', marginBottom:'16px', display:'flex', gap:'32px', alignItems:'center' }}>
+        <div className="card-glow" style={{ padding:'18px 24px', marginBottom:'16px', display:'flex', gap:'12px 32px', alignItems:'center', flexWrap:'wrap' }}>
           <div style={{ fontSize:'13px', fontWeight:'700', color:'var(--t2)', whiteSpace:'nowrap' }}>Score distribution</div>
-          <div style={{ flex:1, display:'flex', gap:'4px', height:'6px', borderRadius:'6px', overflow:'hidden' }}>
+          <div style={{ flex:'1 1 160px', display:'flex', gap:'4px', height:'6px', borderRadius:'6px', overflow:'hidden' }}>
             {['LOW RISK','MODERATE','HIGH RISK'].map(r => {
               const cnt = r === 'LOW RISK' ? stats.lowRisk : r === 'HIGH RISK' ? stats.highRisk : completed.length - stats.lowRisk - stats.highRisk;
               const pct = completed.length ? (cnt / completed.length) * 100 : 0;
@@ -199,7 +199,7 @@ export default function Reports() {
               return pct > 0 ? <div key={r} style={{ height:'100%', width:`${pct}%`, background:color }} /> : null;
             })}
           </div>
-          <div style={{ display:'flex', gap:'16px' }}>
+          <div style={{ display:'flex', gap:'8px 16px', flexWrap:'wrap' }}>
             {[['#16a34a','Low Risk',stats.lowRisk],['#b45309','Moderate',completed.length-stats.lowRisk-stats.highRisk],['#dc2626','High Risk',stats.highRisk]].map(([c,l,v])=>(
               <div key={l} style={{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:'var(--t3)' }}>
                 <div style={{ width:'8px', height:'8px', borderRadius:'2px', background:c }} />
@@ -224,7 +224,7 @@ export default function Reports() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <div style={{ display:'flex', gap:'4px' }}>
+          <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
             {RISK_FILTERS.map(f => (
               <button key={f.key} className={`filter-btn${filter === f.key ? ' active' : ''}`} onClick={() => setFilter(f.key)} style={{ padding:'5px 12px', fontSize:'12px' }}>
                 {f.label}
@@ -249,9 +249,9 @@ export default function Reports() {
             {!search && <button className="btn-primary" onClick={() => navigate('/new-scan')}>Launch First Scan</button>}
           </div>
         ) : (
-          <div>
+          <div className="table-scroll"><div style={{ minWidth:'900px' }}>
             {/* Column headers */}
-            <div style={{ display:'grid', gridTemplateColumns:'2fr 120px 160px 64px 64px 110px 130px', alignItems:'center', padding:'9px 20px', borderBottom:'1px solid var(--b1)', fontSize:'11px', fontWeight:'700', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'0.6px' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'minmax(200px,2fr) 120px 160px 64px 64px 110px 130px', alignItems:'center', padding:'9px 20px', borderBottom:'1px solid var(--b1)', fontSize:'11px', fontWeight:'700', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'0.6px' }}>
               <button onClick={() => toggleSort('name')} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--t3)', textAlign:'left', padding:0, fontSize:'inherit', fontWeight:'inherit', letterSpacing:'inherit', textTransform:'inherit' }}>
                 Target <SortIcon col="name" />
               </button>
@@ -273,7 +273,7 @@ export default function Reports() {
               return (
                 <div
                   key={scan.scan_id}
-                  style={{ display:'grid', gridTemplateColumns:'2fr 120px 160px 64px 64px 110px 130px', alignItems:'center', padding:'14px 20px', borderBottom:'1px solid var(--b1)', cursor:'pointer', transition:'background 0.12s' }}
+                  style={{ display:'grid', gridTemplateColumns:'minmax(200px,2fr) 120px 160px 64px 64px 110px 130px', alignItems:'center', padding:'14px 20px', borderBottom:'1px solid var(--b1)', cursor:'pointer', transition:'background 0.12s' }}
                   onClick={() => navigate(`/results/${scan.scan_id}`)}
                   onMouseEnter={e => e.currentTarget.style.background='rgba(17,24,39,0.025)'}
                   onMouseLeave={e => e.currentTarget.style.background='transparent'}
@@ -313,7 +313,7 @@ export default function Reports() {
                 </div>
               );
             })}
-          </div>
+          </div></div>
         )}
       </div>
     </div>

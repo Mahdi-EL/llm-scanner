@@ -137,9 +137,9 @@ function SevChips({ summary }) {
 /* ── Skeleton loader ───────────────────────────────────── */
 function SkeletonRows() {
   return (
-    <>
+    <div className="table-scroll"><div style={{ minWidth:'760px' }}>
       {[...Array(5)].map((_,i)=>(
-        <div key={i} style={{ display:'grid', gridTemplateColumns:'2fr 90px 120px 130px 80px 70px', gap:0, alignItems:'center', padding:'15px 24px', borderBottom:'1px solid var(--b1)' }}>
+        <div key={i} style={{ display:'grid', gridTemplateColumns:'minmax(200px,2fr) 110px 120px 130px 80px 70px', gap:0, alignItems:'center', padding:'15px 24px', borderBottom:'1px solid var(--b1)' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
             <div className="sk" style={{ width:'34px', height:'34px', borderRadius:'9px', flexShrink:0 }} />
             <div><div className="sk" style={{ width:'140px', height:'13px', marginBottom:'5px' }} /><div className="sk" style={{ width:'70px', height:'10px' }} /></div>
@@ -151,7 +151,7 @@ function SkeletonRows() {
           <div className="sk" style={{ width:'54px', height:'28px', borderRadius:'6px' }} />
         </div>
       ))}
-    </>
+    </div></div>
   );
 }
 
@@ -361,7 +361,7 @@ export default function Dashboard() {
 
       {/* ── Posture + Score history ───────────── */}
       {completedScans.length>0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'210px 1fr', gap:'12px', marginBottom:'14px' }}>
+        <div className="posture-grid">
 
           {/* Posture gauge */}
           <div className="card-glow" style={{ padding:'20px 18px', display:'flex', flexDirection:'column', gap:'12px' }}>
@@ -448,13 +448,13 @@ export default function Dashboard() {
                 )}
               </div>
             </div>
-            <div style={{ display:'flex', gap:'10px', alignItems:'center' }}>
-              <div style={{ position:'relative', flex:1, maxWidth:'280px' }}>
+            <div style={{ display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap' }}>
+              <div style={{ position:'relative', flex:'1 1 180px', maxWidth:'280px' }}>
                 <input className="search-bar" style={{ marginBottom:0, height:'34px', fontSize:'13px', paddingLeft:'38px', backgroundPosition:'12px center' }}
                   placeholder="Search by target name…" value={search}
                   onChange={e=>{setSearch(e.target.value);setPage(1);}} />
               </div>
-              <div style={{ display:'flex', gap:'4px' }}>
+              <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
                 {['ALL','COMPLETE','RUNNING','FAILED'].map(f=>(
                   <button key={f} className={`filter-btn${filter===f?' active':''}`} style={{ padding:'4px 11px', fontSize:'11px' }}
                     onClick={()=>{setFilter(f);setPage(1);}}>{f[0]+f.slice(1).toLowerCase()}</button>
@@ -472,8 +472,9 @@ export default function Dashboard() {
             </div>
           ) : (
             <>
+              <div className="table-scroll"><div style={{ minWidth:'760px' }}>
               {/* Column headers */}
-              <div style={{ display:'grid', gridTemplateColumns:'2fr 90px 130px 140px 80px 80px', padding:'9px 24px', borderBottom:'1px solid var(--b1)', fontSize:'11px', fontWeight:'700', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'0.6px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'minmax(200px,2fr) 110px 130px 140px 80px 80px', padding:'9px 24px', borderBottom:'1px solid var(--b1)', fontSize:'11px', fontWeight:'700', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'0.6px' }}>
                 <span>Target</span><span>Status</span><span>Score</span><span>Findings</span><span>When</span><span></span>
               </div>
               {paged.map(scan=>{
@@ -482,7 +483,7 @@ export default function Dashboard() {
                 const isComplete = scan.status==='complete';
                 return (
                   <div key={scan.scan_id}
-                    style={{ display:'grid', gridTemplateColumns:'2fr 90px 130px 140px 80px 80px', padding:'13px 24px', borderBottom:'1px solid var(--b1)', alignItems:'center', cursor:'pointer', transition:'background 0.12s' }}
+                    style={{ display:'grid', gridTemplateColumns:'minmax(200px,2fr) 110px 130px 140px 80px 80px', padding:'13px 24px', borderBottom:'1px solid var(--b1)', alignItems:'center', cursor:'pointer', transition:'background 0.12s' }}
                     onClick={()=>navigate(`/results/${scan.scan_id}`)}
                     onMouseEnter={e=>{ e.currentTarget.style.background='rgba(17,24,39,0.025)'; }}
                     onMouseLeave={e=>e.currentTarget.style.background='transparent'}
@@ -512,6 +513,7 @@ export default function Dashboard() {
                   </div>
                 );
               })}
+              </div></div>
               {totalPages>1 && (
                 <div className="pagination" style={{ padding:'14px 0 18px' }}>
                   {Array.from({length:totalPages},(_,i)=>(

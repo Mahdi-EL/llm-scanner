@@ -139,14 +139,14 @@ function HeatCell({ label, count, rate }) {
       background: bg, border:`1px solid ${border}`,
       borderRadius:'6px', padding:'8px 10px',
       fontSize:'10px', fontWeight:'600', color:'var(--t2)',
-      textAlign:'center', cursor:'default',
+      textAlign:'center', cursor:'default', minWidth:0,
       transition:'transform 0.15s',
     }}
       onMouseEnter={e => e.currentTarget.style.transform='scale(1.05)'}
       onMouseLeave={e => e.currentTarget.style.transform='none'}
     >
       <div style={{ fontSize:'15px', marginBottom:'3px' }}>{Math.round(rate * 100)}%</div>
-      <div style={{ fontSize:'9px', color:'var(--t3)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textTransform:'capitalize' }}>{label.replace(/_/g,' ')}</div>
+      <div style={{ fontSize:'10px', lineHeight:'1.3', color:'var(--t3)', overflowWrap:'anywhere', textTransform:'capitalize' }}>{label.replace(/_/g,' ')}</div>
     </div>
   );
 }
@@ -259,7 +259,7 @@ export default function Analytics() {
       </div>
 
       {/* Score trend + scan frequency */}
-      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:'16px', marginBottom:'16px' }}>
+      <div className="an-row an-row-wide-left">
 
         {/* Area chart */}
         <div style={cardStyle}>
@@ -308,7 +308,7 @@ export default function Analytics() {
       </div>
 
       {/* Risk distribution + Category heatmap */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:'16px', marginBottom:'16px' }}>
+      <div className="an-row an-row-wide-right">
 
         {/* Donut */}
         <div style={cardStyle}>
@@ -343,7 +343,7 @@ export default function Analytics() {
           {catEntries.length === 0 ? (
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100px', color:'var(--t3)', fontSize:'13px' }}>No findings recorded yet</div>
           ) : (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:'6px' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(120px, 1fr))', gap:'6px' }}>
               {catEntries.slice(0, 15).map(c => (
                 <HeatCell key={c.id} label={c.title} count={c.failed} rate={c.rate} />
               ))}

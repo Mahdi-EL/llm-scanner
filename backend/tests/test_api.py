@@ -337,6 +337,13 @@ def test_share_link_lifecycle(client):
     assert client.get("/shared/not-a-real-token").status_code == 404
 
 
+def test_share_link_without_body_defaults_to_a_week(client):
+    user_id, headers = _register(client)
+    scan_id = _seed_complete_scan(user_id, RESULTS)
+    r = client.post(f"/scan/{scan_id}/share", headers=headers)
+    assert r.status_code == 200 and r.json()["token"]
+
+
 # ── Saved targets, schedules, prompts ─────────────────────────
 def test_saved_targets_hide_keys_and_check_urls(client):
     _, headers = _register(client)

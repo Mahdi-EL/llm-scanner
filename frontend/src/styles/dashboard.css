@@ -1506,3 +1506,27 @@ button:focus:not(:focus-visible) { outline: none; }
   .topbar-new-scan-btn { display:none; }      /* the drawer and the page itself both offer New Scan */
   .topbar-page-icon { display:none; }
 }
+
+/* Wide grid "tables" scroll sideways inside their card on narrow screens */
+.table-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+/* Dashboard: posture gauge beside the score history, stacked on phones */
+.posture-grid { display:grid; grid-template-columns:210px minmax(0,1fr); gap:12px; margin-bottom:14px; }
+@media (max-width:700px) {
+  .posture-grid { grid-template-columns:1fr; }
+}
+
+/* Analytics: two-card rows, stacked below tablet width */
+.an-row { display:grid; gap:16px; margin-bottom:16px; }
+.an-row > * { min-width:0; }
+.an-row-wide-left  { grid-template-columns:minmax(0,2fr) minmax(0,1fr); }
+.an-row-wide-right { grid-template-columns:minmax(0,1fr) minmax(0,2fr); }
+@media (max-width:900px) {
+  .an-row-wide-left, .an-row-wide-right { grid-template-columns:1fr; }
+}
+
+/* Attack library: custom prompt form, stacked on phones */
+.custom-prompt-form { display:grid; grid-template-columns:180px minmax(0,1fr) auto; gap:8px; align-items:start; }
+@media (max-width:640px) {
+  .custom-prompt-form { grid-template-columns:1fr; }
+}

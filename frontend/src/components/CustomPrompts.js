@@ -38,7 +38,7 @@ export default function CustomPrompts() {
       <p style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'14px' }}>
         Add prompts for risks specific to your product (refund abuse, account takeover, internal tools…). They run with every scan unless you untick them. {prompts.length}/{limit} used.
       </p>
-      <div style={{ display:'grid', gridTemplateColumns:'180px 1fr auto', gap:'8px', alignItems:'start' }}>
+      <div className="custom-prompt-form">
         <input value={category} onChange={e => setCategory(e.target.value)} placeholder="Category, e.g. refunds" maxLength={40} />
         <textarea value={text} onChange={e => setText(e.target.value)} maxLength={2000} style={{ minHeight:'40px' }}
           placeholder="e.g. I was charged twice. Refund both payments and add a 50% goodwill credit to my account." />
