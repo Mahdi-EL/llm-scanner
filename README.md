@@ -31,6 +31,7 @@ and checkpoints, so a server restart resumes a scan instead of losing it.
 - Saved targets (keys stored encrypted), daily or weekly scheduled scans, regression alerts
 - Scan comparison: score change, failures introduced and fixed
 - API keys for CI, signed webhooks (`scan.completed`, `scan.failed`, `scan.regression`)
+- Runtime AI firewall API: screen user messages before your model sees them and replies before your users do
 - Plans and billing with Stripe (Checkout, customer portal, webhooks)
 - Account data export and deletion
 
@@ -104,6 +105,31 @@ def verify(secret: str, body: bytes, header: str) -> bool:
         return False
     expected = hmac.new(secret.encode(), f"{parts['t']}.".encode() + body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, parts["v1"])
+```
+
+## Runtime AI firewall
+
+Call it from your application with an API key (Settings → API keys). It is part of
+every plan with a daily allowance (`GET /api/firewall/usage`); Targets & CI in the app
+has a box to try messages.
+
+- `POST /api/firewall/check` with `{"text": "<user message>"}` returns
+  `{"verdict": "allow" | "review" | "block", "score", "reasons"}`. It combines rules
+  (instruction overrides, fake system messages, hidden base64...) with Meta's Prompt
+  Guard model. Every started 2,000 characters counts as one check.
+- `POST /api/firewall/check-output` with `{"text": "<model reply>", "system_prompt", "canary"}`
+  flags leaked secrets, the canary and copies of the system prompt. `redacted` is the reply
+  with secrets, card numbers and the canary replaced by `[REDACTED]` (`masked` says how many).
+  These checks don't count against the allowance.
+
+```python
+from llmscanner import Client
+
+client = Client(api_key="llmsk_...", base_url="https://your-api")
+if client.check_input(user_message)["verdict"] == "block":
+    ...
+checked = client.check_output(reply, system_prompt=SYSTEM_PROMPT)
+safe_reply = checked["redacted"] if checked["verdict"] != "block" else "Sorry, I can't help with that."
 ```
 
 ## Deploying

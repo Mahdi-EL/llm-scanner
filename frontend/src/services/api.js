@@ -153,6 +153,11 @@ export const schedulesAPI = {
   remove: id          => api.delete(`/api/schedules/${id}`),
 };
 
+export const firewallAPI = {
+  usage : ()   => api.get('/api/firewall/usage'),
+  check : text => api.post('/api/firewall/check', { text }),
+};
+
 export const promptsAPI = {
   list  : ()                  => api.get('/api/prompts'),
   add   : (category, prompt)  => api.post('/api/prompts', { category, prompt }),
