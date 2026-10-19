@@ -673,3 +673,21 @@ def test_free_text_category_and_readable_field_errors(client):
     bad = client.post("/targets/test", headers=headers, json={"target_type": "openai_compatible",
                       "api_url": "https://api.example.com/v1", "model": "gpt 4o mini!"})
     assert bad.status_code == 422 and bad.json()["detail"][0]["msg"].endswith("(up to 100 characters)")
+
+
+def test_remediate_unusable_model_output_is_502(client, monkeypatch):
+    import remediation
+
+    class Junk:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    msg = type("M", (), {"content": "not json at all"})()
+                    return type("R", (), {"choices": [type("C", (), {"message": msg})()]})()
+    real = remediation.suggest
+    monkeypatch.setattr(remediation, "suggest", lambda prompt, results: real(prompt, results, client=Junk))
+    user_id, headers = _register(client)
+    sim = _seed_with_config(user_id, {"target_type": "simulation", "system_prompt": "You are Acme's bot."})
+    r = client.post(f"/scan/{sim}/remediate", headers=headers, json={})
+    assert r.status_code == 502 and "couldn't be read" in r.json()["detail"]
