@@ -610,3 +610,30 @@ def test_unexpected_errors_are_json_with_cors_headers(client, monkeypatch):
     r = client.get("/api/keys", headers={**headers, "Origin": "http://localhost:3000"})
     assert r.status_code == 500 and r.json()["detail"].startswith("Something went wrong")
     assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
+
+
+def test_parallel_scan_requests_cannot_exceed_the_limits(client, monkeypatch):
+    """The limit check and the insert are atomic: 8 simultaneous requests start 2 scans."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    import services
+    monkeypatch.setattr(services.runner, "submit", lambda scan_id: None)
+    user_id, _ = _register(client)
+    user = auth_db.get_user_by_id(user_id)
+    real_check = services.check_can_scan
+
+    def slow_check(*a, **k):          # widen the race window the lock has to close
+        time.sleep(0.02)
+        return real_check(*a, **k)
+    monkeypatch.setattr(services, "check_can_scan", slow_check)
+
+    def start(_):
+        try:
+            return services.queue_scan(user, {"target_type": "simulation", "categories": ["extraction"]},
+                                       target_name="race")
+        except services.ScanRejected:
+            return None
+    with ThreadPoolExecutor(8) as pool:
+        started = [s for s in pool.map(start, range(8)) if s]
+    assert len(started) == services.MAX_ACTIVE_PER_USER
+    assert scan_db.count_active_for_user(user_id) == services.MAX_ACTIVE_PER_USER
