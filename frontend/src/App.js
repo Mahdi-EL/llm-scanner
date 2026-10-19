@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import Navbar          from './components/Navbar';
@@ -85,7 +85,7 @@ function EmailBanner() {
   return (
     <div style={{ margin:'12px 24px 0', padding:'10px 14px', border:'1px solid var(--b1)', borderRadius:'8px', fontSize:'13px', color:'var(--t2)' }}>
       Please confirm your email address. We sent a link to <strong>{user.email}</strong>.
-      You can resend it from <a href="/settings">Settings</a>.
+      You can resend it from <Link to="/settings">Settings</Link>.
     </div>
   );
 }

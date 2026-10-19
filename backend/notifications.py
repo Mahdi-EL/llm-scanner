@@ -75,6 +75,11 @@ def _payload(scan: dict) -> dict:
     }
 
 
+def _can_email(user: dict) -> bool:
+    """Only email confirmed addresses, so nobody can sign up with someone else's to spam them."""
+    return bool(user.get("email") and user.get("email_verified"))
+
+
 def scan_finished(scan_id: str, alert_drop: int = None) -> None:
     """Best-effort notifications once a scan completes or fails. Never raises."""
     try:
@@ -83,7 +88,7 @@ def scan_finished(scan_id: str, alert_drop: int = None) -> None:
         if not user:
             return
         if scan["status"] == "complete":
-            if user.get("email"):
+            if _can_email(user):
                 email_service.send_scan_complete(
                     user["email"], scan["target_name"], scan.get("security_score") or 0, scan_id,
                     grade=scan.get("grade"), critical=scan.get("critical_count") or 0,
@@ -92,7 +97,7 @@ def scan_finished(scan_id: str, alert_drop: int = None) -> None:
             if alert_drop is not None:
                 _regression_alert(user, scan, alert_drop)
         elif scan["status"] == "failed":
-            if user.get("email") and scan.get("schedule_id"):
+            if _can_email(user) and scan.get("schedule_id"):
                 email_service.send_scan_failed(user["email"], scan["target_name"], scan_id,
                                                scan.get("error_message") or "Unknown error")
             send_webhook(user, "scan.failed", {**_payload(scan), "error": scan.get("error_message")})
@@ -107,7 +112,7 @@ def _regression_alert(user: dict, scan: dict, alert_drop: int) -> None:
     old, new = previous.get("security_score") or 0, scan.get("security_score") or 0
     new_critical = max(0, (scan.get("critical_count") or 0) - (previous.get("critical_count") or 0))
     if old - new >= alert_drop or new_critical:
-        if user.get("email"):
+        if _can_email(user):
             email_service.send_score_drop(user["email"], scan["target_name"], old, new,
                                           scan["scan_id"], new_critical)
         send_webhook(user, "scan.regression", {**_payload(scan), "previous_scan_id": previous["scan_id"],
