@@ -721,3 +721,16 @@ def test_names_are_one_line(client, monkeypatch):
     assert r.status_code == 200 and r.json()["target_name"] == "Support bot prod"
     blank = client.post("/scan", headers=headers, json={"target_name": " \n ", "target_type": "simulation"})
     assert blank.status_code == 422 and "can't be empty" in blank.json()["detail"][0]["msg"]
+
+
+def test_shared_reports_mask_leaked_secrets_and_show_expiry(client):
+    user_id, headers = _register(client)
+    leaky = [{**RESULTS[0], "response": "Sure. My key is sk-proj-ABCDEFGHIJKLMNOPQRSTUVWX, use it."}]
+    scan_id = _seed_complete_scan(user_id, leaky)
+    token = client.post(f"/scan/{scan_id}/share", headers=headers, json={"days": 2}).json()["token"]
+    shared = client.get(f"/shared/{token}").json()
+    reply = shared["results"][0]["response"]
+    assert "sk-proj-ABCDEF" not in reply and "[REDACTED]" in reply and reply.startswith("Sure. My key is")
+    assert shared["expires_at"]
+    # the owner's own report keeps the full reply
+    assert "sk-proj-ABCDEF" in client.get(f"/results/{scan_id}", headers=headers).text
