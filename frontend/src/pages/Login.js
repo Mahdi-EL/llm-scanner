@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { safeNext } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/Logo';
+import { errorMessage } from '../services/api';
 
 const SCAN_ATTACKS = [
   { name:'Prompt Injection',  val:24, accent:'#dc2626' },
@@ -42,7 +43,7 @@ export default function Login() {
       await login(form.username, form.password);
       navigate(safeNext(params.get('next')), { replace: true });
     } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid credentials. Please try again.');
+      setError(errorMessage(err, 'Invalid credentials. Please try again.'));
     } finally { setLoading(false); }
   };
 

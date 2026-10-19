@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { authAPI } from '../services/api';
+import { authAPI, errorMessage } from '../services/api';
 import Logo from '../components/Logo';
 
 export default function ResetPassword() {
@@ -28,7 +28,7 @@ export default function ResetPassword() {
       setDone(true);
       setTimeout(() => navigate('/login'), 2500);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Reset link is invalid or has expired.');
+      setError(errorMessage(err, 'Reset link is invalid or has expired.'));
     } finally { setLoading(false); }
   };
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/Logo';
+import { errorMessage } from '../services/api';
 
 /* ── Password strength meter ─────────────────────────────── */
 function PasswordStrength({ pwd }) {
@@ -76,7 +77,7 @@ export default function Register() {
       await register(form.username, form.email, form.password);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed. Please try again.');
+      setError(errorMessage(err, 'Registration failed. Please try again.'));
     } finally { setLoading(false); }
   };
 
