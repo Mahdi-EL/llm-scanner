@@ -244,7 +244,7 @@
 .marquee-pill:hover { border-color:var(--b2); color:var(--t2); }
 .marquee-pill.accent { color:var(--blue); border-color:rgba(37,99,235,0.2); background:rgba(37,99,235,0.06); }
 .marquee-pill.warn   { color:var(--orange); border-color:rgba(251,146,60,0.2); background:rgba(251,146,60,0.06); }
-.marquee-pill.danger { color:#fb7185; border-color:rgba(240,68,56,0.2); background:rgba(240,68,56,0.06); }
+.marquee-pill.danger { color:#b42318; border-color:rgba(240,68,56,0.2); background:rgba(240,68,56,0.06); }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    TESTIMONIALS

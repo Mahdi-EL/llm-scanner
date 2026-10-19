@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { scansAPI, targetsAPI, promptsAPI, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -132,6 +132,7 @@ export default function NewScan() {
   };
 
   const quota = user?.scan_limit == null ? null : `${user.scans_this_month ?? 0} of ${user.scan_limit} scans used this month`;
+  const outOfScans = user?.scan_limit != null && (user.scans_this_month ?? 0) >= user.scan_limit;
 
   return (
     <div style={{ maxWidth:'720px' }}>
@@ -143,10 +144,17 @@ export default function NewScan() {
         </p>
       </div>
 
+      {outOfScans && (
+        <div className="alert-error" role="status" style={{ marginBottom:'20px' }}>
+          You’ve used all {user.scan_limit} scans of your plan this month. <Link to="/pricing">See plans</Link> to run more,
+          or wait until the 1st.
+        </div>
+      )}
+
       {targets.length > 0 && (
         <Section title="Saved target" subtitle="Re-scan a target you saved before, with its stored settings and key.">
           <div className="form-group" style={{ marginBottom:0 }}>
-            <select value={targetId} onChange={e => { setTargetId(e.target.value); setTestResult(null); }} style={{ width:'100%' }}>
+            <select aria-label="Saved target" value={targetId} onChange={e => { setTargetId(e.target.value); setTestResult(null); }} style={{ width:'100%' }}>
               <option value="">— Configure a new target below —</option>
               {targets.map(t => <option key={t.id} value={t.id}>{t.name} ({typeLabel(t.config.target_type)})</option>)}
             </select>
@@ -276,7 +284,7 @@ export default function NewScan() {
         )}
       </Section>
 
-      <button className="btn-primary" onClick={handleSubmit} disabled={loading}
+      <button className="btn-primary" onClick={handleSubmit} disabled={loading || outOfScans}
         style={{ width:'100%', padding:'14px', fontSize:'15px', justifyContent:'center', borderRadius:'8px' }}>
         {loading ? 'Starting scan…' : `Launch scan${attackCount ? ` · ${fmtNum(attackCount)} attacks` : ''}`}
       </button>

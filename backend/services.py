@@ -43,8 +43,8 @@ def check_can_scan(user: dict) -> None:
         raise ScanRejected(403, "Please confirm your email address before running scans.")
     q = quota(user)
     if q["limit"] is not None and q["used"] >= q["limit"]:
-        raise ScanRejected(402, f"Monthly scan limit reached for the '{q['plan']}' plan ({q['limit']}). "
-                                "Upgrade your plan to run more scans.")
+        raise ScanRejected(402, f"You've used all {q['limit']} scans of the {str(q['plan']).title()} plan "
+                                "this month. Upgrade your plan to run more scans.")
     if scan_db.count_running_scans() >= MAX_QUEUED_TOTAL:
         raise ScanRejected(429, "The scanner is at capacity right now. Please retry in a few minutes.")
     with_user = scan_db.count_active_for_user(user["id"])
