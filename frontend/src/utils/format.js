@@ -14,6 +14,15 @@ export function relTime(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/** "Oct 19" or, with year, "Oct 19, 2026" (the UI is English, so dates are too). */
+export function shortDate(dateStr, withYear = false) {
+  if (!dateStr) return '—';
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(withYear && { year: 'numeric' }) });
+}
+
+/** 1,090 rather than the browser locale's "1 090". */
+export const fmtNum = n => Number(n).toLocaleString('en-US');
+
 /** Score colour, matching the grade bands (A/B green, C/D amber, F red). */
 export function scoreColor(score) {
   if (score == null) return 'var(--t3)';

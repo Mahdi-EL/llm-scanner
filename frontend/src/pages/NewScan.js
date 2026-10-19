@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { scansAPI, targetsAPI, promptsAPI, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { fmtNum } from '../utils/format';
 
 const TARGET_TYPES = [
   { id:'simulation', label:'Simulation', tag:'No key needed',
@@ -137,7 +138,7 @@ export default function NewScan() {
       <div style={{ marginBottom:'24px' }}>
         <h1 className="page-title">New security scan</h1>
         <p className="page-subtitle" style={{ marginBottom:0 }}>
-          Point the scanner at an AI application and fire {attackCount ? attackCount.toLocaleString() : 'its'} adversarial prompts at it.
+          Point the scanner at an AI application and fire {attackCount ? fmtNum(attackCount) : 'its'} adversarial prompts at it.
           {quota && <span style={{ color:'var(--t3)' }}> · {quota}</span>}
         </p>
       </div>
@@ -277,7 +278,7 @@ export default function NewScan() {
 
       <button className="btn-primary" onClick={handleSubmit} disabled={loading}
         style={{ width:'100%', padding:'14px', fontSize:'15px', justifyContent:'center', borderRadius:'8px' }}>
-        {loading ? 'Starting scan…' : `Launch scan${attackCount ? ` · ${attackCount.toLocaleString()} attacks` : ''}`}
+        {loading ? 'Starting scan…' : `Launch scan${attackCount ? ` · ${fmtNum(attackCount)} attacks` : ''}`}
       </button>
 
       <p style={{ fontSize:'11px', color:'var(--t3)', textAlign:'center', marginTop:'12px', lineHeight:1.6 }}>

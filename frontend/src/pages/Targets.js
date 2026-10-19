@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { targetsAPI, schedulesAPI, scansAPI, API_URL, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { relTime } from '../utils/format';
+import { relTime, shortDate } from '../utils/format';
 
 const TYPES = {
   simulation       : 'Simulation',
@@ -111,7 +111,7 @@ function ScheduleControl({ target, schedule, paid, onChange }) {
   };
   if (!schedule) {
     return (
-      <select defaultValue="" onChange={e => e.target.value && create(e.target.value)} style={{ fontSize:'12px' }}>
+      <select aria-label={`Schedule scans of ${target.name}`} defaultValue="" onChange={e => e.target.value && create(e.target.value)} style={{ fontSize:'12px' }}>
         <option value="" disabled>Schedule…</option>
         <option value="daily">Every day</option>
         <option value="weekly">Every week</option>
@@ -128,7 +128,7 @@ function ScheduleControl({ target, schedule, paid, onChange }) {
   };
   return (
     <span style={{ fontSize:'12px', color:'var(--t3)', display:'inline-flex', gap:'8px', alignItems:'center' }}>
-      {schedule.enabled ? `${schedule.frequency}, next ${new Date(schedule.next_run_at).toLocaleDateString()}` : 'paused'}
+      {schedule.enabled ? `${schedule.frequency}, next ${shortDate(schedule.next_run_at)}` : 'paused'}
       <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={toggle}>{schedule.enabled ? 'Pause' : 'Resume'}</button>
       <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={remove}>Remove</button>
     </span>

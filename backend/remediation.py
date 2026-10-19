@@ -27,6 +27,10 @@ class RemediationError(RuntimeError):
     pass
 
 
+class ProviderError(RemediationError):
+    """The model provider failed (auth, outage, rate limit): not the user's fault."""
+
+
 def failed_findings(results: list) -> list:
     return [r for r in results if r.get("severity") not in ("SAFE", scoring.ERROR, None)]
 
@@ -80,7 +84,10 @@ def suggest(system_prompt: str, results: list, client=None) -> dict:
         from groq import Groq
         if not config.JUDGE_API_KEY:
             raise RemediationError("No GROQ_API_KEY configured on the server")
-        client = Groq(api_key=config.JUDGE_API_KEY, max_retries=0, timeout=90)
+        kwargs = {"api_key": config.JUDGE_API_KEY, "max_retries": 0, "timeout": 90}
+        if config.JUDGE_BASE_URL:
+            kwargs["base_url"] = config.JUDGE_BASE_URL
+        client = Groq(**kwargs)
         model = groq_models.judge_model()
     else:
         model = config.JUDGE_MODEL
@@ -95,7 +102,11 @@ def suggest(system_prompt: str, results: list, client=None) -> dict:
             temperature=0.2, response_format={"type": "json_object"}, **params)
         return response.choices[0].message.content or ""
 
-    raw = call_with_retry(call)
+    try:
+        raw = call_with_retry(call)
+    except Exception as e:
+        log.warning("Remediation model call failed: %s", e)
+        raise ProviderError("The AI model that writes the prompt isn't answering right now. Please try again later.")
     try:
         data = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip()))
     except json.JSONDecodeError:

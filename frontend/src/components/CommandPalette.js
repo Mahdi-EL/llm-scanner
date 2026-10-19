@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { shortDate } from '../utils/format';
 
 const NAV_COMMANDS = [
   { id:'nav-dash',         icon:'⊞', label:'Go to Dashboard',    sub:'Home',                   path:'/' },
@@ -39,7 +40,7 @@ export default function CommandPalette({ open, onClose, recentScans = [] }) {
         id   : s.scan_id,
         icon : '🛡️',
         label: s.target_name,
-        sub  : `Score: ${s.summary?.security_score ?? '—'} · ${new Date(s.created_at).toLocaleDateString()}`,
+        sub  : `Score: ${s.summary?.security_score ?? '—'} · ${shortDate(s.created_at)}`,
         path : `/results/${s.scan_id}`,
       }));
     const g = [];

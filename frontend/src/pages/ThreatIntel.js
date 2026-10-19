@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { scansAPI } from '../services/api';
 import CustomPrompts from '../components/CustomPrompts';
+import { fmtNum } from '../utils/format';
 
 const CATEGORIES = [
   {
@@ -459,7 +460,7 @@ export default function ThreatIntel() {
           { label:'Critical',        value: counts.critical,   color:'#dc2626' },
           { label:'High',            value: counts.high,       color:'#ea580c' },
           { label:'Medium',          value: counts.medium,     color:'#b45309' },
-          { label:'Attack Prompts',  value: totalAttacks ? totalAttacks.toLocaleString() : '—', color:'var(--blue)' },
+          { label:'Attack Prompts',  value: totalAttacks ? fmtNum(totalAttacks) : '—', color:'var(--blue)' },
         ].map(s => (
           <div key={s.label} className="ti-stat">
             <div className="ti-stat-val" style={{ color:s.color }}>{s.value}</div>
@@ -519,7 +520,7 @@ export default function ThreatIntel() {
         <div>
           <div style={{ fontSize:'13px', fontWeight:'600', color:'var(--t1)', marginBottom:'4px' }}>About this data</div>
           <div style={{ fontSize:'12px', color:'var(--t3)', lineHeight:'1.7' }}>
-            LLMScanner tests against <strong style={{ color:'var(--t2)' }}>{totalAttacks ? totalAttacks.toLocaleString() : 'over 1,000'} curated attack prompts</strong> across {CATEGORIES.length} categories, including multi-turn conversations for chat-style targets.
+            LLMScanner tests against <strong style={{ color:'var(--t2)' }}>{totalAttacks ? fmtNum(totalAttacks) : 'over 1,000'} curated attack prompts</strong> across {CATEGORIES.length} categories, including multi-turn conversations for chat-style targets.
             Severity ratings reflect the typical impact on deployed production systems.
             New categories and prompts are added continuously as the threat landscape evolves.
           </div>
