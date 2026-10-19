@@ -48,7 +48,7 @@ export default function CustomPrompts() {
         <div style={{ marginTop:'14px', borderTop:'1px solid var(--b1)' }}>
           {prompts.map(p => (
             <div key={p.id} style={{ display:'flex', gap:'12px', alignItems:'flex-start', padding:'10px 0', borderBottom:'1px solid var(--b1)' }}>
-              <span style={{ fontSize:'11px', color:'var(--t3)', minWidth:'110px' }}>{p.category}</span>
+              <span style={{ fontSize:'11px', color:'var(--t3)', minWidth:'110px' }}>{p.category.replace(/_/g, ' ')}</span>
               <span style={{ fontSize:'13px', flex:1, whiteSpace:'pre-wrap' }}>{p.prompt}</span>
               <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => remove(p.id)}>Remove</button>
             </div>
