@@ -488,3 +488,14 @@ def test_a_due_schedule_is_claimed_only_once():
         conn.execute("UPDATE schedules SET next_run_at = '2000-01-01T00:00:00+00:00' WHERE id = ?", (sched["id"],))
     seen_by_both = [s for s in store.due_schedules() if s["id"] == sched["id"]] * 2
     assert [store.claim_schedule(s) for s in seen_by_both] == [True, False]
+
+
+def test_attack_categories_doc_matches_the_library():
+    import re
+    from pathlib import Path
+
+    from attacks.prompts import ATTACK_PROMPTS
+    doc = (Path(__file__).resolve().parents[2] / "docs" / "attack-categories.md").read_text(encoding="utf-8")
+    counts = {c: int(n) for c, n in re.findall(r"`([a-z_]+)` · (\d+) (?:prompts|conversations)", doc)}
+    assert counts == {c: len(p) for c, p in ATTACK_PROMPTS.items()}
+    assert f"{sum(counts.values()):,} attack prompts in {len(counts)} categories" in doc
