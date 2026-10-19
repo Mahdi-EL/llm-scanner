@@ -1,0 +1,6 @@
+# Only what the build needs: the host node_modules would overwrite the
+# Linux install from npm ci (esbuild ships per-platform binaries).
+node_modules
+build
+.env*
+*.log
