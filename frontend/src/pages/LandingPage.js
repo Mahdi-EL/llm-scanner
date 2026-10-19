@@ -20,10 +20,10 @@ const PREVIEW_ATTACKS = [
 ];
 
 const ATTACK_PILLS = [
-  'Prompt Injection', 'Jailbreak Attempts', 'Data Exfiltration', 'Policy Bypass',
-  'Role-play Exploits', 'Context Poisoning', 'PII Extraction', 'Instruction Hijacking',
-  'System Prompt Leakage', 'Encoding Tricks', 'Indirect Injection', 'Token Smuggling',
-  'Adversarial Suffixes', 'Multi-turn Manipulation', 'Goal Hijacking', 'Refusal Bypass',
+  'Instruction Override', 'Jailbreak Templates', 'Data Exfiltration', 'System Prompt Leakage',
+  'Role-play Exploits', 'Encoding Tricks', 'Indirect Injection', 'Token Smuggling',
+  'RAG Poisoning', 'Few-shot Poisoning', 'Multi-turn Manipulation', 'Authority Impersonation',
+  'System Prompt Spoofing', 'Multilingual Attacks', 'Prompt Chaining', 'Hallucination Induction',
 ];
 const PILLS_DOUBLED = [...ATTACK_PILLS, ...ATTACK_PILLS];
 

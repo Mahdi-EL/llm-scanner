@@ -760,8 +760,9 @@ def download_pdf(scan_id: str, user: dict = Depends(require_user)):
 
 # ── Share links (read-only, expiring) ─────────────────────────
 @app.post("/scan/{scan_id}/share")
-def share_scan(scan_id: str, body: ShareRequest, user: dict = Depends(require_user)):
-    """Creates a read-only link to a finished scan that expires after `days`."""
+def share_scan(scan_id: str, body: Optional[ShareRequest] = None, user: dict = Depends(require_user)):
+    """Creates a read-only link to a finished scan that expires after `days` (default 7)."""
+    body = body or ShareRequest()
     _get_complete_scan(scan_id, user)
     link = store.create_share(user["id"], scan_id, body.days)
     return {"url": f"{config.APP_URL}/shared/{link['token']}", "token": link["token"],

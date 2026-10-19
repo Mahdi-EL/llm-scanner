@@ -436,3 +436,15 @@ def test_real_library_has_conversations():
     from attacks.prompts import ATTACK_PROMPTS
     assert ATTACK_PROMPTS["multi_turn"] == MULTI_TURN and len(MULTI_TURN) == 15
     assert all(len(turns(p)) >= 2 for p in MULTI_TURN)
+
+
+def test_attack_library_page_lists_every_scanned_category():
+    """The frontend's Attack library describes exactly the categories a scan runs."""
+    import re
+    from pathlib import Path
+
+    from attacks.prompts import ATTACK_PROMPTS
+
+    page = Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages" / "ThreatIntel.js"
+    ids = re.findall(r"^\s*id\s*:\s*'([a-z_]+)'", page.read_text(encoding="utf-8"), re.M)
+    assert sorted(ids) == sorted(ATTACK_PROMPTS)

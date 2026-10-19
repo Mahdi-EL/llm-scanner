@@ -189,7 +189,7 @@ export default function Settings() {
             <label>Current password</label>
             <input type="password" autoComplete="current-password" value={pwForm.current} onChange={e => setPwForm(p => ({ ...p, current:e.target.value }))} />
           </div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:'12px', alignItems:'end' }}>
             <div className="form-group" style={{ marginBottom:0 }}>
               <label>New password</label>
               <input type="password" autoComplete="new-password" placeholder="8 to 72 characters" value={pwForm.next} onChange={e => setPwForm(p => ({ ...p, next:e.target.value }))} />
@@ -206,8 +206,8 @@ export default function Settings() {
 
       <Section title="API keys" desc="For CI pipelines, the SDK and the VS Code extension. Send the key in an X-API-Key header.">
         {newKey && <SecretBox value={newKey} onDone={() => setNewKey(null)} note="Copy this key now. For your safety we only store its hash, so it won’t be shown again." />}
-        <div style={{ display:'flex', gap:'8px', padding:'16px 20px', borderBottom:'1px solid var(--b1)' }}>
-          <input value={keyName} onChange={e => setKeyName(e.target.value)} maxLength={60} placeholder="Key name, e.g. GitHub Actions" style={{ flex:1 }} />
+        <div style={{ display:'flex', gap:'8px', padding:'16px 20px', borderBottom:'1px solid var(--b1)', flexWrap:'wrap' }}>
+          <input value={keyName} onChange={e => setKeyName(e.target.value)} maxLength={60} placeholder="Key name, e.g. GitHub Actions" style={{ flex:'1 1 200px', minWidth:0 }} />
           <button className="btn-primary" style={{ fontSize:'12px' }} disabled={busy==='key'} onClick={createKey}>Create key</button>
         </div>
         {keys.length === 0 ? (
