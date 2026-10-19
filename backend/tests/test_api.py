@@ -392,7 +392,7 @@ def test_export_and_delete_account(client):
     export = client.get("/auth/me/export", headers=headers).json()
     assert export["profile"]["id"] == user_id and export["scans"][0]["scan_id"] == scan_id
     assert "hashed_password" not in json.dumps(export)
-    assert client.request("DELETE", "/auth/me", headers=headers, json={"password": "wrong"}).status_code == 401
+    assert client.request("DELETE", "/auth/me", headers=headers, json={"password": "wrong"}).status_code == 403
     assert client.request("DELETE", "/auth/me", headers=headers, json={"password": "password123"}).status_code == 200
     assert scan_db.get_scan(scan_id) is None
     assert client.get("/auth/me", headers=headers).status_code == 401
@@ -691,3 +691,11 @@ def test_remediate_unusable_model_output_is_502(client, monkeypatch):
     sim = _seed_with_config(user_id, {"target_type": "simulation", "system_prompt": "You are Acme's bot."})
     r = client.post(f"/scan/{sim}/remediate", headers=headers, json={})
     assert r.status_code == 502 and "couldn't be read" in r.json()["detail"]
+
+
+def test_wrong_current_password_is_403_not_401(client):
+    """A 401 would make the web app treat it as an expired session and replay the request."""
+    _, headers = _register(client)
+    r = client.put("/auth/password", headers=headers,
+                   json={"current_password": "wrong-one-1", "new_password": "brand-new-pass-1"})
+    assert r.status_code == 403 and r.json()["detail"] == "Current password is incorrect"
