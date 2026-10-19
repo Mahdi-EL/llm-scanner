@@ -6,8 +6,8 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://llmscanner.vercel.app/dashboard</loc>
-    <changefreq>daily</changefreq>
+    <loc>https://llmscanner.vercel.app/register</loc>
+    <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>

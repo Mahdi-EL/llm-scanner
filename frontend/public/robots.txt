@@ -1,3 +1,10 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+# Shared reports are private links; app pages need an account.
+Disallow: /shared/
+Disallow: /results/
+Disallow: /settings
+Disallow: /verify-email
+Disallow: /reset-password
+
+Sitemap: https://llmscanner.vercel.app/sitemap.xml
