@@ -908,7 +908,7 @@ def test_target(request: Request, body: TargetConfig, user: dict = Depends(requi
     try:
         reply = target.get_baseline(body.baseline_question or DEFAULT_BASELINE_QUESTION)
     except Exception as e:
-        return {"ok": False, "error": runner._friendly(e), "latency_ms": round((time.time() - start) * 1000)}
+        return {"ok": False, "error": runner._friendly(e, body.target_type), "latency_ms": round((time.time() - start) * 1000)}
     return {"ok": True, "latency_ms": round((time.time() - start) * 1000), "reply_preview": (reply or "")[:300]}
 
 
