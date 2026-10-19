@@ -122,6 +122,18 @@ export const authAPI = {
 // ── Scans ─────────────────────────────────────────────────────
 export const scansAPI = {
   list   : (params = {}) => api.get('/scans', { params: { limit: 200, ...params } }),
+  /** Every scan summary (pages through /scans), up to `cap`. Resolves to { scans, total }. */
+  listAll: async (params = {}, cap = 1000) => {
+    const scans = [];
+    let total = 0;
+    while (scans.length < cap) {
+      const { data } = await api.get('/scans', { params: { limit: 200, offset: scans.length, ...params } });
+      total = data.total;
+      scans.push(...data.scans);
+      if (!data.scans.length || scans.length >= total) break;
+    }
+    return { scans, total };
+  },
   get    : id       => api.get(`/scan/${id}`),
   start  : payload  => api.post('/scan', payload),
   cancel : id       => api.post(`/scan/${id}/cancel`),
