@@ -2,7 +2,7 @@
 
 Every scan can run 1,090 attack prompts in 22 categories. Each category maps to risks in the [OWASP Top 10 for LLM Applications (2025)](https://genai.owasp.org/llm-top-10/). Reports recommend the fixes below for every category that failed. Multi-turn attacks run only against targets that keep chat history (simulation, Groq and OpenAI-compatible APIs).
 
-_This page is generated from `backend/attacks/catalog.py`._
+_This page mirrors `backend/attacks/catalog.py`; a test fails when its counts drift from the library._
 
 ## Direct instruction override
 
