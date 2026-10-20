@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { usePolling } from '../utils/hooks';
-import { scoreColor, isActive, formatDuration, typeLabel } from '../utils/format';
+import { scoreColor, isActive, formatDuration, typeLabel, fmtNum } from '../utils/format';
 
 const SEV_META = {
   CRITICAL: { color:'#b42318', bg:'rgba(180,35,24,0.08)', label:'Critical' },
@@ -105,7 +105,8 @@ function FixIt({ scan, failedCount }) {
   const toast = useToast();
   const navigate = useNavigate();
   const type = scan.config?.target_type || scan.target_type;
-  const promptIsOurs = type === 'simulation' || type === 'groq';
+  // The scanner sends the prompt itself for these (an OpenAI-compatible target gets the stored one as its system message)
+  const promptIsOurs = type === 'simulation' || type === 'groq' || (type === 'openai_compatible' && !!scan.config?.has_system_prompt);
   const needsPastedPrompt = !scan.config?.has_system_prompt && type !== 'simulation';
   const needsKey = (type === 'groq' || type === 'openai_compatible') && !scan.target_id;
   const [pasted, setPasted] = useState('');
@@ -286,14 +287,22 @@ function PreviousComparison({ scan }) {
   }, [scan.scan_id, scan.target_name, scan.created_at]);
   if (!diff) return null;
   const delta = diff.score_delta;
+  const comparable = diff.same_attacks !== false;
   return (
     <div className="card-glow" style={{ padding:'14px 18px', marginBottom:'16px', display:'flex', gap:'18px', alignItems:'center', flexWrap:'wrap', fontSize:'13px' }}>
       <span style={{ fontWeight:700 }}>Since the previous scan</span>
-      <span style={{ color: delta > 0 ? '#15803d' : delta < 0 ? '#b42318' : 'var(--t3)', fontWeight:700 }}>
-        {delta === 0 ? 'Score unchanged' : `${delta > 0 ? '+' : '−'}${Math.abs(delta)} point${Math.abs(delta) !== 1 ? 's' : ''}`}
-      </span>
-      <span>{diff.introduced_count} new failure{diff.introduced_count!==1?'s':''}</span>
+      {comparable ? (
+        <span style={{ color: delta > 0 ? '#15803d' : delta < 0 ? '#b42318' : 'var(--t3)', fontWeight:700 }}>
+          {delta === 0 ? 'Score unchanged' : `${delta > 0 ? '+' : '−'}${Math.abs(delta)} point${Math.abs(delta) !== 1 ? 's' : ''}`}
+        </span>
+      ) : (
+        <span style={{ color:'var(--t3)' }} title="The score depends on which attacks ran, so it's only compared between scans of the same attacks.">
+          Different attacks ({fmtNum(diff.head_tested)} vs {fmtNum(diff.base_tested)}), so scores aren’t compared
+        </span>
+      )}
       <span>{diff.resolved_count} fixed</span>
+      {!comparable && <span>{diff.still_failing_count} still failing</span>}
+      <span>{diff.introduced_count} new failure{diff.introduced_count!==1?'s':''}</span>
       <button className="btn-ghost" style={{ fontSize:'12px', marginLeft:'auto' }} onClick={()=>navigate(`/results/${diff.previous.scan_id}`)}>Open previous scan →</button>
     </div>
   );

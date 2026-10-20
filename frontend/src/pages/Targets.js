@@ -79,7 +79,8 @@ function TargetForm({ onSaved, onCancel }) {
       <div className="form-group" style={{ marginBottom:0 }}>
         <label htmlFor="tg-system-prompt">System prompt (optional)</label>
         <textarea id="tg-system-prompt" value={form.system_prompt} onChange={e => set('system_prompt', e.target.value)} style={{ minHeight:'70px' }}
-          placeholder={form.target_type === 'simulation' || form.target_type === 'groq' ? 'The prompt to test' : 'Improves leak detection'} />
+          placeholder={form.target_type === 'custom_rest' ? 'Improves leak detection'
+            : form.target_type === 'openai_compatible' ? 'Sent as the system message with every attack' : 'The prompt to test'} />
       </div>
       <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
         <button className="btn-primary" style={{ fontSize:'12px' }} disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save target'}</button>

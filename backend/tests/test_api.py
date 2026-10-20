@@ -304,6 +304,23 @@ def test_scan_comparison_counts_failures_not_attacks(client):
     assert d["score_delta"] == -40
     assert d["introduced_count"] == 1 and d["introduced_findings"][0]["attack"] == "B"
     assert d["resolved_count"] == 1 and d["resolved_findings"][0]["attack"] == "A"
+    assert d["same_attacks"] is True
+
+
+def test_a_retest_is_compared_on_the_attacks_it_reran(client):
+    user_id, headers = _register(client)
+    base = _seed_complete_scan(user_id, [
+        {"category": "injection", "attack": "A", "severity": "HIGH"},
+        {"category": "injection", "attack": "B", "severity": "HIGH"},
+        {"category": "injection", "attack": "C", "severity": "SAFE"}], score=60)
+    retest = _seed_complete_scan(user_id, [
+        {"category": "injection", "attack": "A", "severity": "SAFE"},
+        {"category": "injection", "attack": "B", "severity": "HIGH"},
+        {"category": "extraction", "attack": "new", "severity": "HIGH"}], score=40)
+    d = client.get(f"/scan/compare/{base}/{retest}", headers=headers).json()
+    assert d["same_attacks"] is False and d["head_tested"] == 3
+    assert d["resolved_count"] == 1 and d["still_failing_count"] == 1
+    assert d["introduced_count"] == 0     # "new" was never run in the base scan: not a regression
 
 
 # ── Quota ─────────────────────────────────────────────────────
@@ -491,6 +508,20 @@ def test_remediation_prompt_fences_untrusted_replies():
     assert "untrusted" in prompt and prompt.count("abc") >= 4
     with pytest.raises(remediation.RemediationError):
         remediation.suggest("You are a bot.", [{"severity": "SAFE"}])
+
+
+def test_remediation_rejects_odd_model_answers_cleanly():
+    import remediation
+    failed = [{"category": "extraction", "severity": "HIGH", "attack": "a", "response": "r"}]
+
+    def answering(text):
+        msg = type("M", (), {"content": text})
+        choice = type("Ch", (), {"message": msg})
+        create = staticmethod(lambda **kw: type("R", (), {"choices": [choice]})())
+        return type("C", (), {"chat": type("Chat", (), {"completions": type("Co", (), {"create": create})})})
+    for text in ("[1, 2]", "not json", '{"score": 9}'):
+        with pytest.raises(remediation.ProviderError):
+            remediation.suggest("You are a bot.", failed, client=answering(text))
 
 
 # ── Stripe webhooks ───────────────────────────────────────────

@@ -234,13 +234,15 @@ export default function NewScan() {
               </div>
             )}
             <div className="form-group">
-              <label htmlFor="ns-system-prompt">{form.target_type === 'simulation' || form.target_type === 'groq'
-                ? 'System prompt to test (optional)' : 'Your system prompt (optional, improves leak detection)'}</label>
+              <label htmlFor="ns-system-prompt">{form.target_type === 'custom_rest'
+                ? 'Your system prompt (optional, improves leak detection)' : 'System prompt to test (optional)'}</label>
               <textarea id="ns-system-prompt" value={form.system_prompt} onChange={e => set('system_prompt', e.target.value)} maxLength={20000}
                 style={{ minHeight:'90px' }}
                 placeholder={form.target_type === 'simulation'
                   ? 'Leave empty to use the demo banking assistant.'
-                  : 'If you paste it, any reply that repeats it word for word is flagged.'} />
+                  : form.target_type === 'openai_compatible'
+                    ? 'Sent as the system message with every attack. Leave empty if your endpoint adds its own prompt.'
+                    : 'If you paste it, any reply that repeats it word for word is flagged.'} />
             </div>
             <div className="form-group" style={{ marginBottom:'12px' }}>
               <label htmlFor="ns-baseline">Baseline question (optional)</label>

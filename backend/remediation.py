@@ -110,9 +110,11 @@ def suggest(system_prompt: str, results: list, client=None) -> dict:
     try:
         data = json.loads(re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip()))
     except json.JSONDecodeError:
+        log.warning("Remediation answer from %s isn't JSON (%d chars)", model, len(raw))
         raise ProviderError("The model's answer couldn't be read. Please try again.")
-    hardened = str(data.get("hardened_prompt") or "").strip()
+    hardened = str(data.get("hardened_prompt") or "").strip() if isinstance(data, dict) else ""
     if len(hardened) < 20:
+        log.warning("Remediation answer from %s has no usable hardened_prompt (%d chars)", model, len(hardened))
         raise ProviderError("The model didn't return a usable prompt. Please try again.")
     return {
         "hardened_prompt"   : hardened[:20000],
