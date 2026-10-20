@@ -36,6 +36,8 @@ and checkpoints, so a server restart resumes a scan instead of losing it.
 - Runtime AI firewall API: screen user messages before your model sees them and replies before your users do
 - Firewall gateway: put the firewall in front of any OpenAI-compatible API by changing only the base URL
 - Plans and billing with Stripe (Checkout, customer portal, webhooks)
+- Triage (false positive / accepted risk, kept per target) and evidence reports for audits: scope, method,
+  OWASP LLM Top 10 coverage, triage decisions, re-test proof and a sign-off block (paid plans)
 - Account data export and deletion
 
 ## Quick start (local)

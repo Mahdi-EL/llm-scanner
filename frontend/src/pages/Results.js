@@ -498,6 +498,10 @@ export default function Results() {
           <button className="btn-outline" disabled={!!busy} onClick={()=>download('html')}>HTML</button>
           <button className="btn-outline" disabled={!!busy} onClick={()=>download('md')}>Markdown</button>
           <button className="btn-outline" disabled={!!busy} onClick={()=>download('json')}>JSON</button>
+          <button className="btn-outline" disabled={!!busy} onClick={()=>download('evidence')}
+            title="Testing evidence for audits and security reviews: scope, method, OWASP coverage, triage, re-tests, sign-off">
+            {busy==='evidence' ? 'Preparing…' : 'Evidence report'}
+          </button>
           <button className="btn-outline" disabled={!!busy} onClick={share}>{busy==='share' ? 'Creating…' : scan.shared_until ? 'New share link' : 'Share link'}</button>
           <button className="btn-ghost" onClick={remove}>Delete</button>
           {scan.shared_until && (

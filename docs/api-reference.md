@@ -53,6 +53,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/auth/reset-password` |  | Sets a new password with a reset token and signs out every session. |
 | POST | `/auth/verify-email` |  | Confirms an email address with the token from the confirmation email. |
 | GET | `/categories` |  | The built-in attack categories, with what they test and their OWASP mapping. |
+| GET | `/download/evidence/{scan_id}` | yes | A testing-evidence PDF for audits and security reviews: scope, method, OWASP LLM Top 10 coverage, results before and after triage, triage decisions, re-test evidence and a sign-off block. Paid plans. |
 | GET | `/download/html/{scan_id}` | yes | Downloads the HTML report (rebuilt from the stored results if the file is gone). |
 | GET | `/download/json/{scan_id}` | yes | Downloads the raw results as JSON. |
 | GET | `/download/md/{scan_id}` | yes | Downloads the Markdown report. |

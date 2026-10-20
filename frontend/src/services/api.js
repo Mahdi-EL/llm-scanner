@@ -83,7 +83,8 @@ export function saveBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-const DOWNLOAD_PATHS = { pdf: '/download', html: '/download/html', md: '/download/md', json: '/download/json' };
+const DOWNLOAD_PATHS = { pdf: '/download', html: '/download/html', md: '/download/md', json: '/download/json',
+                         evidence: '/download/evidence' };
 
 /**
  * Downloads a report with the user's token (window.open can't send it).
@@ -91,10 +92,19 @@ const DOWNLOAD_PATHS = { pdf: '/download', html: '/download/html', md: '/downloa
  * report can't read the app's storage.
  */
 export async function downloadReport(scanId, format = 'pdf') {
-  const res = await api.get(`${DOWNLOAD_PATHS[format]}/${scanId}`, { responseType: 'blob' });
+  let res;
+  try {
+    res = await api.get(`${DOWNLOAD_PATHS[format]}/${scanId}`, { responseType: 'blob' });
+  } catch (e) {
+    // the error body arrives as a Blob too: read it so errorMessage() can show its "detail"
+    if (e.response?.data instanceof Blob) {
+      try { e.response.data = JSON.parse(await e.response.data.text()); } catch { /* not JSON */ }
+    }
+    throw e;
+  }
   const disposition = res.headers?.['content-disposition'] || '';
   const match = /filename="?([^";]+)"?/i.exec(disposition);
-  saveBlob(res.data, match ? match[1] : `LLM_Security_Report_${scanId}.${format}`);
+  saveBlob(res.data, match ? match[1] : `LLM_Security_Report_${scanId}.${format === 'evidence' ? 'pdf' : format}`);
 }
 
 // ── Auth ──────────────────────────────────────────────────────
