@@ -216,6 +216,16 @@ def test_invalid_scan_input_is_rejected(client):
     assert r.status_code == 400
 
 
+def test_an_empty_category_list_is_rejected_not_read_as_all(client):
+    _, headers = _register(client)
+    r = client.post("/scan", headers=headers, json={"target_name": "x", "categories": []})
+    assert r.status_code == 422 and "at least one attack category" in r.json()["detail"][0]["msg"]
+    target = client.post("/api/targets", headers=headers, json={"name": "Bot"}).json()
+    r = client.post("/api/schedules", headers=headers, json={"target_id": target["id"], "categories": []})
+    assert r.status_code == 422
+    assert client.post("/api/schedules", headers=headers, json={"target_id": target["id"]}).status_code != 422   # (402: Pro only)
+
+
 def test_scan_is_queued_with_encrypted_key(client):
     user_id, headers = _register(client)
     r = client.post("/scan", headers=headers, json={
