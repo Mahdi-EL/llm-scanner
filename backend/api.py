@@ -855,6 +855,7 @@ def view_shared(request: Request, token: str):
     return {
         "target_name"    : scan["target_name"],
         "scan_date"      : data.get("scan_date"),
+        "created_at"     : scan["created_at"],
         "summary"        : scoring.ensure_summary(data),
         "recommendations": report.recommendations(data.get("results", [])),
         "results"        : [{**{k: r.get(k) for k in keep}, "response": detectors.redact(r.get("response") or "")[0]}

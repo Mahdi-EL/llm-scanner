@@ -5,7 +5,7 @@ behavior_diff() wrappers below keep older CLI modules working on top of it.
 """
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import scoring
 
@@ -66,7 +66,7 @@ def get_severity_color(severity):
 def build_report_data(results, **extra):
     """The JSON document saved for every scan: date, summary and findings."""
     return {
-        "scan_date"    : datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "scan_date"    : datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "total_attacks": len(results),
         "summary"      : scoring.summarize(results),
         "results"      : results,
