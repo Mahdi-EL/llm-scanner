@@ -34,7 +34,7 @@ That means most AI apps your company is building right now are
 probably vulnerable too.
 
 THE SOLUTION
-LLM Scanner automatically fires 85+ adversarial attack prompts 
+LLM Scanner automatically fires 1,090 adversarial attack prompts 
 against your AI application and generates a professional security 
 report in 10 minutes.
 
@@ -54,7 +54,7 @@ WHAT WE COVER
 
 HOW IT WORKS
 1. Enter your AI app details
-2. Scanner fires 85+ attacks automatically
+2. Scanner fires 1,090 attacks automatically
 3. AI analyzes every response with 3-layer intelligent detection
 4. Download your PDF security report
 
@@ -97,7 +97,7 @@ So I built the equivalent of Burp Suite for AI apps.
 
 WHAT IT DOES
 
-The scanner fires 85+ adversarial prompts across 9 attack categories 
+The scanner fires 1,090 adversarial prompts across 22 attack categories 
 against any AI application. It then uses a 3-layer intelligent 
 detection system to analyze responses :
 
@@ -160,7 +160,7 @@ In my first week of manual testing, I discovered that :
 
 After 14 months of building, LLM Scanner is live.
 
-85+ attack prompts.
+1,090 attack prompts.
 3-layer intelligent detection.
 Professional PDF report.
 Web dashboard.
@@ -192,7 +192,7 @@ internal configuration in 30 seconds — just by asking politely.
 This is why I built LLM Scanner.
 
 Automated security testing for AI applications.
-85+ attacks. 10 minutes. Professional PDF report.
+1,090 attacks. 10 minutes. Professional PDF report.
 
 github.com/Mahdi-EL/llm-scanner
 
@@ -207,12 +207,12 @@ github.com/Mahdi-EL/llm-scanner
 
 Here is what LLM Scanner can do today :
 
-→ 85+ adversarial attack prompts in 9 categories
+→ 1,090 adversarial attack prompts in 22 categories
 → 3-layer intelligent detection (AI scores each response 0-10)
 → Behavior diff engine that eliminates false positives
 → Professional 4-page PDF security report
 → Web dashboard — no terminal needed
-→ 12 automated tests — all passing
+→ 190 automated tests — all passing
 → Support for any AI API
 
 From idea to working SaaS product in 14 months.
@@ -263,7 +263,7 @@ I want to give you FREE access to LLM Scanner in exchange
 for 15 minutes of honest feedback.
 
 What LLM Scanner does :
-→ Fires 85+ attack prompts at your AI app automatically
+→ Fires 1,090 attack prompts at your AI app automatically
 → Finds security vulnerabilities with intelligent AI detection
 → Generates a professional PDF security report in 10 minutes
 
