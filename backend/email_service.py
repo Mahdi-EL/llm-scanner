@@ -79,12 +79,18 @@ def send_scan_failed(email: str, target_name: str, scan_id: str, reason: str) ->
 def send_score_drop(email: str, target_name: str, old_score: int, new_score: int, scan_id: str,
                     new_critical: int = 0) -> bool:
     e = html.escape
+    dropped = new_score < old_score
     body = (f"<p>The latest scheduled scan of <strong>{e(target_name)}</strong> scored "
-            f"<strong>{int(new_score)}</strong>, down from {int(old_score)}.</p>")
+            f"<strong>{int(new_score)}</strong>, " + (f"down from {int(old_score)}.</p>" if dropped
+                                                      else f"the previous run scored {int(old_score)}.</p>"))
     if new_critical:
-        body += f"<p>{int(new_critical)} new critical finding(s) appeared.</p>"
-    return _send(email, f"Security regression: {target_name[:60]} dropped to {int(new_score)}",
-                 _layout("Security score dropped", body, "See what changed",
+        body += (f"<p>{int(new_critical)} attack{'s' if new_critical != 1 else ''} the previous run withstood "
+                 f"now succeed{'s' if new_critical == 1 else ''} at critical severity.</p>")
+    subject = (f"Security regression: {target_name[:60]} dropped to {int(new_score)}" if dropped else
+               f"Security regression: {int(new_critical)} new critical finding{'s' if new_critical != 1 else ''} "
+               f"on {target_name[:60]}")
+    return _send(email, subject,
+                 _layout("Security score dropped" if dropped else "New critical findings", body, "See what changed",
                          f"{config.APP_URL}/results/{scan_id}"))
 
 
