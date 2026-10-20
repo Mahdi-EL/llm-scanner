@@ -10,7 +10,7 @@ vi.mock('../services/api', async () => {
     plansAPI: { list: vi.fn(), checkout: vi.fn(), portal: vi.fn() },
     scansAPI: {
       get: vi.fn(), list: vi.fn(), compare: vi.fn(), categories: vi.fn(), cancel: vi.fn(),
-      share: vi.fn(), delete: vi.fn(), shared: vi.fn(), models: vi.fn(), start: vi.fn(), testTarget: vi.fn(),
+      share: vi.fn(), delete: vi.fn(), shared: vi.fn(), models: vi.fn(), start: vi.fn(), testTarget: vi.fn(), listAll: vi.fn(),
     },
     targetsAPI: { list: vi.fn(), create: vi.fn() },
     promptsAPI: { list: vi.fn() },
@@ -26,6 +26,7 @@ const { default: Pricing } = await import('./Pricing');
 const { default: Results } = await import('./Results');
 const { default: SharedReport } = await import('./SharedReport');
 const { default: NewScan } = await import('./NewScan');
+const { default: Reports } = await import('./Reports');
 
 function renderAt(path, element, route) {
   return render(
@@ -115,4 +116,14 @@ test('NewScan refuses to launch a saved target with no category picked', async (
   fireEvent.click(screen.getByText('Clear'));
   fireEvent.click(screen.getByText(/^Launch scan/));
   expect(api.scansAPI.start).not.toHaveBeenCalled();
+});
+
+test('Reports says it could not load instead of showing an empty account', async () => {
+  api.scansAPI.listAll.mockRejectedValueOnce(new Error('Network Error'));
+  api.scansAPI.listAll.mockResolvedValueOnce({ scans: [], total: 0 });
+  renderAt('/reports', <Reports />, '/reports');
+  expect(await screen.findByText(/load your reports/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Retry'));
+  await waitFor(() => expect(screen.queryByText(/load your reports/)).toBeNull());
+  expect(api.scansAPI.listAll).toHaveBeenCalledTimes(2);
 });
