@@ -16,6 +16,8 @@ from typing import Annotated, List, Literal, Optional
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -113,6 +115,59 @@ app = FastAPI(
     lifespan   =lifespan,
 )
 app.state.limiter = limiter
+
+MAX_BODY_BYTES = 1024 * 1024    # far above any real request (a system prompt is capped at 20,000 characters)
+
+
+class _BodyTooLarge(BaseException):
+    """BaseException: FastAPI turns any Exception raised while reading a body into a 400."""
+
+
+class BodyLimit:
+    """Answers 413 to bodies over MAX_BODY_BYTES, counting bytes as they arrive so a missing or
+    false Content-Length doesn't help. Registered innermost, so the 413 still gets CORS headers."""
+
+    def __init__(self, app, max_bytes: int = MAX_BODY_BYTES):
+        self.app, self.max_bytes = app, max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        too_large = JSONResponse({"detail": "Request body too large"}, status_code=413)
+        length = dict(scope.get("headers") or []).get(b"content-length")
+        if length and length.isdigit() and int(length) > self.max_bytes:
+            return await too_large(scope, receive, send)
+        received, started = 0, False
+
+        async def limited_receive():
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    raise _BodyTooLarge()
+            return message
+
+        async def tracking_send(message):
+            nonlocal started
+            started = started or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, tracking_send)
+        except _BodyTooLarge:
+            if not started:
+                await too_large(scope, receive, send)
+
+
+app.add_middleware(BodyLimit)    # first registered = innermost
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_failed(request: Request, exc: RequestValidationError):
+    """FastAPI's 422, minus the rejected value: it would echo passwords and megabytes of input back."""
+    errors = [{k: v for k, v in e.items() if k not in ("input", "ctx", "url")} for e in exc.errors()]
+    return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
 
 
 @app.exception_handler(RateLimitExceeded)

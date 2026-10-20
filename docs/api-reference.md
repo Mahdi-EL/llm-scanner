@@ -4,6 +4,8 @@ Interactive docs with request and response schemas: `GET /docs` on your API.
 
 Authenticate with `Authorization: Bearer <access token>` (from `/auth/login`) or with an API key in `X-API-Key: llmsk_...` (create one in Settings or with `POST /api/keys`).
 
+Errors are JSON with a readable `detail`: a string, or for invalid input (422) a list of `{loc, msg, type}` (the rejected value isn't echoed back). Request bodies are limited to 1 MB (413); 429 responses carry `Retry-After`.
+
 _This page is generated from the FastAPI routes in `backend/api.py`._
 
 | Method | Path | Auth | What it does |

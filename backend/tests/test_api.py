@@ -882,3 +882,18 @@ def test_account_is_kept_when_its_subscription_cant_be_cancelled(client, monkeyp
     outcome["error"] = gone                      # already cancelled in Stripe: fine to delete
     r = client.request("DELETE", "/auth/me", headers=headers, json={"password": "password123"})
     assert r.status_code == 200 and api.auth_db.get_user_by_id(user_id) is None
+
+
+def test_oversized_bodies_get_413_and_errors_dont_echo_input(client):
+    big = b'{"username": "x", "password": "' + b"a" * (api.MAX_BODY_BYTES + 10) + b'"}'
+    r = client.post("/auth/login", content=big, headers={"Content-Type": "application/json",
+                                                         "Origin": "http://localhost:3000"})
+    assert r.status_code == 413 and r.headers.get("access-control-allow-origin")
+
+    def chunks():                                  # no Content-Length: counted as it arrives
+        for _ in range(3):
+            yield b"a" * (api.MAX_BODY_BYTES // 2)
+    assert client.post("/auth/login", content=chunks(), headers={"Content-Type": "application/json"}).status_code == 413
+
+    r = client.post("/auth/login", json={"username": "x", "password": "p" * 300})
+    assert r.status_code == 422 and "ppppp" not in r.text and r.json()["detail"][0]["msg"]
