@@ -36,6 +36,12 @@ note). The mark applies to that attack in every scan of the same target: re-test
 suggestions and regression alerts leave it out, and the page shows the score after triage next to
 the original one. Reports keep the original grading. Reopen a finding to undo the mark.
 
+**Can I give an auditor or a customer proof of testing?**
+On paid plans, a scan's results page has an Evidence report: a PDF with the scope and method, coverage
+of every OWASP Top 10 for LLM Applications risk (including the ones a prompt scan can't test), the
+results before and after triage, each triage decision with its note, the latest re-test of the
+failures, and a sign-off block. It is testing evidence, not a compliance certificate.
+
 **What is an ERROR finding?**
 The target or the judge couldn't be reached, or the judge's answer couldn't be read. Errors are
 excluded from the score and listed in the report, so check them before trusting a scan. A scan

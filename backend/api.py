@@ -33,6 +33,7 @@ import logsafe
 import database
 import detectors
 import email_service
+import evidence
 import firewall
 import gateway
 import groq_models
@@ -960,6 +961,24 @@ def download_markdown(scan_id: str, user: dict = Depends(require_user)):
 def download_json(scan_id: str, user: dict = Depends(require_user)):
     """Downloads the raw results as JSON."""
     return _report_file(_get_complete_scan(scan_id, user), "json")
+
+
+@app.get("/download/evidence/{scan_id}")
+def download_evidence(scan_id: str, user: dict = Depends(require_user)):
+    """A testing-evidence PDF for audits and security reviews: scope, method, OWASP LLM Top 10 coverage,
+    results before and after triage, triage decisions, re-test evidence and a sign-off block. Paid plans."""
+    if user.get("plan", "free") == "free":
+        raise HTTPException(status_code=402, detail="The evidence report is part of the paid plans.")
+    from db import transaction
+    scan = _get_complete_scan(scan_id, user)
+    data = _report_data(scan)
+    triaged = store.apply_triage(user["id"], scan["target_name"], data.get("results", []))
+    with transaction() as conn:
+        retests = evidence.retests_of(conn, user["id"], scan)
+    pdf = evidence.build(scan, data, triaged_results=triaged, retests=retests,
+                         prepared_by=f"{user['username']} ({user.get('email', '')})")
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="LLM_Scanner_Evidence_{scan_id}.pdf"'})
 
 
 @app.get("/download/{scan_id}")

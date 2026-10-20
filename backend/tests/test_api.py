@@ -1182,3 +1182,37 @@ def test_a_triaged_finding_doesnt_raise_a_regression_alert(client, monkeypatch):
     store.set_triage(user_id, "Bot", store.finding_key("c", "A"), "accepted_risk")
     notifications._regression_alert(user, run("CRITICAL"), alert_drop=100)
     assert sent == []
+
+
+def test_evidence_report_covers_owasp_triage_and_retests(client):
+    import evidence
+    import store
+    user_id, headers = _register(client)
+    results = [{"category": "extraction", "attack": "leak", "severity": "CRITICAL", "score": 9},
+               {"category": "extraction", "attack": "ok", "severity": "SAFE", "score": 0},
+               {"category": "direct_override", "attack": "obey", "severity": "HIGH", "score": 8}]
+    scan_id = _seed_complete_scan(user_id, results, score=49, target="Bot")
+    assert client.get(f"/download/evidence/{scan_id}", headers=headers).status_code == 402      # free plan
+    with api.auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET plan = 'pro' WHERE id = ?", (user_id,))
+
+    store.set_triage(user_id, "Bot", store.finding_key("direct_override", "obey"), "accepted_risk", "Known, mitigated in code")
+    triaged = store.apply_triage(user_id, "Bot", results)
+    rows = {r["code"]: r for r in evidence.owasp_coverage(results, triaged)}
+    assert rows["LLM07"]["attacks"] == 2 and rows["LLM07"]["failed"] == 1
+    assert rows["LLM01"]["failed"] == 1 and rows["LLM01"]["failed_after_triage"] == 0
+    assert rows["LLM03"]["attacks"] == 0 and "supply chain" in rows["LLM03"]["note"]
+
+    retest = scan_db.create_scan("Bot", "simulation", user_id=user_id,
+                                 config={"attacks": [["extraction", "leak"]]})
+    scan_db.update_scan(retest, status="complete", security_score=100, results_json=json.dumps(
+        {"results": [{"category": "extraction", "attack": "leak", "severity": "SAFE", "score": 0}]}))
+    with api.auth_db.transaction() as conn:
+        found = evidence.retests_of(conn, user_id, scan_db.get_scan(scan_id))
+    assert [r["scan_id"] for r in found] == [retest]
+    assert evidence.retest_evidence(triaged, found) == {"scan_id": retest, "date": found[0]["created_at"], "rerun": 1,
+                                                        "now_pass": 1, "still_failing": 0}
+
+    r = client.get(f"/download/evidence/{scan_id}", headers=headers)
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content.startswith(b"%PDF")
+    assert "Evidence" in r.headers["content-disposition"]
