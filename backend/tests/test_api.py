@@ -897,3 +897,14 @@ def test_oversized_bodies_get_413_and_errors_dont_echo_input(client):
 
     r = client.post("/auth/login", json={"username": "x", "password": "p" * 300})
     assert r.status_code == 422 and "ppppp" not in r.text and r.json()["detail"][0]["msg"]
+
+
+def test_scan_reports_its_live_share_link(client):
+    user_id, headers = _register(client)
+    scan_id = _seed_complete_scan(user_id, RESULTS)
+    assert client.get(f"/scan/{scan_id}", headers=headers).json()["shared_until"] is None
+    link = client.post(f"/scan/{scan_id}/share", headers=headers, json={"days": 3}).json()
+    assert client.get(f"/scan/{scan_id}", headers=headers).json()["shared_until"] == link["expires_at"]
+    client.delete(f"/scan/{scan_id}/share", headers=headers)
+    assert client.get(f"/scan/{scan_id}", headers=headers).json()["shared_until"] is None
+    assert client.get(f"/shared/{link['token']}").status_code == 404
