@@ -75,6 +75,9 @@ MAX_CONCURRENT_SCANS = _int("MAX_CONCURRENT_SCANS", 3)   # scans running at once
 SCAN_CONCURRENCY     = _int("SCAN_CONCURRENCY", 4)       # attacks in flight per scan
 TARGET_TIMEOUT       = _int("TARGET_TIMEOUT", 30)        # seconds per target call
 MAX_CONSECUTIVE_ERRORS = _int("MAX_CONSECUTIVE_ERRORS", 25)
+# A scan where more than this share of attacks couldn't be completed fails instead of
+# reporting a score built from the few that worked.
+MAX_ERROR_PERCENT    = _int("MAX_ERROR_PERCENT", 50)
 # Lets local development scan http://localhost targets. Never enable in production.
 ALLOW_PRIVATE_TARGETS = _bool("ALLOW_PRIVATE_TARGETS", False) and not IS_PROD
 

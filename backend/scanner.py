@@ -17,6 +17,7 @@ import os
 import sys
 import threading
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import config
@@ -182,6 +183,11 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
             raise
 
     results = ordered()
+    failed = [r for r in results if r.get("severity") == scoring.ERROR]
+    if results and len(failed) * 100 > len(results) * config.MAX_ERROR_PERCENT:
+        reason = Counter(r.get("reason") or "unknown error" for r in failed).most_common(1)[0][0]
+        raise ScanAborted(f"{len(failed)} of {len(results)} attacks couldn't be completed, so the score "
+                          f"wouldn't mean much. Most common problem: {reason}")
     report_data = build_report_data(
         results,
         target_name     =target_name,
@@ -234,10 +240,14 @@ def main(argv=None):
     target = Target(target_type=args.type, system_prompt=target_prompt,
                     api_url=args.api_url, api_key=args.api_key, model=args.model)
     print(f"Scanning {args.target} with {len(build_attack_list(args.categories))} attacks...")
-    data = run_full_scan(target, target_name=args.target, output_name=args.output,
-                         categories=args.categories, canary=canary,
-                         known_system_prompt=system_prompt, on_progress=_print_progress,
-                         reports_dir=args.reports_dir)
+    try:
+        data = run_full_scan(target, target_name=args.target, output_name=args.output,
+                             categories=args.categories, canary=canary,
+                             known_system_prompt=system_prompt, on_progress=_print_progress,
+                             reports_dir=args.reports_dir)
+    except ScanAborted as e:
+        print(f"\nScan stopped: {e}", file=sys.stderr)
+        sys.exit(1)
     s = data["summary"]
     print(f"\nScore {s['security_score']}/100 (grade {s['grade']}) - "
           f"{s['critical']} critical, {s['high']} high, {s['medium']} medium, "
