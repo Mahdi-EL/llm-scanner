@@ -1,0 +1,193 @@
+"""Teams: who can see and change what in a shared workspace. These tests try to break isolation."""
+import json
+import uuid
+
+import pytest
+from fastapi.testclient import TestClient
+
+import api
+import auth_db
+import config
+import scan_db
+import teams
+
+
+@pytest.fixture
+def client():
+    api.limiter.enabled = False
+    with TestClient(api.app) as c:
+        yield c
+    api.limiter.enabled = True
+
+
+def person(client, plan="free"):
+    name = "t" + uuid.uuid4().hex[:10]
+    r = client.post("/auth/register", json={"username": name, "email": f"{name}@example.com", "password": "password123"})
+    body = r.json()
+    if plan != "free":
+        with auth_db.transaction() as conn:
+            conn.execute("UPDATE users SET plan = ? WHERE id = ?", (plan, body["user"]["id"]))
+    return {"id": body["user"]["id"], "email": f"{name}@example.com", "name": name,
+            "auth": {"Authorization": f"Bearer {body['access_token']}"}}
+
+
+def in_ws(who, owner):
+    return {**who["auth"], "X-Workspace": owner["id"]}
+
+
+def seed_scan(owner_id, target="Bot"):
+    scan_id = scan_db.create_scan(target, "simulation", user_id=owner_id)
+    scan_db.update_scan(scan_id, status="complete", security_score=49, results_json=json.dumps(
+        {"results": [{"category": "extraction", "attack": "a", "severity": "CRITICAL", "score": 9}]}))
+    return scan_id
+
+
+def join(client, owner, who, role="member"):
+    r = client.post("/api/team/invites", headers=owner["auth"], json={"email": who["email"], "role": role})
+    assert r.status_code == 200, r.text
+    token = r.json()["link"].split("token=")[1]
+    assert client.post("/api/team/accept", headers=who["auth"], json={"token": token}).status_code == 200
+    return token
+
+
+def test_free_accounts_have_no_team_seats(client):
+    owner, bob = person(client), person(client)
+    r = client.post("/api/team/invites", headers=owner["auth"], json={"email": bob["email"]})
+    assert r.status_code == 402
+
+
+def test_a_member_works_in_the_owners_workspace_and_only_there(client):
+    owner, bob = person(client, "pro"), person(client)
+    scan_id = seed_scan(owner["id"])
+    join(client, owner, bob)
+    assert [s["scan_id"] for s in client.get("/scans", headers=in_ws(bob, owner)).json()["scans"]] == [scan_id]
+    assert client.get(f"/scan/{scan_id}", headers=in_ws(bob, owner)).status_code == 200
+    assert client.get("/scans", headers=bob["auth"]).json()["scans"] == []          # his own workspace is separate
+    assert client.get(f"/scan/{scan_id}", headers=bob["auth"]).status_code == 404
+
+    r = client.post("/scan", headers=in_ws(bob, owner), json={"target_name": "From bob", "quick": True})
+    assert r.status_code == 200
+    stored = scan_db.get_scan(r.json()["scan_id"])
+    assert stored["user_id"] == owner["id"] and stored["created_by"] == bob["id"]   # the owner's scan and quota
+
+
+def test_outsiders_and_made_up_workspaces_get_nothing(client):
+    owner, eve = person(client, "pro"), person(client)
+    scan_id = seed_scan(owner["id"])
+    for path in ("/scans", f"/scan/{scan_id}", f"/download/json/{scan_id}", "/api/targets", "/api/team"):
+        assert client.get(path, headers=in_ws(eve, owner)).status_code == 403, path
+    assert client.post("/scan", headers=in_ws(eve, owner), json={"target_name": "x"}).status_code == 403
+    assert client.get("/scans", headers={**eve["auth"], "X-Workspace": uuid.uuid4().hex}).status_code == 403
+
+
+def test_viewers_read_but_cannot_change_anything(client):
+    owner, dave = person(client, "pro"), person(client)
+    scan_id = seed_scan(owner["id"])
+    join(client, owner, dave, "viewer")
+    assert client.get(f"/scan/{scan_id}", headers=in_ws(dave, owner)).status_code == 200
+    assert client.get(f"/download/html/{scan_id}", headers=in_ws(dave, owner)).status_code == 200
+    key = client.get(f"/scan/{scan_id}", headers=in_ws(dave, owner)).json()["results"]["results"][0]["key"]
+    changes = [("POST", "/scan", {"target_name": "x"}), ("DELETE", f"/scan/{scan_id}", None),
+               ("PUT", f"/scan/{scan_id}/triage", {"key": key, "status": "false_positive"}),
+               ("POST", f"/scan/{scan_id}/share", {}), ("POST", "/api/targets", {"name": "T"}),
+               ("POST", "/api/prompts", {"category": "x", "prompt": "y"})]
+    for method, path, body in changes:
+        r = client.request(method, path, headers=in_ws(dave, owner), json=body)
+        assert r.status_code == 403, (method, path, r.status_code)
+    assert scan_db.get_scan(scan_id) is not None
+
+
+def test_members_cannot_manage_keys_webhook_branding_team_or_billing(client):
+    owner, bob, carol = person(client, "pro"), person(client), person(client)
+    join(client, owner, bob)
+    for method, path, body in [("POST", "/api/keys", {"name": "k"}), ("GET", "/api/keys", None),
+                               ("PUT", "/api/webhook", {"url": None}), ("PUT", "/api/branding", {"brand": "X"}),
+                               ("POST", "/api/team/invites", {"email": carol["email"]}),
+                               ("POST", "/api/checkout", {"plan": "enterprise"}), ("POST", "/api/billing/portal", None)]:
+        r = client.request(method, path, headers=in_ws(bob, owner), json=body)
+        assert r.status_code == 403, (method, path, r.status_code)
+
+
+def test_admins_manage_the_workspace_but_not_billing_or_the_owner(client):
+    owner, bob, carol = person(client, "pro"), person(client), person(client)
+    join(client, owner, bob, "admin")
+    r = client.post("/api/keys", headers=in_ws(bob, owner), json={"name": "ci"})
+    assert r.status_code == 200
+    key = r.json()["key"]
+    assert client.get("/scans", headers={"X-API-Key": key}).status_code == 200
+    assert auth_db.get_user_by_api_key(key) == owner["id"]                         # the workspace's key
+    assert client.post("/api/checkout", headers=in_ws(bob, owner), json={"plan": "enterprise"}).status_code == 403
+    assert client.put(f"/api/team/members/{owner['id']}", headers=in_ws(bob, owner), json={"role": "viewer"}).status_code == 400
+    assert client.delete(f"/api/team/members/{owner['id']}", headers=in_ws(bob, owner)).status_code == 400
+    join_as_admin = client.post("/api/team/invites", headers=in_ws(bob, owner), json={"email": carol["email"]})
+    assert join_as_admin.status_code == 200
+
+
+def test_an_api_key_ignores_the_workspace_header(client):
+    owner, bob = person(client, "pro"), person(client)
+    scan_id = seed_scan(owner["id"])
+    join(client, owner, bob)
+    bob_key = client.post("/api/keys", headers=bob["auth"], json={"name": "own"}).json()["key"]
+    r = client.get("/scans", headers={"X-API-Key": bob_key, "X-Workspace": owner["id"]})
+    assert r.status_code == 200 and r.json()["scans"] == []
+    assert client.get(f"/scan/{scan_id}", headers={"X-API-Key": bob_key, "X-Workspace": owner["id"]}).status_code == 404
+
+
+def test_personal_settings_always_apply_to_the_person(client):
+    owner, bob = person(client, "pro"), person(client)
+    join(client, owner, bob)
+    me = client.get("/auth/me", headers=in_ws(bob, owner)).json()
+    assert me["id"] == bob["id"] and me["workspace"]["id"] == owner["id"] and me["workspace"]["role"] == "member"
+    assert me["workspace"]["plan"] == "pro" and me["plan"] == "free"
+    assert {w["id"] for w in me["workspaces"]} == {bob["id"], owner["id"]}
+    r = client.put("/auth/password", headers=in_ws(bob, owner),
+                   json={"current_password": "password123", "new_password": "bob-new-pass-1"})
+    assert r.status_code == 200
+    assert client.post("/auth/login", json={"username": bob["name"], "password": "bob-new-pass-1"}).status_code == 200
+    assert client.post("/auth/login", json={"username": owner["name"], "password": "password123"}).status_code == 200
+    bob_auth = {"Authorization": f"Bearer {r.json()['access_token']}", "X-Workspace": owner["id"]}
+    r = client.request("DELETE", "/auth/me", headers=bob_auth, json={"password": "bob-new-pass-1"})
+    assert r.status_code == 200
+    assert auth_db.get_user_by_id(bob["id"]) is None and auth_db.get_user_by_id(owner["id"]) is not None
+    assert [m["user_id"] for m in teams.members(owner["id"])] == [owner["id"]]
+
+
+def test_invites_only_work_for_their_address_once(client, monkeypatch):
+    owner, bob, carol = person(client, "pro"), person(client), person(client)
+    r = client.post("/api/team/invites", headers=owner["auth"], json={"email": bob["email"].upper(), "role": "viewer"})
+    token = r.json()["link"].split("token=")[1]
+    assert client.post("/api/team/accept", headers=carol["auth"], json={"token": token}).status_code == 403
+    assert client.post("/api/team/accept", headers=bob["auth"], json={"token": token}).status_code == 200
+    assert client.post("/api/team/accept", headers=bob["auth"], json={"token": token}).status_code == 404
+    assert teams.role_of(owner["id"], bob["id"]) == "viewer"
+    monkeypatch.setattr(config, "PRO_SEATS", 2)                                      # owner + bob
+    assert client.post("/api/team/invites", headers=owner["auth"], json={"email": carol["email"]}).status_code == 402
+
+
+def test_removed_members_lose_access_and_members_can_leave(client):
+    owner, bob, carol = person(client, "pro"), person(client), person(client)
+    join(client, owner, bob)
+    join(client, owner, carol)
+    assert client.delete(f"/api/team/members/{bob['id']}", headers=owner["auth"]).status_code == 200
+    assert client.get("/scans", headers=in_ws(bob, owner)).status_code == 403
+    assert client.delete(f"/api/team/members/{carol['id']}", headers=in_ws(carol, owner)).status_code == 200
+    assert client.get("/scans", headers=in_ws(carol, owner)).status_code == 403
+    me = client.get("/auth/me", headers=in_ws(carol, owner)).json()                 # a stale header falls back
+    assert me["workspace"] is None and [w["id"] for w in me["workspaces"]] == [carol["id"]]
+
+
+def test_deleting_the_owner_dissolves_the_team(client):
+    owner, bob = person(client, "pro"), person(client)
+    join(client, owner, bob)
+    assert client.request("DELETE", "/auth/me", headers=owner["auth"], json={"password": "password123"}).status_code == 200
+    assert [w["id"] for w in teams.workspaces_of(bob["id"])] == [bob["id"]]
+    assert client.get("/scans", headers=in_ws(bob, owner)).status_code == 403
+
+
+def test_only_admins_see_the_webhook_url(client):
+    owner, dave = person(client, "pro"), person(client)
+    client.put("/api/webhook", headers=owner["auth"], json={"url": "https://hooks.slack.com/services/T0/B0/secret"})
+    join(client, owner, dave, "viewer")
+    assert client.get("/api/webhook", headers=in_ws(dave, owner)).status_code == 403
+    assert client.get("/auth/me", headers=in_ws(dave, owner)).json()["workspace"]["webhook_url"] is None
+    assert "secret" in client.get("/api/webhook", headers=owner["auth"]).json()["webhook_url"]

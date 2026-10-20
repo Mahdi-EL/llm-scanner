@@ -109,6 +109,14 @@ def send_verification(email: str, token: str) -> bool:
                          f"{config.APP_URL}/verify-email?token={token}"))
 
 
+def send_team_invite(email: str, inviter: str, workspace: str, link: str) -> bool:
+    e = html.escape
+    body = (f"<p><strong>{e(inviter)}</strong> invited you to the <strong>{e(workspace)}</strong> workspace on "
+            "LLM Scanner. The invite expires in 7 days and works with this email address.</p>")
+    return _send(email, f"{inviter[:60]} invited you to LLM Scanner",
+                 _layout("You're invited", body, "Join the workspace", link))
+
+
 def send_payment_failed(email: str) -> bool:
     body = ("<p>We couldn't take your last subscription payment. "
             "Please update your card to keep your plan.</p>")

@@ -67,6 +67,7 @@ PLANS = {
         "scan_limit"    : _PRO_SCANS,
         "firewall_daily": _PRO_FIREWALL,
         "features"      : [f"{_PRO_SCANS:,} scans per month", "Everything in Free",
+                           f"Up to {config.PRO_SEATS} people per workspace",
                            "Scheduled scans and alerts", "Evidence reports for audits and security reviews", "Your brand on reports",
                            *_firewall_feature(_PRO_FIREWALL, "AI firewall API"),
                            "Email support"],
@@ -80,7 +81,7 @@ PLANS = {
         "yearly_price_id": os.getenv("STRIPE_ENTERPRISE_YEARLY_PRICE_ID", ""),
         "scan_limit"    : None,     # unlimited
         "firewall_daily": _ENTERPRISE_FIREWALL,
-        "features"      : ["Unlimited scans", "Everything in Pro",
+        "features"      : ["Unlimited scans", "Everything in Pro", "Unlimited people per workspace",
                            *_firewall_feature(_ENTERPRISE_FIREWALL, "AI firewall API"), "Priority support"],
     },
 }
