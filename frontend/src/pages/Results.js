@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { usePolling } from '../utils/hooks';
-import { scoreColor, isActive, formatDuration, typeLabel, fmtNum } from '../utils/format';
+import { scoreColor, isActive, formatDuration, typeLabel, fmtNum, shortDate } from '../utils/format';
 
 const SEV_META = {
   CRITICAL: { color:'#b42318', bg:'rgba(180,35,24,0.08)', label:'Critical' },
@@ -367,7 +367,18 @@ export default function Results() {
       const { data } = await scansAPI.share(id, 7);
       await navigator.clipboard?.writeText(data.url);
       toast('Read-only link copied. It expires in 7 days.', 'success', 5000);
+      setScan(s => ({ ...s, shared_until: data.expires_at }));
     } catch (e) { toast(errorMessage(e, 'Could not create a share link.'), 'error'); }
+    finally { setBusy(''); }
+  };
+
+  const unshare = async () => {
+    setBusy('unshare');
+    try {
+      await scansAPI.unshare(id);
+      setScan(s => ({ ...s, shared_until: null }));
+      toast('Sharing stopped. The old link no longer works.', 'success');
+    } catch (e) { toast(errorMessage(e, 'Could not stop sharing.'), 'error'); }
     finally { setBusy(''); }
   };
 
@@ -436,8 +447,16 @@ export default function Results() {
           <button className="btn-outline" disabled={!!busy} onClick={()=>download('html')}>HTML</button>
           <button className="btn-outline" disabled={!!busy} onClick={()=>download('md')}>Markdown</button>
           <button className="btn-outline" disabled={!!busy} onClick={()=>download('json')}>JSON</button>
-          <button className="btn-outline" disabled={!!busy} onClick={share}>{busy==='share' ? 'Creating…' : 'Share link'}</button>
+          <button className="btn-outline" disabled={!!busy} onClick={share}>{busy==='share' ? 'Creating…' : scan.shared_until ? 'New share link' : 'Share link'}</button>
           <button className="btn-ghost" onClick={remove}>Delete</button>
+          {scan.shared_until && (
+            <span style={{ flexBasis:'100%', fontSize:'12px', color:'var(--t3)', textAlign:'right' }}>
+              Shared read-only until {shortDate(scan.shared_until, true)} ·{' '}
+              <button className="btn-ghost" style={{ fontSize:'12px', padding:0 }} disabled={!!busy} onClick={unshare}>
+                {busy==='unshare' ? 'Stopping…' : 'Stop sharing'}
+              </button>
+            </span>
+          )}
         </div>
       </div>
 

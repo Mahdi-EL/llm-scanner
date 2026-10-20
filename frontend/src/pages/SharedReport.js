@@ -35,7 +35,7 @@ export default function SharedReport() {
     </CenterCard>
   );
   if (error) return (
-    <CenterCard title="This link has expired" subtitle="Share links are valid for a limited time. Ask the owner for a new one.">
+    <CenterCard title="This link no longer works" subtitle="It expired, or the owner stopped sharing this report. Ask them for a new link.">
       <Link to="/" className="btn-outline" style={{ display:'inline-flex' }}>About LLM Scanner</Link>
     </CenterCard>
   );

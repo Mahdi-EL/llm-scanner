@@ -98,7 +98,7 @@ test('SharedReport shows when the link expires', async () => {
 test('SharedReport tells an expired link apart from a network error', async () => {
   api.scansAPI.shared.mockRejectedValueOnce({ response: { status: 404 } });
   const { unmount } = renderAt('/shared/old', <SharedReport />, '/shared/:token');
-  expect(await screen.findByText('This link has expired')).toBeInTheDocument();
+  expect(await screen.findByText('This link no longer works')).toBeInTheDocument();
   unmount();
   api.scansAPI.shared.mockRejectedValueOnce(new Error('Network Error'));
   renderAt('/shared/tok', <SharedReport />, '/shared/:token');

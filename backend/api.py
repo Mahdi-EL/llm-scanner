@@ -772,6 +772,7 @@ def get_scan_status(scan_id: str, user: dict = Depends(require_user)):
     out = scan_db.public_scan(scan, include_results=scan["status"] == "complete")
     if out.get("target_id") and not store.get_target(user["id"], out["target_id"]):
         out["target_id"] = None        # the saved target was deleted: nothing to re-scan or take a key from
+    out["shared_until"] = store.share_expiry(user["id"], scan_id) if scan["status"] == "complete" else None
     if scan["status"] == "complete" and scan.get("results"):
         out["recommendations"] = report.recommendations(scan["results"].get("results", []))
     return out

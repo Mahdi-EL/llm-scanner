@@ -212,6 +212,16 @@ def list_shares(user_id: str) -> list:
     return [dict(r) for r in rows]
 
 
+def share_expiry(user_id: str, scan_id: str) -> Optional[str]:
+    """When the scan's share link expires, or None if it has no live link."""
+    with transaction() as conn:
+        row = conn.execute("SELECT expires_at FROM share_links WHERE scan_id = ? AND user_id = ?",
+                           (scan_id, user_id)).fetchone()
+    if not row or parse_ts(row["expires_at"]) < datetime.now(timezone.utc):
+        return None
+    return row["expires_at"]
+
+
 def revoke_share(user_id: str, scan_id: str) -> bool:
     with transaction() as conn:
         return conn.execute("DELETE FROM share_links WHERE scan_id = ? AND user_id = ?",
