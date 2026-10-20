@@ -139,6 +139,15 @@ CREATE TABLE IF NOT EXISTS firewall_usage (
     count   INTEGER DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
+CREATE TABLE IF NOT EXISTS finding_triage (
+    user_id     TEXT NOT NULL,
+    target_name TEXT NOT NULL,
+    finding_key TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    note        TEXT,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (user_id, target_name, finding_key)
+);
 CREATE TABLE IF NOT EXISTS gateway_events (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id         TEXT NOT NULL,

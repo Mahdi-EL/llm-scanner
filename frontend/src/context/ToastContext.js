@@ -31,7 +31,7 @@ function ToastItem({ id, msg, type, onClose }) {
     <div className="toast-item" style={{ '--tb': s.bg, '--tbo': s.border, '--tc': s.color }}>
       <div className="toast-icon-wrap" style={{ color: s.color }}><s.Icon /></div>
       <div className="toast-msg">{msg}</div>
-      <button className="toast-close-btn" onClick={() => onClose(id)} aria-label="dismiss">
+      <button className="toast-close-btn" onClick={() => onClose(id)} aria-label="Dismiss notification">
         <IcoX />
       </button>
     </div>
@@ -52,9 +52,10 @@ export function ToastProvider({ children }) {
   return (
     <Ctx.Provider value={show}>
       {children}
-      <div className="toast-root">
+      {/* a labelled live region: a landmark, and screen readers announce each toast */}
+      <section className="toast-root" aria-label="Notifications" aria-live="polite">
         {list.map(t => <ToastItem key={t.id} {...t} onClose={remove} />)}
-      </div>
+      </section>
     </Ctx.Provider>
   );
 }

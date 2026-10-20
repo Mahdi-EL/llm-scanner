@@ -1130,3 +1130,55 @@ def test_stripe_setup_subscribes_to_every_event_the_api_handles():
     source = (Path(__file__).resolve().parents[1] / "payment.py").read_text(encoding="utf-8")
     handled = set(re.findall(r'"((?:checkout|customer|invoice)\.[a-z_.]+)"', source))
     assert handled and handled <= set(stripe_setup.WEBHOOK_EVENTS)
+
+
+def test_triage_marks_carry_over_and_change_what_counts(client):
+    import store
+    user_id, headers = _register(client)
+    results = [{"category": "extraction", "attack": "leak it", "severity": "CRITICAL", "score": 9, "reason": "r"},
+               {"category": "extraction", "attack": "other", "severity": "SAFE", "score": 0, "reason": "r"}]
+    first = _seed_complete_scan(user_id, results, score=49, target="Bot")
+    scan = client.get(f"/scan/{first}", headers=headers).json()
+    key = next(r["key"] for r in scan["results"]["results"] if r["attack"] == "leak it")
+    assert scan["triage"] == {} and scan["triaged_summary"] is None
+
+    safe_key = next(r["key"] for r in scan["results"]["results"] if r["attack"] == "other")
+    r = client.put(f"/scan/{first}/triage", headers=headers, json={"key": safe_key, "status": "false_positive"})
+    assert r.status_code == 404                                         # only failed findings can be triaged
+    r = client.put(f"/scan/{first}/triage", headers=headers,
+                   json={"key": key, "status": "false_positive", "note": "The 'secret' is a public demo value."})
+    assert r.status_code == 200
+    scan = client.get(f"/scan/{first}", headers=headers).json()
+    assert scan["triage"][key]["status"] == "false_positive"
+    assert scan["triaged_summary"]["critical"] == 0 and scan["triaged_summary"]["security_score"] == 100
+
+    second = _seed_complete_scan(user_id, results, score=49, target="Bot")       # the next scan of the same target
+    assert key in client.get(f"/scan/{second}", headers=headers).json()["triage"]
+    r = client.post(f"/scan/{second}/retest", headers=headers, json={})
+    assert r.status_code == 400 and "nothing to re-test" in r.json()["detail"]     # the only failure is triaged
+    assert store.apply_triage(user_id, "Other bot", results) == results            # marks are per target
+
+    client.put(f"/scan/{first}/triage", headers=headers, json={"key": key, "status": "open"})
+    assert client.get(f"/scan/{first}", headers=headers).json()["triage"] == {}
+    assert client.put(f"/scan/{first}/triage", headers=headers, json={"key": key, "status": "nope"}).status_code == 422
+
+
+def test_a_triaged_finding_doesnt_raise_a_regression_alert(client, monkeypatch):
+    import notifications
+    import store
+    sent = []
+    monkeypatch.setattr(notifications, "send_webhook", lambda user, event, payload: sent.append(event))
+    monkeypatch.setattr(notifications, "_can_email", lambda user: False)
+    user_id, _ = _register(client)
+    user = api.auth_db.get_user_by_id(user_id)
+
+    def run(severity):
+        scan_id = scan_db.create_scan("Bot", "simulation", user_id=user_id, schedule_id="sch-t")
+        scan_db.update_scan(scan_id, status="complete", security_score=49 if severity == "CRITICAL" else 100,
+                            results_json=json.dumps({"results": [{"category": "c", "attack": "A", "severity": severity}]}))
+        return scan_db.get_scan(scan_id)
+
+    run("SAFE")
+    store.set_triage(user_id, "Bot", store.finding_key("c", "A"), "accepted_risk")
+    notifications._regression_alert(user, run("CRITICAL"), alert_drop=100)
+    assert sent == []

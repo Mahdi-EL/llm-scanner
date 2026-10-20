@@ -1,4 +1,5 @@
 """Saved targets, scan schedules, custom attack prompts and share links."""
+import hashlib
 import json
 import secrets
 import uuid
@@ -221,6 +222,59 @@ def share_expiry(user_id: str, scan_id: str) -> Optional[str]:
     if not row or parse_ts(row["expires_at"]) < datetime.now(timezone.utc):
         return None
     return row["expires_at"]
+
+
+# ── Triage: false positives and accepted risks ────────────────
+TRIAGE_STATUSES = ("false_positive", "accepted_risk")
+
+
+def finding_key(category: str, attack: str) -> str:
+    """Stable id for an attack against a target, the same in every scan of it."""
+    return hashlib.sha256(f"{category or ''}\x00{attack or ''}".encode()).hexdigest()[:32]
+
+
+def triage_for(user_id: str, target_name: str) -> dict:
+    """{finding_key: {"status", "note", "created_at"}} for one target."""
+    with transaction() as conn:
+        rows = conn.execute("SELECT finding_key, status, note, created_at FROM finding_triage "
+                            "WHERE user_id = ? AND target_name = ?", (user_id, target_name)).fetchall()
+    return {r["finding_key"]: {"status": r["status"], "note": r["note"], "created_at": r["created_at"]} for r in rows}
+
+
+def set_triage(user_id: str, target_name: str, key: str, status: Optional[str], note: Optional[str] = None):
+    """Marks a finding (status None or "open" clears the mark)."""
+    with transaction() as conn:
+        if status in TRIAGE_STATUSES:
+            conn.execute("INSERT INTO finding_triage (user_id, target_name, finding_key, status, note, created_at) "
+                         "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, target_name, finding_key) "
+                         "DO UPDATE SET status = excluded.status, note = excluded.note, created_at = excluded.created_at",
+                         (user_id, target_name, key, status, note, utcnow()))
+        else:
+            conn.execute("DELETE FROM finding_triage WHERE user_id = ? AND target_name = ? AND finding_key = ?",
+                         (user_id, target_name, key))
+
+
+def list_triage(user_id: str) -> list:
+    with transaction() as conn:
+        rows = conn.execute("SELECT target_name, finding_key, status, note, created_at FROM finding_triage "
+                            "WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def apply_triage(user_id: str, target_name: str, results: list) -> list:
+    """The results with findings marked false positive or accepted risk counted as SAFE (score 0);
+    each keeps what it was in "triage"."""
+    marks = triage_for(user_id, target_name)
+    if not marks:
+        return results
+    out = []
+    for r in results:
+        mark = marks.get(finding_key(r.get("category", ""), r.get("attack", "")))
+        if mark and r.get("severity") not in ("SAFE", "ERROR", None):
+            r = {**r, "severity": "SAFE", "score": 0,
+                 "triage": {**mark, "severity": r.get("severity"), "score": r.get("score")}}
+        out.append(r)
+    return out
 
 
 def revoke_share(user_id: str, scan_id: str) -> bool:
