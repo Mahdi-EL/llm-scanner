@@ -45,6 +45,7 @@ export default function NewScan() {
   const [testing, setTesting]   = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [catsError, setCatsError] = useState(false);
   const [chosen, setChosen]     = useState(null);        // null = all categories
   const [targets, setTargets]   = useState([]);
   const [targetId, setTargetId] = useState(params.get('target') || '');
@@ -54,8 +55,12 @@ export default function NewScan() {
   const [models, setModels] = useState({ default_target: '', groq: [] });
   const savedOnce = useRef(null);   // {key, id} of a target saved by an earlier attempt that then failed
 
+  const loadCategories = () => scansAPI.categories()
+    .then(r => { setCategories(r.data.categories); setCatsError(false); })
+    .catch(() => setCatsError(true));
+
   useEffect(() => {
-    scansAPI.categories().then(r => setCategories(r.data.categories)).catch(() => {});
+    loadCategories();
     targetsAPI.list().then(r => setTargets(r.data.targets)).catch(() => {});
     promptsAPI.list().then(r => setCustomCount(r.data.prompts.length)).catch(() => {});
     scansAPI.models().then(r => setModels(r.data)).catch(() => {});
@@ -270,6 +275,11 @@ export default function NewScan() {
           <button type="button" className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => setChosen(null)}>Select all</button>
           <button type="button" className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => setChosen([])}>Clear</button>
         </div>
+        {catsError && (
+          <div role="alert" style={{ fontSize:'13px', color:'#b42318', marginBottom:'10px' }}>
+            Couldn’t load the attack categories. <button type="button" className="btn-ghost" style={{ fontSize:'12px' }} onClick={loadCategories}>Retry</button>
+          </div>
+        )}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(210px, 1fr))', gap:'6px' }}>
           {categories.map(c => {
             const on = !chosen || chosen.includes(c.id);
