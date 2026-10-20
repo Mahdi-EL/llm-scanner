@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { scansAPI } from '../services/api';
-import { scoreColor } from '../utils/format';
+import { scoreColor, shortDate } from '../utils/format';
 import CenterCard from '../components/CenterCard';
 
 const SEV_COLORS = { CRITICAL:'#b42318', HIGH:'#c4320a', MEDIUM:'#a15c07', LOW:'#4b6b2f', SAFE:'#3d6b4f', ERROR:'#6b6b6b' };
@@ -14,11 +14,16 @@ export default function SharedReport() {
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
-    scansAPI.shared(token).then(r => setData(r.data)).catch(() => setError(true));
+    scansAPI.shared(token).then(r => setData(r.data)).catch(e => setError(e?.response?.status === 404 ? 'gone' : 'other'));
   }, [token]);
 
   const failed = useMemo(() => (data?.results || []).filter(r => !['SAFE','ERROR'].includes(r.severity)), [data]);
 
+  if (error === 'other') return (
+    <CenterCard title="Couldn’t load this report" subtitle="Check your connection and try again in a moment.">
+      <button className="btn-outline" onClick={() => window.location.reload()}>Try again</button>
+    </CenterCard>
+  );
   if (error) return (
     <CenterCard title="This link has expired" subtitle="Share links are valid for a limited time. Ask the owner for a new one.">
       <Link to="/" className="btn-outline" style={{ display:'inline-flex' }}>About LLM Scanner</Link>
@@ -33,7 +38,7 @@ export default function SharedReport() {
     <div style={{ maxWidth:'880px', margin:'0 auto', padding:'48px 20px 64px' }}>
       <div style={{ fontSize:'12px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--t3)' }}>LLM Scanner · shared report</div>
       <h1 style={{ fontFamily:'Georgia, serif', fontSize:'34px', fontWeight:600, margin:'6px 0' }}>{data.target_name}</h1>
-      <div style={{ fontSize:'13px', color:'var(--t3)' }}>Scanned {data.scan_date} · {s.tested} attacks graded</div>
+      <div style={{ fontSize:'13px', color:'var(--t3)' }}>Scanned {data.scan_date} · {s.tested} attacks graded{data.expires_at && <> · Link expires {shortDate(data.expires_at, true)}</>}</div>
 
       <div style={{ display:'flex', gap:'32px', alignItems:'flex-end', margin:'28px 0 8px', flexWrap:'wrap' }}>
         <div>

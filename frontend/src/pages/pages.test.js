@@ -10,7 +10,7 @@ vi.mock('../services/api', async () => {
     plansAPI: { list: vi.fn(), checkout: vi.fn(), portal: vi.fn() },
     scansAPI: {
       get: vi.fn(), list: vi.fn(), compare: vi.fn(), categories: vi.fn(), cancel: vi.fn(),
-      share: vi.fn(), delete: vi.fn(),
+      share: vi.fn(), delete: vi.fn(), shared: vi.fn(),
     },
     downloadReport: vi.fn(),
   };
@@ -22,6 +22,7 @@ vi.mock('../context/ToastContext', () => ({ useToast: () => vi.fn() }));
 const api = await import('../services/api');
 const { default: Pricing } = await import('./Pricing');
 const { default: Results } = await import('./Results');
+const { default: SharedReport } = await import('./SharedReport');
 
 function renderAt(path, element, route) {
   return render(
@@ -78,4 +79,24 @@ test('Results lists every finding with "show more" and downloads with auth', asy
   expect(screen.getAllByText(/^attack \d+$/)).toHaveLength(28);
   fireEvent.click(screen.getByText('Download PDF'));
   await waitFor(() => expect(api.downloadReport).toHaveBeenCalledWith('done', 'pdf'));
+});
+
+test('SharedReport shows when the link expires', async () => {
+  api.scansAPI.shared.mockResolvedValue({ data: {
+    target_name: 'Bot', scan_date: '2026-10-16', expires_at: '2026-10-23T10:00:00+00:00',
+    summary: { security_score: 90, grade: 'A', critical: 0, high: 0, medium: 0, low: 0, safe: 5, tested: 5 },
+    recommendations: [], results: [],
+  } });
+  renderAt('/shared/tok', <SharedReport />, '/shared/:token');
+  expect(await screen.findByText(/Link expires Oct 23, 2026/)).toBeInTheDocument();
+});
+
+test('SharedReport tells an expired link apart from a network error', async () => {
+  api.scansAPI.shared.mockRejectedValueOnce({ response: { status: 404 } });
+  const { unmount } = renderAt('/shared/old', <SharedReport />, '/shared/:token');
+  expect(await screen.findByText('This link has expired')).toBeInTheDocument();
+  unmount();
+  api.scansAPI.shared.mockRejectedValueOnce(new Error('Network Error'));
+  renderAt('/shared/tok', <SharedReport />, '/shared/:token');
+  expect(await screen.findByText('Couldn’t load this report')).toBeInTheDocument();
 });
