@@ -96,8 +96,12 @@ def safe_session() -> requests.Session:
 
 
 def safe_post(url: str, **kwargs) -> requests.Response:
+    """POSTs and returns the response with its status and headers only: the body is never read,
+    so a receiver can't make us download a huge reply."""
     check_url(url)
     kwargs.setdefault("timeout", 10)
     kwargs["allow_redirects"] = False
     with safe_session() as session:
-        return session.post(url, **kwargs)
+        response = session.post(url, stream=True, **kwargs)
+        response.close()
+        return response
