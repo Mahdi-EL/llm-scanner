@@ -583,3 +583,21 @@ def test_translated_pdf_has_no_emoji_and_refuses_arabic(tmp_path):
     assert _PICTOGRAPHS.sub("", "CRITIQUE 🚨").strip() == "CRITIQUE" and _PICTOGRAPHS.sub("", "MOYEN ⚠️").strip() == "MOYEN"
     with pytest.raises(ValueError):
         generate_multilingual_report(str(src), str(tmp_path / "ar.pdf"), "Bot", "ar")
+
+
+def test_cli_comparison_uses_current_summaries(tmp_path):
+    import json as _json
+    from compare import compare_scans, generate_comparison_pdf
+
+    def write(name, severities):
+        p = tmp_path / name
+        p.write_text(_json.dumps({"scan_date": "2026-10-20", "results": [
+            {"category": "extraction", "attack": f"a{i}", "severity": s} for i, s in enumerate(severities)]}))
+        return str(p)
+    before = write("b.json", ["CRITICAL", "SAFE", "HIGH"])
+    after = write("a.json", ["SAFE", "SAFE", "HIGH"])
+    diff = compare_scans(before, after)
+    assert diff["before"]["critical"] == 1 and diff["after"]["critical"] == 0 and diff["same_attacks"]
+    assert len(diff["fixed"]) == 1 and diff["still_failing"] == 1 and diff["verdict"] == "Improved"
+    assert compare_scans(before, write("c.json", ["SAFE"]))["verdict"].startswith("Different attacks")
+    assert os.path.getsize(generate_comparison_pdf(before, after, str(tmp_path / "cmp.pdf"), "Bot")) > 1000
