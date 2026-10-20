@@ -10,10 +10,11 @@ export default function CustomPrompts() {
   const [category, setCategory] = useState('');
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(() => promptsAPI.list()
-    .then(r => { setPrompts(r.data.prompts); setLimit(r.data.limit); })
-    .catch(() => {}), []);
+    .then(r => { setPrompts(r.data.prompts); setLimit(r.data.limit); setLoadError(false); })
+    .catch(() => setLoadError(true)), []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -36,8 +37,13 @@ export default function CustomPrompts() {
     <section style={{ background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'10px', padding:'20px 22px', marginBottom:'24px' }}>
       <h2 style={{ fontSize:'15px', fontWeight:'700', marginBottom:'2px' }}>Your custom attacks</h2>
       <p style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'14px' }}>
-        Add prompts for risks specific to your product (refund abuse, account takeover, internal tools…). They run with every scan unless you untick them. {prompts.length}/{limit} used.
+        Add prompts for risks specific to your product (refund abuse, account takeover, internal tools…). They run with every scan unless you untick them.{!loadError && ` ${prompts.length}/${limit} used.`}
       </p>
+      {loadError && (
+        <div role="alert" style={{ fontSize:'13px', color:'#b42318', marginBottom:'12px' }}>
+          Couldn’t load your custom attacks. <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={load}>Retry</button>
+        </div>
+      )}
       <div className="custom-prompt-form">
         <input aria-label="Attack category" value={category} onChange={e => setCategory(e.target.value)} placeholder="Category, e.g. refunds" maxLength={40} />
         <textarea aria-label="Attack prompt" value={text} onChange={e => setText(e.target.value)} maxLength={2000} style={{ minHeight:'40px' }}

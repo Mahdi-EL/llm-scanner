@@ -54,6 +54,7 @@ export default function Settings() {
   const [pwForm, setPwForm]     = useState({ current:'', next:'', confirm:'' });
   const [pwLoading, setPwLoading] = useState(false);
   const [keys, setKeys]         = useState([]);
+  const [keysError, setKeysError] = useState(false);
   const [keyName, setKeyName]   = useState('');
   const [newKey, setNewKey]     = useState(null);
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -61,7 +62,9 @@ export default function Settings() {
   const [deletePw, setDeletePw] = useState('');
   const [busy, setBusy]         = useState('');
 
-  const loadKeys = useCallback(() => keysAPI.list().then(r => setKeys(r.data.keys)).catch(() => {}), []);
+  const loadKeys = useCallback(() => keysAPI.list()
+    .then(r => { setKeys(r.data.keys); setKeysError(false); })
+    .catch(() => setKeysError(true)), []);
 
   useEffect(() => { loadKeys(); }, [loadKeys]);
   useEffect(() => { setWebhookUrl(user?.webhook_url || ''); }, [user?.webhook_url]);
@@ -212,7 +215,11 @@ export default function Settings() {
           <input aria-label="API key name" value={keyName} onChange={e => setKeyName(e.target.value)} maxLength={60} placeholder="Key name, e.g. GitHub Actions" style={{ flex:'1 1 200px', minWidth:0 }} />
           <button className="btn-primary" style={{ fontSize:'12px' }} disabled={busy==='key'} onClick={createKey}>Create key</button>
         </div>
-        {keys.length === 0 ? (
+        {keysError ? (
+          <div role="alert" style={{ padding:'16px 20px', fontSize:'13px', color:'#b42318' }}>
+            Couldn’t load your keys. <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={loadKeys}>Retry</button>
+          </div>
+        ) : keys.length === 0 ? (
           <div style={{ padding:'16px 20px', fontSize:'13px', color:'var(--t3)' }}>No keys yet.</div>
         ) : keys.map((k, i) => (
           <Row key={k.id} last={i === keys.length - 1} label={k.name}
