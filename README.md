@@ -40,6 +40,8 @@ and checkpoints, so a server restart resumes a scan instead of losing it.
 - Triage (false positive / accepted risk, kept per target) and evidence reports for audits: scope, method,
   OWASP LLM Top 10 coverage, triage decisions, re-test proof and a sign-off block (paid plans)
 - White-label reports: your organisation's name instead of LLM Scanner (paid plans)
+- Teams: invite people by email as viewer, member or admin; switch workspaces in the sidebar
+  (Pro: 5 people per workspace, `PRO_SEATS`; Enterprise: no limit)
 - Account data export and deletion
 
 ## Quick start (local)

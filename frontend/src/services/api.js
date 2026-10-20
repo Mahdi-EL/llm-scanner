@@ -7,9 +7,13 @@ const REFRESH_KEY = 'refresh_token';
 
 // Clear ONLY auth keys — never wipe the whole localStorage (preserves UI prefs
 // like sidebar state, etc.)
+// The team workspace the app acts in (absent = the person's own account)
+export const WORKSPACE_KEY = 'workspace_id';
+
 export function clearAuth() {
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
+  localStorage.removeItem(WORKSPACE_KEY);
 }
 
 export function saveTokens(data) {
@@ -23,6 +27,8 @@ const api = axios.create({ baseURL: API_URL });
 api.interceptors.request.use(cfg => {
   const token = localStorage.getItem(ACCESS_KEY);
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
+  const workspace = localStorage.getItem(WORKSPACE_KEY);
+  if (workspace) cfg.headers['X-Workspace'] = workspace;
   return cfg;
 });
 
@@ -180,6 +186,15 @@ export const schedulesAPI = {
 
 export const publicAPI = {
   leakCheck: systemPrompt => api.post('/public/leak-check', { system_prompt: systemPrompt }, { timeout: 90000 }),
+};
+
+export const teamAPI = {
+  get         : ()            => api.get('/api/team'),
+  invite      : (email, role) => api.post('/api/team/invites', { email, role }),
+  revokeInvite: id            => api.delete(`/api/team/invites/${id}`),
+  setRole     : (id, role)    => api.put(`/api/team/members/${id}`, { role }),
+  remove      : id            => api.delete(`/api/team/members/${id}`),
+  accept      : token         => api.post('/api/team/accept', { token }),
 };
 
 export const gatewayAPI = {

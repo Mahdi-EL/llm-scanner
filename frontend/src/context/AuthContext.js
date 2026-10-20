@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { authAPI, clearAuth, saveTokens } from '../services/api';
+import { authAPI, clearAuth, saveTokens, WORKSPACE_KEY } from '../services/api';
+
+// In a team workspace, plan, quota and workspace settings come from it; identity stays the person's.
+const WORKSPACE_FIELDS = ['plan', 'scans_count', 'scans_this_month', 'scan_limit', 'full_scans', 'webhook_url',
+                          'has_webhook_secret', 'has_billing', 'report_brand'];
+function withWorkspace(me) {
+  if (!me?.workspace) return me;
+  return { ...me, ...Object.fromEntries(WORKSPACE_FIELDS.map(k => [k, me.workspace[k]])) };
+}
 
 const AuthContext = createContext(null);
 
@@ -18,8 +26,11 @@ export function AuthProvider({ children }) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const { data } = await authAPI.me();
-        setUser(data); setOffline(false); setLoading(false);
-        return data;
+        const chosen = localStorage.getItem(WORKSPACE_KEY);
+        if (chosen && !data.workspace) localStorage.removeItem(WORKSPACE_KEY);   // left it, or was removed
+        const merged = withWorkspace(data);
+        setUser(merged); setOffline(false); setLoading(false);
+        return merged;
       } catch (err) {
         if (err.response?.status === 401) { clearAuth(); setUser(null); setLoading(false); return null; }
         await wait(1500 * (attempt + 1));
@@ -45,6 +56,13 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  // A full reload, so nothing loaded for the previous workspace stays on screen
+  const switchWorkspace = id => {
+    if (!id || id === user?.id) localStorage.removeItem(WORKSPACE_KEY);
+    else localStorage.setItem(WORKSPACE_KEY, id);
+    window.location.assign('/');
+  };
+
   const logout = async () => {
     setUser(null);
     await authAPI.logout();
@@ -52,7 +70,8 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{ user, loading, offline, login, register, logout,
-                                   refreshUser: loadUser, setUser, saveTokens }}>
+                                   refreshUser: loadUser, setUser, saveTokens, switchWorkspace,
+                                   role: user?.workspace?.role || 'owner' }}>
       {children}
     </AuthContext.Provider>
   );

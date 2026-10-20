@@ -46,6 +46,13 @@ failures, and a sign-off block. It is testing evidence, not a compliance certifi
 Yes, on paid plans: Settings → Report branding. PDF, HTML, Markdown and evidence reports then show
 your organisation's name instead of LLM Scanner, for reports you hand to your own clients.
 
+**Can my team work in the same account?**
+On paid plans: Settings → Team → invite by email. The link works once, for that address, for 7 days.
+Viewers read scans and reports; members also run and change scans, targets, schedules and custom
+attacks; admins also manage API keys, the webhook, report branding and the team; only the owner
+manages billing. People switch between their own workspace and yours in the sidebar. Each person
+keeps their own password and settings, and the workspace's plan and scan quota are shared.
+
 **What is an ERROR finding?**
 The target or the judge couldn't be reached, or the judge's answer couldn't be read. Errors are
 excluded from the score and listed in the report, so check them before trusting a scan. A scan

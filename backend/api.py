@@ -206,7 +206,7 @@ app.add_middleware(
     allow_origins    =config.ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods    =["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers    =["Authorization", "Content-Type", "X-API-Key"],
+    allow_headers    =["Authorization", "Content-Type", "X-API-Key", "X-Workspace"],
     expose_headers   =["Content-Disposition"],
 )
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import TeamPanel from '../components/TeamPanel';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { authAPI, keysAPI, webhookAPI, plansAPI, saveBlob, errorMessage, brandingAPI } from '../services/api';
@@ -46,7 +47,8 @@ function SecretBox({ value, onDone, note }) {
 }
 
 export default function Settings() {
-  const { user, logout, refreshUser, saveTokens } = useAuth();
+  const { user, logout, refreshUser, saveTokens, role } = useAuth();
+  const canAdmin = role === 'owner' || role === 'admin';
   const navigate = useNavigate();
   const toast    = useToast();
   const [params, setParams] = useSearchParams();
@@ -190,7 +192,7 @@ export default function Settings() {
       <Section title="Plan and usage">
         <Row label={`${(user?.plan || 'free').replace(/^./, c => c.toUpperCase())} plan`} desc={usage} last>
           <div style={{ display:'flex', gap:'8px' }}>
-            {user?.has_billing && <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy==='portal'} onClick={openPortal}>Manage billing</button>}
+            {user?.has_billing && role === 'owner' && <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy==='portal'} onClick={openPortal}>Manage billing</button>}
             <button className="btn-primary" style={{ fontSize:'12px' }} onClick={() => navigate('/pricing')}>
               {user?.plan === 'free' ? 'Upgrade' : 'Change plan'}
             </button>
@@ -221,6 +223,15 @@ export default function Settings() {
         </form>
       </Section>
 
+      <Section title="Team" desc={user?.workspace ? `People who work in ${user.workspace.name}.` : 'People who work in your workspace: they see its scans and, depending on their role, run scans or manage settings.'}>
+        <TeamPanel />
+      </Section>
+
+      {!canAdmin && (
+        <Section title="Workspace settings" desc={`API keys, the webhook and report branding of ${user?.workspace?.name || 'this workspace'} are managed by its owner and admins.`}><div /></Section>
+      )}
+
+      {canAdmin && <>
       <Section title="API keys" desc="For CI pipelines, the SDK and the VS Code extension. Send the key in an X-API-Key header.">
         {newKey && <SecretBox value={newKey} onDone={() => setNewKey(null)} note="Copy this key now. For your safety we only store its hash, so it won’t be shown again." />}
         <div style={{ display:'flex', gap:'8px', padding:'16px 20px', borderBottom:'1px solid var(--b1)', flexWrap:'wrap' }}>
@@ -260,6 +271,8 @@ export default function Settings() {
           {!paidPlan && <span style={{ fontSize:'12px', color:'var(--t3)' }}>Part of the paid plans. <a href="/pricing" onClick={e => { e.preventDefault(); navigate('/pricing'); }}>See plans</a></span>}
         </div>
       </Section>
+
+      </>}
 
       <Section title="Sessions and data">
         <Row label="Sign out everywhere" desc="Ends every session on every device, including this one.">

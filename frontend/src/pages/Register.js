@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { safeNext } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/Logo';
 import { errorMessage } from '../services/api';
@@ -61,6 +62,7 @@ const SCAN_ATTACKS = [
 export default function Register() {
   const { register } = useAuth();
   const navigate     = useNavigate();
+  const [params]     = useSearchParams();
   const [form, setForm] = useState({ username:'', email:'', password:'', confirm:'' });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -75,7 +77,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form.username, form.email, form.password);
-      navigate('/');
+      navigate(safeNext(params.get('next')), { replace: true });
     } catch (err) {
       setError(errorMessage(err, 'Registration failed. Please try again.'));
     } finally { setLoading(false); }
