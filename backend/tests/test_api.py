@@ -824,3 +824,28 @@ def test_scan_stats_cover_every_finished_scan(client):
     # a filtered list reports the real count, not the page size
     page = client.get("/scans?target_name=Other&limit=1", headers=headers).json()
     assert page["total"] == 2 and len(page["scans"]) == 1
+
+
+def test_webhooks_retry_transient_failures_only(monkeypatch):
+    import notifications
+    monkeypatch.setattr(notifications.time, "sleep", lambda s: None)
+    user = {"id": "u", "webhook_url": "https://hooks.example.com/x", "webhook_secret": "whsec_x"}
+
+    def deliver(answers):
+        calls = []
+
+        def post(url, **kw):
+            calls.append(kw["headers"])
+            answer = answers[len(calls) - 1]
+            if isinstance(answer, Exception):
+                raise answer
+            return type("R", (), {"status_code": answer})()
+        monkeypatch.setattr(notifications.netguard, "safe_post", post)
+        return notifications.send_webhook(user, "ping", {}), calls
+
+    ok, calls = deliver([503, ConnectionError("reset"), 200])
+    assert ok and len(calls) == 3 and all("X-LLMScanner-Signature" in h for h in calls)
+    ok, calls = deliver([404, 200])
+    assert not ok and len(calls) == 1          # the receiver said no: don't hammer it
+    ok, calls = deliver([500, 500, 500, 200])
+    assert not ok and len(calls) == 3
