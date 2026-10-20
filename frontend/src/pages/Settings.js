@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { authAPI, keysAPI, webhookAPI, plansAPI, saveBlob, errorMessage } from '../services/api';
+import { authAPI, keysAPI, webhookAPI, plansAPI, saveBlob, errorMessage, brandingAPI } from '../services/api';
 import { relTime } from '../utils/format';
 
 function Section({ title, desc, children, danger }) {
@@ -109,6 +109,15 @@ export default function Settings() {
   const revokeKey = id => run(`revoke-${id}`, async () => {
     if (!window.confirm('Revoke this key? Anything using it stops working immediately.')) return;
     await keysAPI.revoke(id); loadKeys(); toast('Key revoked.', 'success');
+  });
+
+  const [brand, setBrand] = useState(user?.report_brand || '');
+  useEffect(() => { setBrand(user?.report_brand || ''); }, [user?.report_brand]);
+  const paidPlan = user?.plan && user.plan !== 'free';
+  const saveBrand = () => run('brand', async () => {
+    await brandingAPI.set(brand.trim());
+    await refreshUser();
+    toast(brand.trim() ? 'Reports now carry your brand.' : 'Reports are LLM Scanner-branded again.', 'success');
   });
 
   const saveWebhook = () => run('webhook', async () => {
@@ -240,6 +249,15 @@ export default function Settings() {
           <button className="btn-primary" style={{ fontSize:'12px' }} disabled={busy==='webhook'} onClick={saveWebhook}>Save</button>
           {user?.webhook_url && <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy==='test'} onClick={testWebhook}>Send test</button>}
           {user?.has_webhook_secret && <button className="btn-ghost" style={{ fontSize:'12px' }} disabled={busy==='rotate'} onClick={rotateSecret}>New secret</button>}
+        </div>
+      </Section>
+
+      <Section title="Report branding" desc="Your organisation's name on PDF, HTML, Markdown and evidence reports instead of LLM Scanner, for reports you hand to clients.">
+        <div style={{ display:'flex', gap:'8px', padding:'16px 20px', flexWrap:'wrap', alignItems:'center' }}>
+          <input aria-label="Name on reports" value={brand} onChange={e => setBrand(e.target.value)} maxLength={80}
+            placeholder="e.g. Acme Security Consulting" disabled={!paidPlan} style={{ flex:1, minWidth:'240px' }} />
+          <button className="btn-primary" style={{ fontSize:'12px' }} disabled={!paidPlan || busy==='brand'} onClick={saveBrand}>Save</button>
+          {!paidPlan && <span style={{ fontSize:'12px', color:'var(--t3)' }}>Part of the paid plans. <a href="/pricing" onClick={e => { e.preventDefault(); navigate('/pricing'); }}>See plans</a></span>}
         </div>
       </Section>
 

@@ -312,6 +312,11 @@ def revoke_api_key(user_id: str, key_id: str) -> bool:
         return cur.rowcount > 0
 
 
+def set_report_brand(user_id: str, brand: Optional[str]):
+    with transaction() as conn:
+        conn.execute("UPDATE users SET report_brand = ? WHERE id = ?", (brand or None, user_id))
+
+
 # ── Per-user webhook ──────────────────────────────────────────
 def update_webhook(user_id: str, url: Optional[str]) -> Optional[str]:
     """Sets or clears the webhook URL. Returns the signing secret (created on first use)."""

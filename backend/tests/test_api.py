@@ -1258,3 +1258,24 @@ def test_free_leak_check_says_when_the_model_is_down(client, monkeypatch):
     monkeypatch.setattr(config, "LEAK_CHECKS_PER_DAY", 10_000)
     r = client.post("/public/leak-check", json={"system_prompt": "You are a helpful assistant for a bank."})
     assert r.status_code == 503
+
+
+def test_white_label_reports_carry_the_account_brand(client):
+    user_id, headers = _register(client)
+    scan_id = _seed_complete_scan(user_id, RESULTS, target="Bot")
+    assert client.put("/api/branding", headers=headers, json={"brand": "Acme Security"}).status_code == 402   # free
+    with api.auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET plan = 'pro' WHERE id = ?", (user_id,))
+    r = client.put("/api/branding", headers=headers, json={"brand": "  Acme\nSecurity  "})
+    assert r.status_code == 200 and r.json()["report_brand"] == "Acme Security"      # one clean line
+    assert client.get("/auth/me", headers=headers).json()["report_brand"] == "Acme Security"
+
+    html = client.get(f"/download/html/{scan_id}", headers=headers).text
+    assert "Acme Security · Security report" in html and "Prepared by Acme Security" in html
+    assert "LLM Scanner" not in html
+    md = client.get(f"/download/md/{scan_id}", headers=headers).text
+    assert md.startswith("# Acme Security Security Report") and "LLM Scanner" not in md
+    assert client.get(f"/download/{scan_id}", headers=headers).content.startswith(b"%PDF")
+
+    client.put("/api/branding", headers=headers, json={"brand": ""})                  # removed: back to LLM Scanner
+    assert "LLM Scanner · Security report" in client.get(f"/download/html/{scan_id}", headers=headers).text

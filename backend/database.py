@@ -210,6 +210,7 @@ USER_COLUMNS = {
     "tokens_valid_after"    : "TEXT",
     "verify_token"          : "TEXT",
     "verify_token_expires"  : "TEXT",
+    "report_brand"          : "TEXT",
 }
 
 

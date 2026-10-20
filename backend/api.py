@@ -295,6 +295,7 @@ def _public_user(user: dict) -> dict:
         "webhook_url"       : user.get("webhook_url"),
         "has_webhook_secret": bool(user.get("webhook_secret")),
         "has_billing"       : bool(user.get("stripe_customer_id")),
+        "report_brand"      : user.get("report_brand"),
         "full_scans"        : _can_run_full_scans(user),
     }
 
@@ -928,7 +929,24 @@ _FORMATS = {
 }
 
 
-def _report_file(scan: dict, fmt: str) -> FileResponse:
+def _report_brand(user: dict) -> Optional[str]:
+    """The account's own name for white-labelled reports (paid plans), else None."""
+    return user.get("report_brand") if user.get("plan", "free") != "free" else None
+
+
+def _report_file(scan: dict, fmt: str, user: Optional[dict] = None) -> FileResponse:
+    brand = _report_brand(user) if user else None
+    if brand and fmt != "json":
+        import tempfile
+
+        from starlette.background import BackgroundTask
+        handle, path = tempfile.mkstemp(suffix=f".{fmt}")
+        os.close(handle)
+        report.write_one({**_report_data(scan), "brand": brand}, fmt, path, scan["target_name"])
+        return FileResponse(path=path, media_type=_FORMATS[fmt][1],
+                            filename=f"Security_Report_{scan['scan_id']}.{fmt}",
+                            headers={"Content-Security-Policy": "sandbox"} if fmt == "html" else None,
+                            background=BackgroundTask(os.remove, path))
     column, media_type = _FORMATS[fmt]
     path = scan.get(column)
     if not path or not os.path.exists(path):
@@ -949,13 +967,13 @@ def _report_file(scan: dict, fmt: str) -> FileResponse:
 @app.get("/download/html/{scan_id}")
 def download_html(scan_id: str, user: dict = Depends(require_user)):
     """Downloads the HTML report (rebuilt from the stored results if the file is gone)."""
-    return _report_file(_get_complete_scan(scan_id, user), "html")
+    return _report_file(_get_complete_scan(scan_id, user), "html", user)
 
 
 @app.get("/download/md/{scan_id}")
 def download_markdown(scan_id: str, user: dict = Depends(require_user)):
     """Downloads the Markdown report."""
-    return _report_file(_get_complete_scan(scan_id, user), "md")
+    return _report_file(_get_complete_scan(scan_id, user), "md", user)
 
 
 @app.get("/download/json/{scan_id}")
@@ -972,7 +990,7 @@ def download_evidence(scan_id: str, user: dict = Depends(require_user)):
         raise HTTPException(status_code=402, detail="The evidence report is part of the paid plans.")
     from db import transaction
     scan = _get_complete_scan(scan_id, user)
-    data = _report_data(scan)
+    data = {**_report_data(scan), "brand": _report_brand(user)}
     triaged = store.apply_triage(user["id"], scan["target_name"], data.get("results", []))
     with transaction() as conn:
         retests = evidence.retests_of(conn, user["id"], scan)
@@ -985,7 +1003,7 @@ def download_evidence(scan_id: str, user: dict = Depends(require_user)):
 @app.get("/download/{scan_id}")
 def download_pdf(scan_id: str, user: dict = Depends(require_user)):
     """Downloads the PDF report."""
-    return _report_file(_get_complete_scan(scan_id, user), "pdf")
+    return _report_file(_get_complete_scan(scan_id, user), "pdf", user)
 
 
 # ── Share links (read-only, expiring) ─────────────────────────
@@ -1349,6 +1367,19 @@ def revoke_api_key_endpoint(key_id: str, user: dict = Depends(require_session)):
 
 
 # ── Notification webhook ──────────────────────────────────────
+class BrandingBody(BaseModel):
+    brand: Optional[DisplayName] = Field(None, max_length=80)
+
+
+@app.put("/api/branding")
+def set_branding(body: BrandingBody, user: dict = Depends(require_session)):
+    """Your organisation's name on reports instead of LLM Scanner (white-label, paid plans). Empty to remove."""
+    if user.get("plan", "free") == "free":
+        raise HTTPException(status_code=402, detail="Report branding is part of the paid plans.")
+    auth_db.set_report_brand(user["id"], (body.brand or "").strip() or None)
+    return {"report_brand": (body.brand or "").strip() or None}
+
+
 @app.get("/api/webhook")
 def get_webhook(user: dict = Depends(require_user)):
     """Your webhook URL and whether a signing secret exists."""
