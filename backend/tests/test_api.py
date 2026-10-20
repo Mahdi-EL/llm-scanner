@@ -801,3 +801,13 @@ def test_regression_alerts_compare_runs_of_the_same_schedule(client, monkeypatch
     worse = [dict(f, severity="CRITICAL") if f["attack"] == "A" else f for f in full]
     notifications._regression_alert(user, run(worse, 49), alert_drop=5)
     assert sent[-1][0] == "scan.regression" and sent[-1][1]["new_critical"] == 1
+
+
+def test_regression_email_says_what_happened(monkeypatch):
+    import email_service
+    sent = []
+    monkeypatch.setattr(email_service, "_send", lambda to, subject, html: sent.append((subject, html)) or True)
+    email_service.send_score_drop("a@b.c", "Bot <x>", 80, 60, "s1")
+    email_service.send_score_drop("a@b.c", "Bot", 49, 49, "s2", new_critical=2)
+    assert "dropped to 60" in sent[0][0] and "down from 80" in sent[0][1] and "&lt;x&gt;" in sent[0][1]
+    assert "2 new critical findings" in sent[1][0] and "down from" not in sent[1][1]
