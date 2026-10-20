@@ -69,8 +69,11 @@ export default function Settings() {
   useEffect(() => { loadKeys(); }, [loadKeys]);
   useEffect(() => { setWebhookUrl(user?.webhook_url || ''); }, [user?.webhook_url]);
   useEffect(() => {
-    if (params.get('payment') === 'success') {
-      toast('Payment received. Your plan updates in a few seconds.', 'success', 6000);
+    const payment = params.get('payment');
+    if (payment === 'success' || payment === 'updated') {
+      toast(payment === 'success' ? 'Payment received. Your plan updates in a few seconds.'
+                                  : 'Plan changed. The difference is prorated on your next invoice; your plan updates in a few seconds.',
+            'success', 6000);
       setParams({}, { replace: true });
       setTimeout(refreshUser, 3000);
     }

@@ -127,3 +127,17 @@ test('Reports says it could not load instead of showing an empty account', async
   await waitFor(() => expect(screen.queryByText(/load your reports/)).toBeNull());
   expect(api.scansAPI.listAll).toHaveBeenCalledTimes(2);
 });
+
+test('Pricing offers a yearly switch when yearly prices exist', async () => {
+  api.plansAPI.list.mockResolvedValue({ data: { plans: {
+    free: { name: 'Free', amount: 0, currency: 'eur', interval: 'month', scan_limit: 10, features: [], purchasable: false, trial_days: 0, yearly: null },
+    pro: { name: 'Pro', amount: 4900, currency: 'eur', interval: 'month', scan_limit: 200, features: [], purchasable: true, trial_days: 14,
+           yearly: { amount: 49000, currency: 'eur', interval: 'year' } },
+  } } });
+  renderAt('/pricing', <Pricing />, '/pricing');
+  expect(await screen.findByText('€49')).toBeInTheDocument();
+  expect(screen.getByText('14-day free trial')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Yearly'));
+  expect(screen.getByText('€490')).toBeInTheDocument();
+  expect(screen.getByText(/17% less than monthly/)).toBeInTheDocument();
+});

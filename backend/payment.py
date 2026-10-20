@@ -63,6 +63,7 @@ PLANS = {
         "currency"      : "eur",
         "interval"      : "month",
         "price_id"      : os.getenv("STRIPE_PRO_PRICE_ID", ""),
+        "yearly_price_id": os.getenv("STRIPE_PRO_YEARLY_PRICE_ID", ""),
         "scan_limit"    : _PRO_SCANS,
         "firewall_daily": _PRO_FIREWALL,
         "features"      : [f"{_PRO_SCANS:,} scans per month", "Everything in Free",
@@ -75,6 +76,7 @@ PLANS = {
         "currency"      : "eur",
         "interval"      : "month",
         "price_id"      : os.getenv("STRIPE_ENTERPRISE_PRICE_ID", ""),
+        "yearly_price_id": os.getenv("STRIPE_ENTERPRISE_YEARLY_PRICE_ID", ""),
         "scan_limit"    : None,     # unlimited
         "firewall_daily": _ENTERPRISE_FIREWALL,
         "features"      : ["Unlimited scans", "Everything in Pro",
@@ -142,20 +144,65 @@ def get_plans_public() -> dict:
                 entry.update(live)
         entry["purchasable"] = bool(plan["price_id"]) and billing_enabled()
         entry["trial_days"]  = config.STRIPE_TRIAL_DAYS if entry["purchasable"] else 0
+        entry["yearly"] = None
+        if plan.get("yearly_price_id") and billing_enabled():
+            live = _live_price(plan["yearly_price_id"])
+            if live:
+                entry["yearly"] = {"amount": live["amount"], "currency": live["currency"], "interval": "year"}
         out[key] = entry
     return out
 
 
-def create_checkout_session(plan: str, user: dict) -> dict:
-    """Stripe Checkout for a subscription. Returns {"url", "session_id"} or {"error"}."""
+def _price_ids(plan: dict) -> set:
+    return {p for p in (plan.get("price_id"), plan.get("yearly_price_id")) if p}
+
+
+_LIVE_STATUSES = ("active", "trialing", "past_due")
+
+
+def _switch_subscription(stripe, user: dict, plan: str, price_id: str) -> dict:
+    """Moves an existing subscription to another price (prorated) instead of starting a second one.
+    {} when there is no live subscription to switch, so the caller opens a normal checkout."""
+    sub_id = user.get("stripe_subscription_id")
+    if not sub_id:
+        return {}
+    try:
+        sub = stripe.Subscription.retrieve(sub_id)
+    except Exception as e:
+        if getattr(e, "code", None) == "resource_missing":
+            return {}
+        raise
+    if sub.get("status") not in _LIVE_STATUSES:
+        return {}
+    item = ((sub.get("items") or {}).get("data") or [None])[0]
+    if not item:
+        return {}
+    if (item.get("price") or {}).get("id") == price_id:
+        return {"error": "You're already on this plan"}
+    stripe.Subscription.modify(sub_id, items=[{"id": item["id"], "price": price_id}],
+                               proration_behavior="create_prorations",
+                               metadata={"user_id": user["id"], "plan": plan})
+    # customer.subscription.updated then sets the plan, from the new price
+    return {"url": f"{config.APP_URL}/settings?payment=updated", "updated": True}
+
+
+def create_checkout_session(plan: str, user: dict, interval: str = "month") -> dict:
+    """Stripe Checkout for a subscription. Returns {"url", "session_id"}, or {"url", "updated"} when an
+    existing subscription was switched to this plan, or {"error"}."""
     if plan not in PLANS or not PLANS[plan]["price_id"]:
         return {"error": f"The '{plan}' plan can't be bought online"}
+    price_id = PLANS[plan]["yearly_price_id"] if interval == "year" else PLANS[plan]["price_id"]
+    if not price_id:
+        return {"error": f"The '{plan}' plan has no yearly price"}
     try:
         stripe = _stripe()
+        switched = _switch_subscription(stripe, user, plan, price_id)
+        if switched:
+            return switched
         metadata = {"user_id": user["id"], "plan": plan}
         params = {
             "mode"               : "subscription",
-            "line_items"         : [{"price": PLANS[plan]["price_id"], "quantity": 1}],
+            "line_items"         : [{"price": price_id, "quantity": 1}],
             "client_reference_id": user["id"],
             "metadata"           : metadata,
             "subscription_data"  : {"metadata": metadata},
@@ -163,7 +210,8 @@ def create_checkout_session(plan: str, user: dict) -> dict:
             "cancel_url"         : f"{config.APP_URL}/pricing?payment=cancelled",
             "allow_promotion_codes": True,
         }
-        if config.STRIPE_TRIAL_DAYS > 0:
+        if config.STRIPE_TRIAL_DAYS > 0 and not user.get("stripe_customer_id"):
+            # one trial per customer: anyone who has paid before (and so has a customer) pays now
             params["subscription_data"]["trial_period_days"] = config.STRIPE_TRIAL_DAYS
         if user.get("stripe_customer_id"):
             params["customer"] = user["stripe_customer_id"]
@@ -228,7 +276,7 @@ def _subscription_plan(sub: dict) -> Optional[str]:
     items = ((sub.get("items") or {}).get("data") or [])
     price_ids = {((item.get("price") or {}).get("id")) for item in items}
     for name, plan in PLANS.items():
-        if plan["price_id"] and plan["price_id"] in price_ids:
+        if _price_ids(plan) & price_ids:
             return name
     return (sub.get("metadata") or {}).get("plan")
 

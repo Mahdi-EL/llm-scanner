@@ -206,7 +206,7 @@ export const waitlistAPI = {
 // ── Plans / Payment ───────────────────────────────────────────
 export const plansAPI = {
   list    : ()   => api.get('/api/plans'),
-  checkout: plan => api.post('/api/checkout', { plan }),
+  checkout: (plan, interval = 'month') => api.post('/api/checkout', { plan, interval }),
   portal  : ()   => api.post('/api/billing/portal'),
 };
 
