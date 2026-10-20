@@ -9,8 +9,10 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 
+import analysis
 import config
 import email_service
 import netguard
@@ -105,13 +107,27 @@ def scan_finished(scan_id: str, alert_drop: int = None) -> None:
         log.warning("Notifications for scan %s failed", scan_id, exc_info=True)
 
 
+def _results(scan: dict) -> list:
+    data = scan.get("results")
+    if not data and scan.get("json_path") and os.path.exists(scan["json_path"]):
+        with open(scan["json_path"], encoding="utf-8") as f:
+            data = json.load(f)
+    return (data or {}).get("results", []) if isinstance(data, dict) else []
+
+
 def _regression_alert(user: dict, scan: dict, alert_drop: int) -> None:
-    previous = scan_db.previous_complete_scan(user["id"], scan["target_name"], scan["scan_id"])
+    """Compares a scheduled run with the schedule's previous run. The score only counts when both ran
+    the same attacks (a re-test or a narrower manual scan isn't a baseline); new criticals are attacks
+    both runs tried that are critical now and weren't before."""
+    previous = scan_db.previous_complete_scan(user["id"], scan["target_name"], scan["scan_id"],
+                                              schedule_id=scan.get("schedule_id"))
     if not previous:
         return
+    diff = analysis.diff_findings(_results(previous), _results(scan))
     old, new = previous.get("security_score") or 0, scan.get("security_score") or 0
-    new_critical = max(0, (scan.get("critical_count") or 0) - (previous.get("critical_count") or 0))
-    if old - new >= alert_drop or new_critical:
+    dropped = diff["same_attacks"] and old - new >= alert_drop
+    new_critical = sum(1 for f in diff["introduced"] if f.get("severity") == "CRITICAL")
+    if dropped or new_critical:
         if _can_email(user):
             email_service.send_score_drop(user["email"], scan["target_name"], old, new,
                                           scan["scan_id"], new_critical)
