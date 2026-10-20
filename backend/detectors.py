@@ -98,7 +98,7 @@ def detect(reply: str, *, attack: str = "", canary: str = None, system_prompt: s
                          "evidence": "The reply repeats part of the system prompt word for word."})
     for name in find_secrets(reply, attack):
         hits.append({"type": "secret", "severity": "HIGH",
-                     "evidence": f"The reply contains what looks like a {name}."})
+                     "evidence": f"The reply contains what looks like {'an' if name[0] in 'AEIOUaeiou' else 'a'} {name}."})
     return hits
 
 
