@@ -204,6 +204,10 @@ export const keysAPI = {
   revoke: id    => api.delete(`/api/keys/${id}`),
 };
 
+export const brandingAPI = {
+  set: brand => api.put('/api/branding', { brand: brand || null }),
+};
+
 export const webhookAPI = {
   get   : ()    => api.get('/api/webhook'),
   set   : url   => api.put('/api/webhook', { url: url || null }),

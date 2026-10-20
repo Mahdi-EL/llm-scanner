@@ -13,6 +13,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | GET | `/` |  | API name, version and a link to the interactive docs. |
 | GET | `/analytics/categories` | yes | Failure rate per attack category across all your finished scans. |
 | POST | `/api/billing/portal` | yes | A link to Stripe's portal to update cards, see invoices or cancel. |
+| PUT | `/api/branding` | yes | Your organisation's name on reports instead of LLM Scanner (white-label, paid plans). Empty to remove. |
 | POST | `/api/checkout` | yes | Creates a Stripe Checkout session for the signed-in user. |
 | POST | `/api/firewall/check` | yes | Screens a user message before it reaches your model: allow, review or block, with reasons. Every started 2,000 characters count as one check against your plan's daily allowance. |
 | POST | `/api/firewall/check-output` | yes | Screens a model reply before it reaches the user: flags and masks leaked secrets, the canary and copies of the system prompt. Free of charge on plans that include the firewall. |

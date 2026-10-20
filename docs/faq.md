@@ -42,6 +42,10 @@ of every OWASP Top 10 for LLM Applications risk (including the ones a prompt sca
 results before and after triage, each triage decision with its note, the latest re-test of the
 failures, and a sign-off block. It is testing evidence, not a compliance certificate.
 
+**Can reports carry our own name?**
+Yes, on paid plans: Settings → Report branding. PDF, HTML, Markdown and evidence reports then show
+your organisation's name instead of LLM Scanner, for reports you hand to your own clients.
+
 **What is an ERROR finding?**
 The target or the judge couldn't be reached, or the judge's answer couldn't be read. Errors are
 excluded from the score and listed in the report, so check them before trusting a scan. A scan

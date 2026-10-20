@@ -67,7 +67,7 @@ PLANS = {
         "scan_limit"    : _PRO_SCANS,
         "firewall_daily": _PRO_FIREWALL,
         "features"      : [f"{_PRO_SCANS:,} scans per month", "Everything in Free",
-                           "Scheduled scans and alerts", "Evidence reports for audits and security reviews",
+                           "Scheduled scans and alerts", "Evidence reports for audits and security reviews", "Your brand on reports",
                            *_firewall_feature(_PRO_FIREWALL, "AI firewall API"),
                            "Email support"],
     },
