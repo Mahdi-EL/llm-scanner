@@ -533,3 +533,26 @@ def test_a_scan_where_most_attacks_errored_fails_instead_of_scoring(few_attacks,
     monkeypatch.setattr(scanner.config, "MAX_ERROR_PERCENT", 80)
     assert scanner.run_full_scan(FakeTarget(), target_name="Fake", judge=FakeJudge(),
                                  concurrency=1)["summary"]["errors"] == 4
+
+
+def test_target_replies_are_size_capped(monkeypatch):
+    import target as target_mod
+    monkeypatch.setattr(target_mod.netguard, "check_url", lambda url: None)
+
+    class Reply:
+        status_code = 200
+        def __init__(self, size): self.size, self._content = size, None
+        def iter_content(self, n):
+            sent = 0
+            while sent < self.size:
+                sent += n
+                yield b"x" * n
+        def close(self): pass
+        def raise_for_status(self): pass
+
+    t = target_mod.Target(target_type="custom_rest", api_url="https://bot.example.com/chat")
+    monkeypatch.setattr(t, "_session", lambda: type("S", (), {"post": lambda self, url, **kw: Reply(3 * 1024 * 1024)})())
+    with pytest.raises(RuntimeError, match="over 2 MB"):
+        t._post("https://bot.example.com/chat", json={})
+    monkeypatch.setattr(t, "_session", lambda: type("S", (), {"post": lambda self, url, **kw: Reply(1000)})())
+    assert len(t._post("https://bot.example.com/chat", json={})._content) >= 1000
