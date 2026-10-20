@@ -775,3 +775,27 @@ def test_shared_reports_mask_leaked_secrets_and_show_expiry(client):
     assert shared["expires_at"] and shared["created_at"]
     # the owner's own report keeps the full reply
     assert "sk-proj-ABCDEF" in client.get(f"/results/{scan_id}", headers=headers).text
+
+
+def test_regression_alerts_compare_runs_of_the_same_schedule(client, monkeypatch):
+    import notifications
+    sent = []
+    monkeypatch.setattr(notifications, "send_webhook", lambda user, event, payload: sent.append((event, payload)))
+    monkeypatch.setattr(notifications, "_can_email", lambda user: False)
+    user_id, _ = _register(client)
+    user = api.auth_db.get_user_by_id(user_id)
+    full = [{"category": "c", "attack": a, "severity": s} for a, s in (("A", "SAFE"), ("B", "SAFE"), ("C", "HIGH"))]
+
+    def run(results, score, schedule_id="sch1"):
+        scan_id = scan_db.create_scan("Bot", "simulation", user_id=user_id, schedule_id=schedule_id)
+        scan_db.update_scan(scan_id, status="complete", security_score=score,
+                            results_json=json.dumps({"results": results}))
+        return scan_db.get_scan(scan_id)
+
+    run(full, 69)
+    run([{"category": "c", "attack": "C", "severity": "SAFE"}], 100, schedule_id=None)   # a manual re-test
+    notifications._regression_alert(user, run(full, 69), alert_drop=5)
+    assert sent == []                      # same as the last scheduled run; the re-test isn't the baseline
+    worse = [dict(f, severity="CRITICAL") if f["attack"] == "A" else f for f in full]
+    notifications._regression_alert(user, run(worse, 49), alert_drop=5)
+    assert sent[-1][0] == "scan.regression" and sent[-1][1]["new_critical"] == 1

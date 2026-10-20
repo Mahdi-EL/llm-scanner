@@ -191,16 +191,20 @@ def user_scan_ids(user_id: str) -> list:
         return [r["scan_id"] for r in conn.execute("SELECT scan_id FROM scans WHERE user_id = ?", (user_id,))]
 
 
-def previous_complete_scan(user_id: str, target_name: str, before_scan_id: str) -> Optional[dict]:
-    """The latest finished scan of the same target before this one (for comparisons and alerts)."""
+def previous_complete_scan(user_id: str, target_name: str, before_scan_id: str,
+                           schedule_id: Optional[str] = None) -> Optional[dict]:
+    """The latest finished scan of the same target before this one (for comparisons and alerts),
+    or with schedule_id, the previous finished run of that schedule."""
     with transaction() as conn:
-        ref = conn.execute("SELECT created_at FROM scans WHERE scan_id = ?", (before_scan_id,)).fetchone()
+        ref = conn.execute("SELECT id FROM scans WHERE scan_id = ?", (before_scan_id,)).fetchone()
         if not ref:
             return None
+        # id, not created_at: timestamps are to the second, so two scans can share one
+        same_schedule = " AND schedule_id = ?" if schedule_id else ""
         row = conn.execute(
             "SELECT scan_id FROM scans WHERE user_id = ? AND target_name = ? AND status = 'complete' "
-            "AND scan_id != ? AND created_at <= ? ORDER BY created_at DESC LIMIT 1",
-            (user_id, target_name, before_scan_id, ref["created_at"])).fetchone()
+            f"AND id < ?{same_schedule} ORDER BY id DESC LIMIT 1",
+            (user_id, target_name, ref["id"], *([schedule_id] if schedule_id else []))).fetchone()
     return get_scan(row["scan_id"]) if row else None
 
 
