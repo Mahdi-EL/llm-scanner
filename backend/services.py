@@ -132,6 +132,22 @@ def firewall_usage(user: dict) -> dict:
     return {"used": row[0] if row else 0, "limit": payment.firewall_limit(user.get("plan", "free"))}
 
 
+def use_remediation(user: dict) -> None:
+    """Counts one hardened-prompt suggestion against today's allowance, or raises ScanRejected(429)."""
+    limit = payment.remediation_limit(user.get("plan", "free"))
+    day = _today()
+    with transaction() as conn:
+        if conn.execute("INSERT INTO remediation_usage (user_id, day, count) VALUES (?, ?, 0) "
+                        "ON CONFLICT(user_id, day) DO NOTHING", (user["id"], day)).rowcount:
+            old = (datetime.now(timezone.utc) - timedelta(days=35)).strftime("%Y-%m-%d")
+            conn.execute("DELETE FROM remediation_usage WHERE user_id = ? AND day < ?", (user["id"], old))
+        counted = conn.execute("UPDATE remediation_usage SET count = count + 1 "
+                               "WHERE user_id = ? AND day = ? AND count < ?", (user["id"], day, limit)).rowcount
+    if not counted:
+        raise ScanRejected(429, f"You've asked for {limit} hardened prompts today, your plan's daily limit. "
+                                "It resets at midnight UTC.")
+
+
 def use_firewall(user: dict, checks: int) -> dict:
     """Counts `checks` against today's allowance. Returns {"used", "limit"} or raises FirewallRejected."""
     limit = payment.firewall_limit(user.get("plan", "free"))

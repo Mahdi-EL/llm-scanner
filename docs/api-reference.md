@@ -64,7 +64,7 @@ _This page is generated from the FastAPI routes in `backend/api.py`._
 | DELETE | `/scan/{scan_id}` | yes | Deletes a scan, its findings and its report files. |
 | GET | `/scan/{scan_id}` | yes | Status and progress; includes the findings once the scan is complete. |
 | POST | `/scan/{scan_id}/cancel` | yes | Stops a queued or running scan. |
-| POST | `/scan/{scan_id}/remediate` | yes | Suggests a hardened system prompt based on the attacks that succeeded in this scan. |
+| POST | `/scan/{scan_id}/remediate` | yes | Suggests a hardened system prompt based on the attacks that succeeded in this scan (10 a day on Free, 100 on Pro). |
 | POST | `/scan/{scan_id}/retest` | yes | Runs only the attacks that failed in this scan again, optionally with a new system prompt. |
 | DELETE | `/scan/{scan_id}/share` | yes | Disables the scan's share link. |
 | POST | `/scan/{scan_id}/share` | yes | Creates a read-only link to a finished scan that expires after `days` (default 7). |
