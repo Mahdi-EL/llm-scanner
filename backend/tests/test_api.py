@@ -1013,3 +1013,20 @@ def test_a_yearly_subscription_maps_to_its_plan(client, monkeypatch):
            "items": {"data": [{"price": {"id": "price_pro_year"}}]}}
     _stripe_event(client, monkeypatch, "customer.subscription.created", sub)
     assert auth_db.get_user_by_id(user_id)["plan"] == "pro"
+
+
+def test_cost_report_sums_server_tokens_per_plan(client):
+    import cli
+    user_id, _ = _register(client)
+    scan_id = _seed_complete_scan(user_id, RESULTS)
+    scan_db.update_scan(scan_id, tokens_in=1_000_000, tokens_out=200_000, graded_by_rules=3, total_attacks=10)
+    free = next(r for r in cli.cost_report(30) if r["plan"] == "free")
+    assert free["tokens_in"] >= 1_000_000 and free["tokens_out"] >= 200_000 and free["rule_graded"] >= 3
+
+
+def test_simulation_scans_count_target_tokens_as_ours():
+    import runner
+    usage = {"judge_prompt_tokens": 100, "judge_completion_tokens": 10, "target_prompt_tokens": 50,
+             "target_completion_tokens": 5, "graded_by_rules": 2}
+    assert runner._server_tokens(usage, "simulation") == {"tokens_in": 150, "tokens_out": 15, "graded_by_rules": 2}
+    assert runner._server_tokens(usage, "groq") == {"tokens_in": 100, "tokens_out": 10, "graded_by_rules": 2}

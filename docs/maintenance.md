@@ -86,3 +86,16 @@ In the Stripe dashboard:
    `customer.subscription.deleted` and `invoice.payment_failed`; set `STRIPE_WEBHOOK_SECRET`.
 3. Enable the customer portal (Settings → Billing → Customer portal) and allow cancellation
    "at the end of the billing period".
+
+## 6. Model costs
+
+Every scan records the model tokens it cost this server (the judge, plus the target for simulation
+scans). See them per plan for the last 30 days:
+
+```bash
+python backend/cli.py costs --price-in 0.15 --price-out 0.75   # $ per million tokens
+```
+
+Compare the cost per user with what each plan pays. To lower it: plain refusals already skip the
+judge (`JUDGE_SKIP_CLEAR_REFUSALS`); `JUDGE_REASONING_EFFORT=low` cuts the judge's billed reasoning
+tokens (check a few reports first); quick scans run about a tenth of the attacks.

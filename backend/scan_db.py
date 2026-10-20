@@ -21,7 +21,7 @@ _WRITABLE = {
     "high_count", "medium_count", "low_count", "safe_count", "completed_at",
     "duration_seconds", "config_json", "api_key_enc", "checkpoint_json",
     "completed_attacks", "current_category", "started_at", "model", "grade",
-    "error_count", "llm_calls", "target_id", "schedule_id",
+    "error_count", "llm_calls", "target_id", "schedule_id", "tokens_in", "tokens_out", "graded_by_rules",
 }
 
 # What list endpoints return: summary columns only, never results or secrets.
