@@ -399,11 +399,17 @@ export default function Results() {
   if (scan.status === 'failed' || scan.status === 'cancelled') return (
     <div className="empty-state" style={{ padding:'100px 40px' }}>
       <h3 style={{ color: scan.status === 'failed' ? '#b42318' : 'var(--t1)' }}>
-        {scan.status === 'failed' ? 'Scan failed' : 'Scan cancelled'}
+        {scan.status === 'failed' ? 'Scan failed' : 'Scan cancelled'}: {scan.target_name}
       </h3>
-      <p style={{ maxWidth:'520px', margin:'8px auto 20px' }}>{scan.error_message || 'The scan stopped before it finished.'}</p>
+      <p style={{ maxWidth:'520px', margin:'8px auto 20px' }}>
+        {scan.status === 'cancelled'
+          ? `Stopped after ${fmtNum(scan.completed_attacks || 0)} of ${fmtNum(scan.total_attacks || 0)} attacks. A cancelled scan keeps no findings.`
+          : scan.error_message || 'The scan stopped before it finished.'}
+      </p>
       <div style={{ display:'flex', gap:'8px', justifyContent:'center' }}>
-        <button className="btn-primary" onClick={()=>navigate('/new-scan')}>Start a new scan</button>
+        <button className="btn-primary" onClick={()=>navigate(scan.target_id ? `/new-scan?target=${scan.target_id}` : '/new-scan')}>
+          {scan.target_id ? 'Scan this target again' : 'Start a new scan'}
+        </button>
         <button className="btn-outline" onClick={remove}>Delete</button>
       </div>
     </div>
