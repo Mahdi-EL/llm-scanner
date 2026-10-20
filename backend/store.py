@@ -69,6 +69,7 @@ def update_target(user_id: str, target_id: str, name: Optional[str] = None,
 def delete_target(user_id: str, target_id: str) -> bool:
     with transaction() as conn:
         conn.execute("DELETE FROM schedules WHERE target_id = ? AND user_id = ?", (target_id, user_id))
+        conn.execute("DELETE FROM gateway_events WHERE target_id = ? AND user_id = ?", (target_id, user_id))
         return conn.execute("DELETE FROM targets WHERE id = ? AND user_id = ?",
                             (target_id, user_id)).rowcount > 0
 

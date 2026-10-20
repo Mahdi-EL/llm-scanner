@@ -10,6 +10,7 @@ Two layers:
 """
 import ipaddress
 import socket
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -93,6 +94,25 @@ def safe_session() -> requests.Session:
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     return session
+
+
+def read_capped(response: requests.Response, max_bytes: int, seconds: float) -> requests.Response:
+    """Reads a streamed response's body into response.content: at most max_bytes, and within
+    `seconds` in all (requests' timeout is per read, so a body that trickles in never times out).
+    Closes the response either way."""
+    try:
+        body, started = bytearray(), time.monotonic()
+        for chunk in response.iter_content(64 * 1024):
+            body += chunk
+            if len(body) > max_bytes:
+                raise RuntimeError(f"The reply is over {max_bytes // (1024 * 1024)} MB; "
+                                   "check the URL points at the chat API")
+            if time.monotonic() - started > seconds:
+                raise requests.Timeout("reply took too long to arrive")
+        response._content = bytes(body)
+    finally:
+        response.close()
+    return response
 
 
 def safe_post(url: str, **kwargs) -> requests.Response:

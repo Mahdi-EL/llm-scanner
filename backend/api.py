@@ -20,7 +20,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import AfterValidator, BaseModel, BeforeValidator, EmailStr, Field, field_validator
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
@@ -34,6 +34,7 @@ import database
 import detectors
 import email_service
 import firewall
+import gateway
 import groq_models
 import netguard
 import notifications
@@ -229,7 +230,7 @@ def _user_from_request(request: Request) -> Optional[dict]:
     (X-API-Key header, or Authorization: ApiKey <key>)."""
     scheme, _, credentials = request.headers.get("Authorization", "").partition(" ")
     credentials = credentials.strip()
-    if scheme.lower() == "bearer" and credentials:
+    if scheme.lower() == "bearer" and credentials and not credentials.startswith(auth_db.API_KEY_PREFIX):
         payload = _decode_access(credentials)
         user = auth_db.get_user_by_id(payload["sub"]) if payload else None
         if not user:
@@ -238,7 +239,9 @@ def _user_from_request(request: Request) -> Optional[dict]:
         if valid_after and payload["iat"] < int(parse_ts(valid_after).timestamp()):
             return None          # issued before a password change or "log out everywhere"
         return user
-    key = request.headers.get("X-API-Key") or (credentials if scheme.lower() == "apikey" else None)
+    key = request.headers.get("X-API-Key") or (
+        credentials if scheme.lower() == "apikey"
+        or (scheme.lower() == "bearer" and credentials.startswith(auth_db.API_KEY_PREFIX)) else None)
     if key:
         user_id = auth_db.get_user_by_api_key(key)
         user = auth_db.get_user_by_id(user_id) if user_id else None
@@ -696,6 +699,7 @@ def export_account(request: Request, user: dict = Depends(require_session)):
         "custom_prompts": store.list_prompts(user["id"]),
         "share_links"   : store.list_shares(user["id"]),
         "firewall_usage": services.firewall_usage(user),
+        "gateway_last_7_days": gateway.stats(user["id"]),
         "scans"         : scans,
     }
 
@@ -1063,6 +1067,54 @@ def firewall_check_output(request: Request, body: FirewallOutput, user: dict = D
     if not payment.firewall_limit(user.get("plan", "free")):
         raise HTTPException(status_code=402, detail="The AI firewall isn't included in your plan. Upgrade to use it.")
     return firewall.check_output(body.text, body.system_prompt, body.canary)
+
+
+# ── Firewall gateway ──────────────────────────────────────────
+_gateway_slots = None
+
+
+def _gateway_limiter():
+    """Gateway calls wait on the model for up to GATEWAY_TIMEOUT: give them their own threads so
+    they can't use up the pool every other endpoint runs on."""
+    global _gateway_slots
+    if _gateway_slots is None:
+        import anyio
+        _gateway_slots = anyio.CapacityLimiter(max(1, config.GATEWAY_CONCURRENCY))
+    return _gateway_slots
+
+
+def _gateway_response(result: "gateway.Result"):
+    if result.stream is not None:
+        return Response(result.stream, status_code=result.status, media_type="text/event-stream",
+                        headers=result.headers)
+    return JSONResponse(result.body, status_code=result.status, headers=result.headers)
+
+
+@app.post("/gateway/{target_id}/v1/chat/completions")
+@limiter.limit("1200/minute")
+async def gateway_chat(request: Request, target_id: str):
+    """OpenAI-compatible chat completions through the AI firewall. Set your OpenAI client's base_url to
+    /gateway/{target_id}/v1 and its api_key to an LLM Scanner API key."""
+    import anyio
+    user = await anyio.to_thread.run_sync(_user_from_request, request)
+    if not user:
+        return _gateway_response(gateway.error(401, "Use an LLM Scanner API key (llmsk_...) as the api_key.",
+                                               "invalid_api_key"))
+    try:
+        body = await request.json()
+    except ValueError:
+        return _gateway_response(gateway.error(400, "The request body isn't valid JSON.", "invalid_json"))
+    result = await anyio.to_thread.run_sync(
+        lambda: gateway.handle(user, target_id[:64], body, request.headers.get("X-Upstream-Authorization")),
+        limiter=_gateway_limiter())
+    return _gateway_response(result)
+
+
+@app.get("/api/gateway/stats")
+def gateway_stats(target_id: Optional[str] = Query(None, max_length=64), days: int = Query(7, ge=1, le=30),
+                  user: dict = Depends(require_user)):
+    """Gateway requests in the last `days` days: blocked and flagged inputs, masked or replaced replies."""
+    return gateway.stats(user["id"], target_id, days)
 
 
 # ── Target connection test ────────────────────────────────────

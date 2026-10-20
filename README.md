@@ -34,6 +34,7 @@ and checkpoints, so a server restart resumes a scan instead of losing it.
 - Scan comparison: score change, failures introduced and fixed
 - API keys for CI, signed webhooks (`scan.completed`, `scan.failed`, `scan.regression`)
 - Runtime AI firewall API: screen user messages before your model sees them and replies before your users do
+- Firewall gateway: put the firewall in front of any OpenAI-compatible API by changing only the base URL
 - Plans and billing with Stripe (Checkout, customer portal, webhooks)
 - Account data export and deletion
 
@@ -136,6 +137,24 @@ if client.check_input(user_message)["verdict"] == "block":
 checked = client.check_output(reply, system_prompt=SYSTEM_PROMPT)
 safe_reply = checked["redacted"] if checked["verdict"] != "block" else "Sorry, I can't help with that."
 ```
+
+### Gateway: no code changes
+
+Save the app as an OpenAI-compatible (or Groq) target with its key, then point your OpenAI client
+at the gateway and use an LLM Scanner key as the `api_key`. Targets & CI shows the URL per target.
+
+```python
+client = OpenAI(base_url="https://your-api/gateway/<target id>/v1", api_key="llmsk_...")
+```
+
+Each request's new user and tool messages are checked first; a blocked request never reaches the
+model and gets an ordinary reply with a refusal (`GATEWAY_BLOCK_MESSAGE`). The rest go to your model
+with the saved key (or the one in `X-Upstream-Authorization`), and the reply is checked: leaked
+secrets are masked, and a reply that leaks the system prompt, or leaks anything after a flagged
+request, is replaced by the refusal. Streaming works (the reply is checked whole, then streamed).
+`X-LLMScanner-Input` / `X-LLMScanner-Output` headers give the verdicts. When the day's allowance is
+used up, requests pass unscreened with `X-LLMScanner-Firewall: quota-exceeded`. Only verdicts and
+timings are stored, never messages; `GET /api/gateway/stats` sums them up.
 
 ## Deploying
 

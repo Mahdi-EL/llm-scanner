@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import LoadError from '../components/LoadError';
 import { useNavigate } from 'react-router-dom';
-import { targetsAPI, schedulesAPI, scansAPI, API_URL, errorMessage } from '../services/api';
+import { targetsAPI, schedulesAPI, scansAPI, gatewayAPI, API_URL, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { relTime, shortDate, TARGET_TYPES } from '../utils/format';
@@ -133,6 +133,50 @@ function ScheduleControl({ target, schedule, paid, onChange }) {
   );
 }
 
+const GATEWAY_TYPES = ['openai_compatible', 'groq'];
+
+/* The firewall gateway for one saved target: where to point an OpenAI client, and what it caught. */
+function GatewayPanel({ target }) {
+  const [stats, setStats] = useState(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    gatewayAPI.stats(target.id).then(r => setStats(r.data)).catch(() => setFailed(true));
+  }, [target.id]);
+  const base = `${API_URL}/gateway/${target.id}/v1`;
+  const python = `import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="${base}",
+    api_key=os.environ["LLMSCANNER_API_KEY"],  # your model key stays with this saved target
+)`;
+  const node = `import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "${base}",
+  apiKey: process.env.LLMSCANNER_API_KEY,
+});`;
+  return (
+    <div style={{ padding:'4px 20px 18px', borderBottom:'1px solid var(--b1)', background:'var(--s2)' }}>
+      <p style={{ fontSize:'13px', color:'var(--t2)', lineHeight:1.6, margin:'12px 0' }}>
+        Send this app's chat requests through the AI firewall: change only the base URL and the API key of your
+        OpenAI client. Injections are blocked before they reach the model (the caller gets a refusal), and leaked
+        secrets or system-prompt text are removed from replies. Each request uses your daily firewall checks;
+        the <code>X-LLMScanner-Input</code> and <code>X-LLMScanner-Output</code> response headers say what happened.
+      </p>
+      <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'12px' }}>
+        {failed ? 'Couldn’t load the gateway stats.' : !stats ? 'Loading stats…' : stats.requests === 0
+          ? 'No requests in the last 7 days.'
+          : `Last 7 days: ${stats.requests} request${stats.requests === 1 ? '' : 's'} · ${stats.blocked_inputs} blocked · `
+            + `${stats.flagged_inputs} flagged · ${stats.blocked_outputs} ${stats.blocked_outputs === 1 ? 'reply' : 'replies'} cleaned · `
+            + `${stats.unscreened} unscreened (allowance used up) · ${stats.avg_latency_ms} ms on average`}
+      </div>
+      <Snippet title="Python" code={python} />
+      <Snippet title="Node.js" code={node} />
+    </div>
+  );
+}
+
 function Snippet({ title, code }) {
   const toast = useToast();
   return (
@@ -155,6 +199,7 @@ export default function Targets() {
   const [adding, setAdding]       = useState(false);
   const [loading, setLoading]     = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [gatewayOpen, setGatewayOpen] = useState(null);
   const paid = user?.plan && user.plan !== 'free';
 
   const load = useCallback(async () => {
@@ -234,8 +279,10 @@ jobs:
           <div style={{ padding:'28px 20px', fontSize:'13px', color:'var(--t3)' }}>No saved targets yet. Add one, or tick “Save this target” when you start a scan.</div>
         ) : targets.map(t => {
           const schedule = schedules.find(s => s.target_id === t.id);
+          const gatewayable = GATEWAY_TYPES.includes(t.config.target_type);
           return (
-            <div key={t.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'16px', padding:'14px 20px', borderBottom:'1px solid var(--b1)', flexWrap:'wrap' }}>
+            <React.Fragment key={t.id}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'16px', padding:'14px 20px', borderBottom:'1px solid var(--b1)', flexWrap:'wrap' }}>
               <div style={{ minWidth:'220px', flex:1 }}>
                 <div style={{ fontSize:'14px', fontWeight:'600' }}>{t.name}</div>
                 <div style={{ fontSize:'12px', color:'var(--t3)' }}>
@@ -248,9 +295,15 @@ jobs:
               <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
                 <ScheduleControl target={t} schedule={schedule} paid={paid} onChange={load} />
                 <button className="btn-outline" style={{ fontSize:'12px' }} onClick={() => scanNow(t)}>Scan now</button>
+                {gatewayable && (
+                  <button className="btn-outline" style={{ fontSize:'12px' }} aria-expanded={gatewayOpen === t.id}
+                    onClick={() => setGatewayOpen(open => (open === t.id ? null : t.id))}>Gateway</button>
+                )}
                 <button className="btn-ghost" style={{ fontSize:'12px', color:'#b42318' }} onClick={() => remove(t)}>Delete</button>
               </div>
             </div>
+            {gatewayOpen === t.id && <GatewayPanel target={t} />}
+            </React.Fragment>
           );
         })}
       </div>
