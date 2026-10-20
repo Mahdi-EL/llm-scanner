@@ -106,7 +106,7 @@ export default function NewScan() {
     if (problem) { toast(problem, 'error'); return; }
     setLoading(true);
     try {
-      let useTarget = targetId || null;
+      let useTarget = savedTarget ? targetId : null;     // ?target= may name a target deleted since
       if (!useTarget && saveTarget) {
         const config = { name: form.target_name.trim(), ...payload() };
         const key = JSON.stringify(config);

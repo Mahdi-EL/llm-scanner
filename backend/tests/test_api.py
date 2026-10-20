@@ -849,3 +849,13 @@ def test_webhooks_retry_transient_failures_only(monkeypatch):
     assert not ok and len(calls) == 1          # the receiver said no: don't hammer it
     ok, calls = deliver([500, 500, 500, 200])
     assert not ok and len(calls) == 3
+
+
+def test_a_scan_of_a_deleted_target_no_longer_points_at_it(client):
+    user_id, headers = _register(client)
+    target = client.post("/api/targets", headers=headers, json={"name": "Bot"}).json()
+    scan_id = _seed_with_config(user_id, {"target_type": "simulation"})
+    scan_db.update_scan(scan_id, target_id=target["id"])
+    assert client.get(f"/scan/{scan_id}", headers=headers).json()["target_id"] == target["id"]
+    client.delete(f"/api/targets/{target['id']}", headers=headers)
+    assert client.get(f"/scan/{scan_id}", headers=headers).json()["target_id"] is None

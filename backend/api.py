@@ -712,6 +712,8 @@ def get_scan_status(scan_id: str, user: dict = Depends(require_user)):
     """Status and progress; includes the findings once the scan is complete."""
     scan = _get_owned_scan(scan_id, user)
     out = scan_db.public_scan(scan, include_results=scan["status"] == "complete")
+    if out.get("target_id") and not store.get_target(user["id"], out["target_id"]):
+        out["target_id"] = None        # the saved target was deleted: nothing to re-scan or take a key from
     if scan["status"] == "complete" and scan.get("results"):
         out["recommendations"] = report.recommendations(scan["results"].get("results", []))
     return out
