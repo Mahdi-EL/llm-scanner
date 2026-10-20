@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
 const ORDER = ['free', 'pro', 'enterprise'];
+const RANK = { free: 0, pro: 1, enterprise: 2 };
 
 const DESCRIPTIONS = {
   free      : 'Try the scanner on your own AI apps.',
@@ -45,6 +46,7 @@ export default function Pricing() {
   const [params] = useSearchParams();
   const [plans, setPlans] = useState(null);
   const [busy, setBusy] = useState('');
+  const [yearly, setYearly] = useState(false);
 
   useEffect(() => {
     plansAPI.list().then(r => setPlans(r.data.plans)).catch(() => setPlans({}));
@@ -55,7 +57,7 @@ export default function Pricing() {
     if (!user) { navigate('/register'); return; }
     setBusy(key);
     try {
-      const { data } = await plansAPI.checkout(key);
+      const { data } = await plansAPI.checkout(key, yearly && plans[key]?.yearly ? 'year' : 'month');
       window.location.assign(data.url);
     } catch (e) {
       toast(errorMessage(e, 'Checkout is unavailable right now.'), 'error');
@@ -67,20 +69,40 @@ export default function Pricing() {
     if (user?.plan === key) return { label:'Your current plan', disabled:true };
     if (key === 'free') return user ? null : { label:'Start free', onClick: () => navigate('/register') };
     if (!plan.purchasable) return { label:'Not available yet', disabled:true };
-    return { label: user ? `Upgrade to ${plan.name}` : `Start with ${plan.name}`, onClick: () => choose(key) };
+    if (!user) return { label:`Start with ${plan.name}`, onClick: () => choose(key) };
+    // A paying customer moves their subscription to the other plan (prorated) rather than buying a second one
+    const up = (RANK[key] ?? 0) > (RANK[user.plan] ?? 0);
+    return { label: `${up ? 'Upgrade' : 'Switch'} to ${plan.name}`, onClick: () => choose(key) };
   };
 
   const list = plans ? ORDER.filter(k => plans[k]).map(k => [k, plans[k]]) : [];
+  const hasYearly = list.some(([, p]) => p.yearly);
+  // Stripe gives one trial per customer: someone who has paid before doesn't get another
+  const trialEligible = !user?.has_billing;
+  const shown = plan => (yearly && plan.yearly ? plan.yearly : plan);
+  const yearlySaving = plan => plan.yearly && plan.amount
+    ? Math.round(100 - (plan.yearly.amount / (plan.amount * 12)) * 100) : 0;
 
   return (
     <div style={{ maxWidth:'1080px', margin:'0 auto', padding:'0 16px' }}>
       <div style={{ textAlign:'center', padding:'56px 0 48px' }}>
         <h1 style={{ fontFamily:'Georgia, serif', fontSize:'48px', fontWeight:600, letterSpacing:'-1px', lineHeight:1.1, marginBottom:'14px' }}>
-          Simple, monthly pricing
+          {hasYearly ? 'Simple pricing' : 'Simple, monthly pricing'}
         </h1>
         <p style={{ fontSize:'16px', color:'var(--t2)', maxWidth:'520px', margin:'0 auto', lineHeight:1.6 }}>
           Every plan runs the full attack library and produces the same reports. Plans differ in how many scans you can run, scheduled scans, and the AI firewall allowance.
         </p>
+        {hasYearly && (
+          <div role="group" aria-label="Billing period" style={{ display:'inline-flex', marginTop:'24px', border:'1px solid var(--b1)', borderRadius:'8px', padding:'3px' }}>
+            {[['Monthly', false], ['Yearly', true]].map(([label, value]) => (
+              <button key={label} type="button" aria-pressed={yearly === value} onClick={() => setYearly(value)}
+                style={{ padding:'7px 16px', border:'none', borderRadius:'6px', cursor:'pointer', fontFamily:'inherit', fontSize:'13px',
+                         background: yearly === value ? 'var(--t1)' : 'transparent', color: yearly === value ? 'var(--s1)' : 'var(--t2)' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {!plans ? (
@@ -96,13 +118,18 @@ export default function Pricing() {
               <div key={key} style={{ background:'var(--s1)', border:`1px solid ${featured ? 'var(--t1)' : 'var(--b1)'}`, borderRadius:'12px', padding:'28px', display:'flex', flexDirection:'column' }}>
                 <div style={{ fontSize:'13px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:'10px' }}>{plan.name}</div>
                 <div style={{ display:'flex', alignItems:'baseline', gap:'4px', marginBottom:'6px' }}>
-                  <span style={{ fontFamily:'Georgia, serif', fontSize:'44px', lineHeight:1 }}>{plan.amount ? money(plan.amount, plan.currency) : 'Free'}</span>
-                  {plan.amount > 0 && <span style={{ fontSize:'14px', color:'var(--t3)' }}>/ {plan.interval}</span>}
+                  <span style={{ fontFamily:'Georgia, serif', fontSize:'44px', lineHeight:1 }}>{plan.amount ? money(shown(plan).amount, shown(plan).currency) : 'Free'}</span>
+                  {plan.amount > 0 && <span style={{ fontSize:'14px', color:'var(--t3)' }}>/ {shown(plan).interval}</span>}
                 </div>
+                {yearly && plan.yearly && yearlySaving(plan) > 0 && (
+                  <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'6px' }}>
+                    {money(Math.round(plan.yearly.amount / 12), plan.yearly.currency)} a month, {yearlySaving(plan)}% less than monthly
+                  </div>
+                )}
                 <div style={{ fontSize:'13px', fontWeight:'600', marginBottom:'6px' }}>
                   {plan.scan_limit == null ? 'Unlimited scans' : `${plan.scan_limit} scans per month`}
                 </div>
-                {plan.trial_days > 0 && <div style={{ fontSize:'12px', color:'#16a34a', marginBottom:'6px' }}>{plan.trial_days}-day free trial</div>}
+                {plan.trial_days > 0 && trialEligible && <div style={{ fontSize:'12px', color:'#16a34a', marginBottom:'6px' }}>{plan.trial_days}-day free trial</div>}
                 <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:1.5, paddingBottom:'18px', borderBottom:'1px solid var(--b1)', marginBottom:'18px' }}>{DESCRIPTIONS[key]}</p>
                 <ul style={{ listStyle:'none', padding:0, margin:'0 0 24px', display:'grid', gap:'8px', flex:1, alignContent:'start' }}>
                   {plan.features.map(f => <li key={f} style={{ fontSize:'14px', color:'var(--t2)' }}>✓ {f}</li>)}

@@ -76,7 +76,11 @@ Reports in `REPORTS_DIR` can always be rebuilt from the database, so they don't 
 In the Stripe dashboard:
 
 1. Create products and monthly prices for Pro and Enterprise; set `STRIPE_PRO_PRICE_ID` and
-   `STRIPE_ENTERPRISE_PRICE_ID`. The Pricing page shows the amounts from Stripe.
+   `STRIPE_ENTERPRISE_PRICE_ID`. The Pricing page shows the amounts from Stripe. Optional: yearly
+   prices in `STRIPE_PRO_YEARLY_PRICE_ID` / `STRIPE_ENTERPRISE_YEARLY_PRICE_ID` add a Monthly/Yearly
+   switch, and `STRIPE_TRIAL_DAYS=14` gives first-time customers a trial (one per customer: anyone
+   who has paid before is charged straight away). A customer who picks another plan on the Pricing
+   page has their subscription switched, prorated, instead of getting a second one.
 2. Add a webhook endpoint `https://<api>/api/stripe-webhook` for `checkout.session.completed`,
    `customer.subscription.created`, `customer.subscription.updated`,
    `customer.subscription.deleted` and `invoice.payment_failed`; set `STRIPE_WEBHOOK_SECRET`.

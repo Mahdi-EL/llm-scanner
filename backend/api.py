@@ -437,7 +437,8 @@ class DeleteAccountRequest(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    plan : str = Field(..., max_length=40)
+    plan    : str = Field(..., max_length=40)
+    interval: Literal["month", "year"] = "month"
     email: Optional[str] = None      # ignored: the account email is used
 
 
@@ -1283,7 +1284,7 @@ def list_plans():
 @limiter.limit("10/minute")
 def checkout(request: Request, body: CheckoutRequest, user: dict = Depends(require_session)):
     """Creates a Stripe Checkout session for the signed-in user."""
-    result = payment.create_checkout_session(body.plan, user)
+    result = payment.create_checkout_session(body.plan, user, body.interval)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result

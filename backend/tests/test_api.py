@@ -935,3 +935,81 @@ def test_hardened_prompt_suggestions_have_a_daily_allowance(client, monkeypatch)
     clean = _seed_with_config(user_id, {"target_type": "simulation"}, results=[{**RESULTS[0], "severity": "SAFE"}])
     assert client.post(f"/scan/{clean}/remediate", headers=headers, json={}).status_code == 400   # not counted
     assert [client.post(f"/scan/{sim}/remediate", headers=headers, json={}).status_code for _ in range(3)] == [200, 200, 429]
+
+
+class _CheckoutStripe:
+    """Records checkout sessions and subscription changes; the user's subscription is `sub`."""
+    def __init__(self, sub=None):
+        self.created, self.modified, self.sub = [], [], sub
+        outer = self
+
+        class Session:
+            @staticmethod
+            def create(**params):
+                outer.created.append(params)
+                return type("S", (), {"url": "https://checkout.stripe.test/s", "id": "cs_1"})()
+
+        class Subscription:
+            @staticmethod
+            def retrieve(sub_id):
+                return outer.sub
+
+            @staticmethod
+            def modify(sub_id, **params):
+                outer.modified.append(params)
+
+        self.checkout = type("C", (), {"Session": Session})
+        self.Subscription = Subscription
+
+
+def _billing_on(monkeypatch, fake):
+    import config
+    import payment
+    monkeypatch.setattr(config, "STRIPE_SECRET_KEY", "sk_test_x")
+    monkeypatch.setattr(config, "STRIPE_TRIAL_DAYS", 14)
+    monkeypatch.setitem(payment.PLANS["pro"], "price_id", "price_pro")
+    monkeypatch.setitem(payment.PLANS["pro"], "yearly_price_id", "price_pro_year")
+    monkeypatch.setitem(payment.PLANS["enterprise"], "price_id", "price_ent")
+    monkeypatch.setitem(payment.PLANS["enterprise"], "yearly_price_id", "")
+    monkeypatch.setattr(payment, "_stripe", lambda: fake)
+
+
+def test_checkout_gives_one_trial_per_customer_and_yearly_prices(client, monkeypatch):
+    user_id, headers = _register(client)
+    fake = _CheckoutStripe()
+    _billing_on(monkeypatch, fake)
+    assert client.post("/api/checkout", headers=headers, json={"plan": "pro"}).status_code == 200
+    assert fake.created[-1]["subscription_data"]["trial_period_days"] == 14
+    auth_db.set_stripe_ids(user_id, "cus_1")                        # has paid before
+    client.post("/api/checkout", headers=headers, json={"plan": "pro", "interval": "year"})
+    assert "trial_period_days" not in fake.created[-1]["subscription_data"]
+    assert fake.created[-1]["line_items"][0]["price"] == "price_pro_year"
+    r = client.post("/api/checkout", headers=headers, json={"plan": "enterprise", "interval": "year"})
+    assert r.status_code == 400 and "no yearly price" in r.json()["detail"]
+
+
+def test_checkout_switches_a_live_subscription_instead_of_adding_one(client, monkeypatch):
+    user_id, headers = _register(client)
+    auth_db.set_stripe_ids(user_id, "cus_1", "sub_1")
+    fake = _CheckoutStripe(sub={"id": "sub_1", "status": "active",
+                                "items": {"data": [{"id": "si_1", "price": {"id": "price_pro"}}]}})
+    _billing_on(monkeypatch, fake)
+    r = client.post("/api/checkout", headers=headers, json={"plan": "enterprise"})
+    assert r.status_code == 200 and r.json()["updated"] and fake.created == []
+    assert fake.modified[0]["items"] == [{"id": "si_1", "price": "price_ent"}]
+    r = client.post("/api/checkout", headers=headers, json={"plan": "pro"})
+    assert r.status_code == 400 and "already on this plan" in r.json()["detail"]
+    fake.sub = {**fake.sub, "status": "canceled"}                   # an old, ended subscription: new checkout
+    assert client.post("/api/checkout", headers=headers, json={"plan": "pro"}).status_code == 200
+    assert len(fake.created) == 1
+
+
+def test_a_yearly_subscription_maps_to_its_plan(client, monkeypatch):
+    import payment
+    user_id, _ = _register(client)
+    monkeypatch.setitem(payment.PLANS["pro"], "price_id", "price_pro")
+    monkeypatch.setitem(payment.PLANS["pro"], "yearly_price_id", "price_pro_year")
+    sub = {"id": "sub_9", "customer": "cus_9", "status": "active", "metadata": {"user_id": user_id},
+           "items": {"data": [{"price": {"id": "price_pro_year"}}]}}
+    _stripe_event(client, monkeypatch, "customer.subscription.created", sub)
+    assert auth_db.get_user_by_id(user_id)["plan"] == "pro"
