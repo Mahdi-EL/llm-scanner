@@ -694,8 +694,12 @@ def compare_scans(base_id: str, head_id: str, user: dict = Depends(require_user)
         "head": {"scan_id": head_id, "security_score": head.get("security_score", 0),
                  "grade": head.get("grade"), "created_at": head.get("created_at")},
         "score_delta"        : (head.get("security_score") or 0) - (base.get("security_score") or 0),
+        "same_attacks"       : diff["same_attacks"],
+        "base_tested"        : diff["base_tested"],
+        "head_tested"        : diff["head_tested"],
         "introduced_count"   : len(diff["introduced"]),
         "resolved_count"     : len(diff["resolved"]),
+        "still_failing_count": diff["still_failing"],
         "introduced_findings": diff["introduced"],
         "resolved_findings"  : diff["resolved"],
     }

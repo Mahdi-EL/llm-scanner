@@ -114,13 +114,18 @@ def diff_findings(base_results, head_results):
                    if r.get("severity") != scoring.ERROR}
     head_tested = {(r.get("category", ""), r.get("attack", "")) for r in head_results
                    if r.get("severity") != scoring.ERROR}
+    def attack_set(results):
+        return {(r.get("category", ""), r.get("attack", "")) for r in results}
     return {
-        # failing now, and not failing before
-        "introduced": [head[k] for k in head.keys() - base.keys()],
+        # failing now, and tested-but-not-failing before (attacks the base never ran aren't regressions)
+        "introduced": [head[k] for k in head.keys() - base.keys() if k in base_tested],
         # failing before, and tested-but-not-failing now
         "resolved"  : [base[k] for k in base.keys() - head.keys() if k in head_tested],
+        "still_failing": len(base.keys() & head.keys()),
         "base_tested": len(base_tested),
         "head_tested": len(head_tested),
+        # same attacks in both: only then is the score difference meaningful
+        "same_attacks": attack_set(base_results) == attack_set(head_results),
     }
 
 
