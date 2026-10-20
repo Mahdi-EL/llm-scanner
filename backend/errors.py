@@ -62,9 +62,11 @@ def explain(exc: Exception, *, server_side: bool = False) -> str:
         return (f"Couldn't connect to {'the scanner model' if server_side else 'the target'}. "
                 "Check the URL and that it accepts connections from the internet.")
     if any(isinstance(e, ValueError) and "JSON" in type(e).__name__ for e in chain):
-        return f"{who} didn't reply with JSON. Check the URL and the response field."
+        return (f"{who} didn't reply with JSON. Check that the URL is the API endpoint, "
+                "not a web page or a login screen.")
     if any(isinstance(e, (KeyError, IndexError, TypeError)) for e in chain):
-        return f"{who}'s reply didn't have the expected shape. Check the response field."
+        return (f"{who}'s reply didn't have the expected shape. Check the target type "
+                "(and for a custom REST endpoint, the response field).")
 
     # Our own errors already read as sentences; anything else is summarised.
     if isinstance(exc, (RuntimeError, ValueError)):
