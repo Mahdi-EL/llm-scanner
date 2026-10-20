@@ -6,7 +6,7 @@ Authenticate with `Authorization: Bearer <access token>` (from `/auth/login`) or
 
 Errors are JSON with a readable `detail`: a string, or for invalid input (422) a list of `{loc, msg, type}` (the rejected value isn't echoed back). Request bodies are limited to 1 MB (413); 429 responses carry `Retry-After`.
 
-_This page is generated from the FastAPI routes in `backend/api.py`._
+_This page lists the FastAPI routes in `backend/api.py`; a test fails when a route is missing from it._
 
 | Method | Path | Auth | What it does |
 |---|---|---|---|
