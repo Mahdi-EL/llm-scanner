@@ -32,7 +32,16 @@ inputs:
     description: Model name sent to the target.
     required: false
   system-prompt-file:
-    description: File holding the system prompt (tested in simulation; used for leak detection otherwise).
+    description: File holding the system prompt (sent to simulation, groq and openai_compatible targets; used only for leak detection with custom_rest).
+    required: false
+  input-field:
+    description: custom_rest only. JSON field the attack message is sent in (default message).
+    required: false
+  output-field:
+    description: custom_rest only. JSON field the reply is read from (default response).
+    required: false
+  baseline-question:
+    description: A harmless question for this app, used as the normal-behavior baseline.
     required: false
   categories:
     description: Space-separated attack categories. Empty means all 22.
@@ -87,6 +96,9 @@ runs:
         IN_TARGET_ID: ${{ inputs.target-id }}
         IN_MODEL: ${{ inputs.model }}
         IN_PROMPT_FILE: ${{ inputs.system-prompt-file }}
+        IN_INPUT_FIELD: ${{ inputs.input-field }}
+        IN_OUTPUT_FIELD: ${{ inputs.output-field }}
+        IN_BASELINE: ${{ inputs.baseline-question }}
         IN_CATEGORIES: ${{ inputs.categories }}
         IN_FAIL_ON: ${{ inputs.fail-on }}
         IN_MIN_SCORE: ${{ inputs.min-score }}
@@ -101,7 +113,10 @@ runs:
           [ -n "$IN_URL" ] && args+=(--url "$IN_URL")
           [ -n "$IN_MODEL" ] && args+=(--model "$IN_MODEL")
           [ -n "$IN_PROMPT_FILE" ] && args+=(--prompt-file "$IN_PROMPT_FILE")
+          [ -n "$IN_INPUT_FIELD" ] && args+=(--input-field "$IN_INPUT_FIELD")
+          [ -n "$IN_OUTPUT_FIELD" ] && args+=(--output-field "$IN_OUTPUT_FIELD")
         fi
+        [ -n "$IN_BASELINE" ] && args+=(--baseline "$IN_BASELINE")
         if [ -n "$IN_CATEGORIES" ]; then
           read -ra categories <<< "$IN_CATEGORIES"
           args+=(--categories "${categories[@]}")

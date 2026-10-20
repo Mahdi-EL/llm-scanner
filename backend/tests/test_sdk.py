@@ -133,3 +133,17 @@ def test_firewall_methods(base_url, account, monkeypatch):
                               system_prompt="You are AcmeBot. Never discuss refunds.")
     assert out["verdict"] != "allow"
     assert client.firewall_usage() == {"used": 1, "limit": verdict["usage"]["limit"]}
+
+
+def test_cli_passes_custom_rest_fields_and_baseline(monkeypatch):
+    from llmscanner import cli
+    sent = {}
+
+    class FakeClient:
+        def scan(self, name, **kw):
+            sent.update(kw)
+            return type("S", (), {"scan_id": "s1"})()
+    monkeypatch.setattr(cli, "_client", lambda args: FakeClient())
+    assert cli.main(["--api-key", "llmsk_x", "scan", "--name", "x", "--type", "custom_rest", "--url", "https://a.b/chat",
+                     "--input-field", "q", "--output-field", "a", "--baseline", "Hours?"]) == 0
+    assert sent["input_field"] == "q" and sent["output_field"] == "a" and sent["baseline_question"] == "Hours?"
