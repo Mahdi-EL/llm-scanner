@@ -28,6 +28,7 @@ const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword  = lazy(() => import('./pages/ResetPassword'));
 const VerifyEmail    = lazy(() => import('./pages/VerifyEmail'));
 const SharedReport   = lazy(() => import('./pages/SharedReport'));
+const LeakCheck      = lazy(() => import('./pages/LeakCheck'));
 
 /* ── Layout shells ──────────────────────────────────────────── */
 
@@ -120,6 +121,7 @@ const TITLES = {
   '/threat-intel': 'Attack library', '/settings': 'Settings', '/pricing': 'Pricing', '/login': 'Sign in',
   '/register': 'Create account', '/forgot-password': 'Reset password', '/reset-password': 'Reset password',
   '/verify-email': 'Confirm email', '/results/': 'Scan results', '/shared/': 'Shared report',
+  '/check': 'Free leak check',
 };
 const BASE_TITLE = 'LLM Scanner: red-team your AI applications';
 
@@ -156,6 +158,7 @@ function AppRoutes() {
       <Route path="/reset-password"  element={<PublicShell><ResetPassword /></PublicShell>} />
       <Route path="/verify-email"    element={<PublicShell><VerifyEmail /></PublicShell>} />
       <Route path="/shared/:token"   element={<PublicShell><SharedReport /></PublicShell>} />
+      <Route path="/check"           element={<PublicShell><LeakCheck /></PublicShell>} />
 
       {/* ── Pricing: sidebar when signed in, navbar when not ── */}
       <Route path="/pricing" element={user ? <AppShell><Pricing /></AppShell> : <PublicShell><Pricing /></PublicShell>} />

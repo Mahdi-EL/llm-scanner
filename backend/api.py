@@ -36,6 +36,7 @@ import email_service
 import evidence
 import firewall
 import gateway
+import leakcheck
 import groq_models
 import netguard
 import notifications
@@ -1120,6 +1121,22 @@ def firewall_check_output(request: Request, body: FirewallOutput, user: dict = D
     if not payment.firewall_limit(user.get("plan", "free")):
         raise HTTPException(status_code=402, detail="The AI firewall isn't included in your plan. Upgrade to use it.")
     return firewall.check_output(body.text, body.system_prompt, body.canary)
+
+
+# ── Free leak check (no account) ──────────────────────────────
+class LeakCheckRequest(BaseModel):
+    system_prompt: str = Field(..., min_length=20, max_length=leakcheck.MAX_PROMPT_CHARS)
+
+
+@app.post("/public/leak-check")
+@limiter.limit("5/hour")
+def public_leak_check(request: Request, body: LeakCheckRequest):
+    """Free, no account: sends 20 extraction and override attacks at a system prompt on the demo model and says
+    how many got it out. Graded by rules (the canary, verbatim copies); replies are never returned or stored."""
+    try:
+        return leakcheck.run(body.system_prompt.strip())
+    except leakcheck.CheckUnavailable as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
 
 
 # ── Firewall gateway ──────────────────────────────────────────
