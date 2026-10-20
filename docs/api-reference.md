@@ -2,7 +2,7 @@
 
 Interactive docs with request and response schemas: `GET /docs` on your API.
 
-Authenticate with `Authorization: Bearer <access token>` (from `/auth/login`) or with an API key in `X-API-Key: llmsk_...` (create one in Settings or with `POST /api/keys`).
+Authenticate with `Authorization: Bearer <access token>` (from `/auth/login`) or with an API key in `X-API-Key: llmsk_...` (create one in Settings or with `POST /api/keys`). An API key can run and read scans, saved targets, schedules and the firewall, but not manage API keys, the webhook, billing, the password, the data export or account deletion (403): those need a signed-in session.
 
 Errors are JSON with a readable `detail`: a string, or for invalid input (422) a list of `{loc, msg, type}` (the rejected value isn't echoed back). Request bodies are limited to 1 MB (413); 429 responses carry `Retry-After`.
 
