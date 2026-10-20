@@ -96,6 +96,7 @@ Set a URL in Settings → Webhook. Each request carries `X-LLMScanner-Event` and
 `X-LLMScanner-Signature: t=<unix time>,v1=<hex>`, where `v1` is HMAC-SHA256 of
 `"<t>.<raw body>"` with your webhook secret. Answer with a 2xx within 5 seconds; timeouts,
 connection errors, 429 and 5xx are retried twice (after 2 s and 10 s), other 4xx are not.
+To verify a request:
 
 ```python
 import hashlib, hmac, time
