@@ -30,6 +30,10 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           CATEGORIES: ${{ inputs.categories }}
         run: |
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "::error::Add a GROQ_API_KEY repository secret: the demo assistant runs on Groq."
+            exit 1
+          fi
           read -ra categories <<< "$CATEGORIES"
           python backend/scanner.py --target "Demo assistant" --output ci_report \
             --categories "${categories[@]}" --reports-dir results
