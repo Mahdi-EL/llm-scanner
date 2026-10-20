@@ -174,7 +174,7 @@ function EmptyHero({ onStart, onLibrary }) {
         </button>
       </div>
       <div style={{ marginTop:'36px', display:'flex', gap:'28px', justifyContent:'center' }}>
-        {[['21','Attack categories'],['1K+','Prompts per scan'],['100','Max score']].map(([n,l])=>(
+        {[['22','Attack categories'],['1K+','Prompts per scan'],['100','Max score']].map(([n,l])=>(
           <div key={l} style={{ textAlign:'center' }}>
             <div style={{ fontSize:'20px', fontWeight:'900', color:'var(--t1)', letterSpacing:'-0.5px' }}>{n}</div>
             <div style={{ fontSize:'11px', color:'var(--t3)', marginTop:'2px' }}>{l}</div>
@@ -242,7 +242,13 @@ export default function Dashboard() {
   // Oldest to newest, for the trend chart.
   const chronological = useMemo(()=>[...completedScans].reverse().slice(-12), [completedScans]);
   const scoreTrend = chronological.map(s=>s.summary?.security_score ?? 0);
-  const trendDelta = scoreTrend.length>=2 ? scoreTrend[scoreTrend.length-1]-scoreTrend[scoreTrend.length-2] : null;
+  // Change since the previous scan of the same target (scores of different targets don't compare).
+  const latestDone = completedScans[0];
+  const prevSame = latestDone && completedScans.slice(1).find(s=>s.target_name===latestDone.target_name);
+  const trendDelta = latestDone?.summary?.security_score!=null && prevSame?.summary?.security_score!=null
+    ? latestDone.summary.security_score - prevSame.summary.security_score : null;
+  const trendColor = trendDelta==null || trendDelta===0 ? 'var(--t3)' : trendDelta>0 ? '#16a34a' : '#dc2626';
+  const trendText = trendDelta===0 ? 'Unchanged' : trendDelta!=null ? `${trendDelta>0?'↑':'↓'} ${Math.abs(trendDelta)} pts` : '';
   const latestScan = scans[0]||null;
   const cleanScans = completedScans.filter(s=>!(s.summary?.critical>0)&&!(s.summary?.high>0)).length;
 
@@ -264,9 +270,9 @@ export default function Dashboard() {
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
     },
     { label:'Avg Security Score', value:avgScore, color:avgColor, suffix:'/100',
-      sub: trendDelta!=null ? `${trendDelta>=0?'↑':'↓'} ${Math.abs(trendDelta)} pts vs last scan`
-        : completedScans.length ? 'Need 2+ scans for trend' : 'No completed scan yet',
-      subColor: trendDelta==null ? 'var(--t3)' : trendDelta>=0 ? '#16a34a' : '#dc2626',
+      sub: trendDelta!=null ? `${trendText} since ${latestDone.target_name.length>24 ? latestDone.target_name.slice(0,23)+'…' : latestDone.target_name}’s previous scan`
+        : completedScans.length ? 'Scan a target twice to see a trend' : 'No completed scan yet',
+      subColor: trendColor,
       iconBg: avgScore==null ? 'rgba(17,24,39,0.04)' : avgScore>=80 ? 'rgba(74,222,128,0.12)' : avgScore>=50 ? 'rgba(250,204,21,0.1)' : 'var(--red-soft)',
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       chart: scoreTrend,
@@ -372,7 +378,7 @@ export default function Dashboard() {
               {[
                 { label:'Last scan',   val:latestScan ? relTime(latestScan.created_at) : '—' },
                 { label:'Total scans', val:total,       vc:'var(--t1)' },
-                { label:'Clean scans', val:`${cleanScans}/${completedScans.length}`, vc:'#16a34a' },
+                { label:'Clean scans', val:`${cleanScans}/${completedScans.length}`, vc: cleanScans>0 ? '#15803d' : 'var(--t1)' },
               ].map(row=>(
                 <div key={row.label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <span style={{ fontSize:'11px', color:'var(--t3)' }}>{row.label}</span>
@@ -390,8 +396,8 @@ export default function Dashboard() {
                 <p style={{ fontSize:'12px', color:'var(--t3)', marginTop:'2px' }}>
                   Last {scoreTrend.length} scan{scoreTrend.length!==1?'s':''}
                   {trendDelta!=null && (
-                    <span style={{ marginLeft:'8px', fontWeight:'700', color:trendDelta>=0?'#16a34a':'#dc2626' }}>
-                      {trendDelta>=0?'↑':'↓'} {Math.abs(trendDelta)} pts
+                    <span style={{ marginLeft:'8px', fontWeight:'700', color:trendColor }} title={`Latest ${latestDone.target_name} scan vs its previous one`}>
+                      {trendText}
                     </span>
                   )}
                 </p>
