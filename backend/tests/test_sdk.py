@@ -147,3 +147,16 @@ def test_cli_passes_custom_rest_fields_and_baseline(monkeypatch):
     assert cli.main(["--api-key", "llmsk_x", "scan", "--name", "x", "--type", "custom_rest", "--url", "https://a.b/chat",
                      "--input-field", "q", "--output-field", "a", "--baseline", "Hours?"]) == 0
     assert sent["input_field"] == "q" and sent["output_field"] == "a" and sent["baseline_question"] == "Hours?"
+
+
+def test_cli_quick_flag_reaches_the_client(monkeypatch):
+    from llmscanner import cli
+    sent = {}
+
+    class FakeClient:
+        def scan(self, name, **kw):
+            sent.update(kw)
+            return type("S", (), {"scan_id": "s1"})()
+    monkeypatch.setattr(cli, "_client", lambda args: FakeClient())
+    assert cli.main(["--api-key", "llmsk_x", "scan", "--name", "x", "--quick"]) == 0 and sent["quick"] is True
+    assert cli.main(["--api-key", "llmsk_x", "scan", "--name", "x"]) == 0 and sent["quick"] is False

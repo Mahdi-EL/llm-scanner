@@ -46,6 +46,9 @@ inputs:
   categories:
     description: Space-separated attack categories. Empty means all 22.
     required: false
+  quick:
+    description: "true runs about 5 attacks per category (~110) instead of all ~1,090: faster and cheaper, for pull requests."
+    default: "false"
   fail-on:
     description: Fail when any finding is at or above this severity (low, medium, high, critical). Empty disables.
     default: high
@@ -100,6 +103,7 @@ runs:
         IN_OUTPUT_FIELD: ${{ inputs.output-field }}
         IN_BASELINE: ${{ inputs.baseline-question }}
         IN_CATEGORIES: ${{ inputs.categories }}
+        IN_QUICK: ${{ inputs.quick }}
         IN_FAIL_ON: ${{ inputs.fail-on }}
         IN_MIN_SCORE: ${{ inputs.min-score }}
         IN_FORMAT: ${{ inputs.report-format }}
@@ -121,6 +125,7 @@ runs:
           read -ra categories <<< "$IN_CATEGORIES"
           args+=(--categories "${categories[@]}")
         fi
+        [ "$IN_QUICK" = "true" ] && args+=(--quick)
         [ -n "$IN_FAIL_ON" ] && args+=(--fail-on "$IN_FAIL_ON")
         [ -n "$IN_MIN_SCORE" ] && args+=(--min-score "$IN_MIN_SCORE")
         if [ -n "$IN_FORMAT" ]; then

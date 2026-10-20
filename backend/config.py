@@ -84,6 +84,10 @@ MAX_CONSECUTIVE_ERRORS = _int("MAX_CONSECUTIVE_ERRORS", 25)
 # A scan where more than this share of attacks couldn't be completed fails instead of
 # reporting a score built from the few that worked.
 MAX_ERROR_PERCENT    = _int("MAX_ERROR_PERCENT", 50)
+# A quick scan runs this many attacks per category, spread from basic to advanced (22 x 5 = 110).
+QUICK_SCAN_PER_CATEGORY = _int("QUICK_SCAN_PER_CATEGORY", 5)
+# Free accounts run quick scans only (full scans cost ~10x the model calls). Off by default.
+FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", False)
 # Lets local development scan http://localhost targets. Never enable in production.
 ALLOW_PRIVATE_TARGETS = _bool("ALLOW_PRIVATE_TARGETS", False) and not IS_PROD
 

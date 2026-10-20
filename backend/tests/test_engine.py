@@ -602,3 +602,12 @@ def test_judge_counts_tokens_and_can_lower_reasoning_effort(monkeypatch):
     sent.clear()
     j2.evaluate("attack 2", "reply")
     assert "reasoning_effort" not in sent          # only gpt-oss models take it
+
+
+def test_quick_scan_reports_its_depth(few_attacks, monkeypatch):
+    import scanner
+    monkeypatch.setattr(scanner.config, "QUICK_SCAN_PER_CATEGORY", 2)
+    data = scanner.run_full_scan(FakeTarget(), judge=FakeJudge(), generate_reports=False, quick=True, concurrency=1)
+    assert data["scan_depth"] == "quick" and data["total_attacks"] == 4      # 2 per category, 2 categories
+    full = scanner.run_full_scan(FakeTarget(), judge=FakeJudge(), generate_reports=False, concurrency=1)
+    assert full["scan_depth"] == "full" and full["total_attacks"] == 6

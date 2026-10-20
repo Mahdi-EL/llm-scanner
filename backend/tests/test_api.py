@@ -1030,3 +1030,23 @@ def test_simulation_scans_count_target_tokens_as_ours():
              "target_completion_tokens": 5, "graded_by_rules": 2}
     assert runner._server_tokens(usage, "simulation") == {"tokens_in": 150, "tokens_out": 15, "graded_by_rules": 2}
     assert runner._server_tokens(usage, "groq") == {"tokens_in": 100, "tokens_out": 10, "graded_by_rules": 2}
+
+
+def test_quick_scans_sample_every_category_and_can_be_required_on_free(client, monkeypatch):
+    import config
+    from scanner import spread
+    assert spread(list(range(10)), 5) == [0, 2, 4, 7, 9] and spread([1, 2], 5) == [1, 2]
+    _, headers = _register(client)
+    cats = client.get("/categories").json()["categories"]
+    expected = sum(c["quick_attacks"] for c in cats)
+    assert all(1 <= c["quick_attacks"] <= 5 for c in cats) and expected == 5 * len(cats)
+
+    scan = client.post("/scan", headers=headers, json={"target_name": "q", "quick": True}).json()
+    stored = scan_db.get_scan(scan["scan_id"])
+    assert stored["total_attacks"] == expected            # simulation keeps chat history: all of them
+    assert client.get(f"/scan/{scan['scan_id']}", headers=headers).json()["config"]["quick"] is True
+
+    monkeypatch.setattr(config, "FREE_QUICK_SCANS_ONLY", True)
+    assert client.get("/auth/me", headers=headers).json()["full_scans"] is False
+    r = client.post("/scan", headers=headers, json={"target_name": "full"})
+    assert r.status_code == 402 and "quick scan" in r.json()["detail"]

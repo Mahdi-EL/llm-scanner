@@ -45,8 +45,12 @@ A custom REST endpoint takes a JSON message and returns a JSON reply; name the f
 `message` / `response`:
 
 ```bash
-llmscanner scan --name "Help desk" --type custom_rest --url https://api.example.com/chat   --input-field question --output-field answer --wait --fail-on high
+llmscanner scan --name "Help desk" --type custom_rest --url https://api.example.com/chat \
+  --input-field question --output-field answer --wait --fail-on high
 ```
+
+`--quick` runs about 5 attacks per category (~110) instead of all ~1,090: a fast check for every pull
+request, with a full scan before a release.
 
 Exit codes: `0` passed, `1` a finding at or above `--fail-on` (or a score below `--min-score`), `2` error.
 In GitHub Actions the result is also written to the job summary.

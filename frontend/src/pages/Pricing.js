@@ -14,7 +14,7 @@ const DESCRIPTIONS = {
 };
 
 const FAQS = [
-  { q:'What counts as one scan?', a:'One scan sends every selected attack prompt (about 1,090 when you pick all 22 categories) to one target and produces a full report. A scan that fails or is cancelled before its first attack doesn’t count toward your monthly limit. Re-testing the failed attacks of a scan also counts as one scan.' },
+  { q:'What counts as one scan?', a:'One scan sends every selected attack prompt (about 1,090 when you pick all 22 categories) to one target and produces a full report. A scan that fails or is cancelled before its first attack doesn’t count toward your monthly limit. A quick scan (about 110 attacks) and a re-test of the failed attacks also count as one scan each.' },
   { q:'How long does a scan take?', a:'It depends on how fast your target answers. Each attack is one call to your target plus one grading call. Pick fewer categories for a quicker scan.' },
   { q:'Which AI apps can I scan?', a:'Any OpenAI-compatible API (OpenAI, Azure OpenAI, Together, Groq and others), your own Groq models, custom REST endpoints, and a simulation mode that tests a system prompt without a live API.' },
   { q:'Can I scan production apps?', a:'Only apps you own or are explicitly authorized to test. Scans send real adversarial prompts and use your target’s API quota.' },

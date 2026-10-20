@@ -141,3 +141,21 @@ test('Pricing offers a yearly switch when yearly prices exist', async () => {
   expect(screen.getByText('€490')).toBeInTheDocument();
   expect(screen.getByText(/17% less than monthly/)).toBeInTheDocument();
 });
+
+test('NewScan sends a quick scan with its smaller attack count', async () => {
+  api.scansAPI.categories.mockResolvedValue({ data: { categories: [
+    { id: 'extraction', title: 'System prompt extraction', tests: '', owasp: ['LLM07'], attacks: 68, quick_attacks: 5 },
+    { id: 'roleplay', title: 'Role-play', tests: '', owasp: ['LLM01'], attacks: 63, quick_attacks: 5 },
+  ] } });
+  api.scansAPI.models.mockResolvedValue({ data: { default_target: '', groq: [] } });
+  api.promptsAPI.list.mockResolvedValue({ data: { prompts: [] } });
+  api.targetsAPI.list.mockResolvedValue({ data: { targets: [] } });
+  api.scansAPI.start.mockResolvedValue({ data: { scan_id: 'new1' } });
+  renderAt('/new-scan', <NewScan />, '/new-scan');
+  expect(await screen.findByText('Launch scan · 131 attacks')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Quick scan'));
+  expect(screen.getByText('Launch scan · 10 attacks')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Target name'), { target: { value: 'Bot' } });
+  fireEvent.click(screen.getByText('Launch scan · 10 attacks'));
+  await waitFor(() => expect(api.scansAPI.start).toHaveBeenCalledWith(expect.objectContaining({ quick: true })));
+});

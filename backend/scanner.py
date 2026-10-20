@@ -39,12 +39,30 @@ class ScanAborted(RuntimeError):
     """Raised when a scan stops early (target down, or cancelled)."""
 
 
-def build_attack_list(categories=None, with_history=True):
+def spread(items: list, n: int) -> list:
+    """n items evenly spaced through the list. Each category runs from basic attacks to
+    sophisticated ones, so a quick scan samples the whole range, not just the easy start."""
+    if n <= 0 or len(items) <= n:
+        return list(items)
+    if n == 1:
+        return [items[0]]
+    return [items[round(k * (len(items) - 1) / (n - 1))] for k in range(n)]
+
+
+def build_attack_list(categories=None, with_history=True, quick=False):
     """[(category, prompt)] for the chosen categories (all of them by default).
-    with_history=False leaves out multi-turn attacks (targets that can't keep a conversation)."""
+    with_history=False leaves out multi-turn attacks (targets that can't keep a conversation);
+    quick=True keeps QUICK_SCAN_PER_CATEGORY attacks per category."""
     chosen = categories or list(ATTACK_PROMPTS)
-    return [(c, p) for c in chosen if c in ATTACK_PROMPTS for p in ATTACK_PROMPTS[c]
-            if with_history or not is_multi_turn(p)]
+    out = []
+    for c in chosen:
+        if c not in ATTACK_PROMPTS:
+            continue
+        prompts = [p for p in ATTACK_PROMPTS[c] if with_history or not is_multi_turn(p)]
+        if quick:
+            prompts = spread(prompts, config.QUICK_SCAN_PER_CATEGORY)
+        out += [(c, p) for p in prompts]
+    return out
 
 
 CLEAR_REFUSAL = {"score": 0, "behavior_changed": False, "confidence": "HIGH", "detail": "",
@@ -122,7 +140,7 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
                   known_system_prompt=None, canary=None, concurrency=None,
                   on_progress=None, on_checkpoint=None, resume_results=None,
                   should_stop=None, generate_reports=True, reports_dir=None,
-                  extra_attacks=None, attacks=None):
+                  extra_attacks=None, attacks=None, quick=False):
     """Runs a full scan and returns the report data (summary + findings).
 
     on_progress(done, total, category) is called after each attack,
@@ -131,7 +149,8 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
     extra_attacks adds (category, prompt) pairs, e.g. a user's custom prompts;
     attacks replaces the category selection with an explicit list (re-tests).
     """
-    base = [tuple(a) for a in attacks] if attacks else build_attack_list(categories)
+    depth = "quick" if quick and not attacks else "full"     # a re-test's explicit list is neither
+    base = [tuple(a) for a in attacks] if attacks else build_attack_list(categories, quick=quick)
     attacks = base + [tuple(a) for a in (extra_attacks or [])]
     if not getattr(target, "supports_history", False):
         skipped = sum(1 for _, p in attacks if is_multi_turn(p))
@@ -205,6 +224,7 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
         duration_seconds=round(time.time() - started),
         judge_model     =judge.model,
         llm_calls       =judge.calls + getattr(target, "calls", 0),
+        scan_depth      =depth,
         usage           ={**(judge.usage() if hasattr(judge, "usage") else {}),
                           "target_calls": getattr(target, "calls", 0),
                           "target_prompt_tokens": getattr(target, "prompt_tokens", 0),

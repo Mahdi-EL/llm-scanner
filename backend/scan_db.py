@@ -101,6 +101,7 @@ def public_scan(scan: dict, include_results: bool = False) -> dict:
                              if cfg.get(k) is not None}
             out["config"]["has_system_prompt"] = bool(cfg.get("system_prompt"))
             out["config"]["retest"] = bool(cfg.get("attacks"))
+            out["config"]["quick"] = bool(cfg.get("quick")) and not cfg.get("attacks")
         except (TypeError, ValueError):
             pass
     if include_results:

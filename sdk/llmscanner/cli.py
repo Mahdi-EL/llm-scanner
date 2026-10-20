@@ -69,7 +69,7 @@ def cmd_scan(args) -> int:
     scan = client.scan(args.name, target_type=args.type, api_url=args.url, api_key=args.target_key,
                        model=args.model, system_prompt=system_prompt, categories=args.categories,
                        baseline_question=args.baseline, input_field=args.input_field,
-                       output_field=args.output_field, target_id=args.target_id)
+                       output_field=args.output_field, target_id=args.target_id, quick=args.quick)
     print(f"Scan {scan.scan_id} queued for {args.name}")
     if not args.wait:
         return 0
@@ -136,6 +136,8 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--input-field", help="custom_rest: JSON field the message is sent in (default: message)")
     scan.add_argument("--output-field", help="custom_rest: JSON field the reply is read from (default: response)")
     scan.add_argument("--categories", nargs="+")
+    scan.add_argument("--quick", action="store_true",
+                      help="about 5 attacks per category (~110) instead of the full library")
     scan.add_argument("--target-id", help="use a saved target instead of --type/--url/--target-key")
     scan.add_argument("--wait", action="store_true", help="wait for the result")
     scan.add_argument("--fail-on", type=str.lower, choices=[s.lower() for s in SEVERITY_RANK if s != "SAFE"],
