@@ -110,7 +110,7 @@ export default function LandingPage() {
             </p>
             <div className="ed-cta-row">
               <Link to="/register" className="ed-btn ed-btn-solid">Start for free →</Link>
-              <Link to="/login" className="ed-btn ed-btn-line">Sign in</Link>
+              <Link to="/check" className="ed-btn ed-btn-line">Test your prompt free</Link>
             </div>
             <div className="ed-hero-meta">
               <div className="ed-meta-item"><strong>1,000+</strong><span>attack prompts / scan</span></div>

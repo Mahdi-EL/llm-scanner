@@ -28,6 +28,7 @@ and checkpoints, so a server restart resumes a scan instead of losing it.
 
 - 1,090 attack prompts in 22 categories (including 15 multi-turn conversations), each mapped to the OWASP LLM Top 10 (2025)
 - Quick scans: about 110 attacks spread across every category, for a check on each change
+- A free, no-signup leak check at /check: 20 attacks on a pasted system prompt, rule-graded, nothing stored
 - Your own custom attack prompts, run with every scan
 - Reports in PDF, HTML, Markdown and JSON; read-only share links that expire
 - Saved targets (keys stored encrypted), daily or weekly scheduled scans, regression alerts

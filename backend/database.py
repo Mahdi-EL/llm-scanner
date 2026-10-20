@@ -139,6 +139,10 @@ CREATE TABLE IF NOT EXISTS firewall_usage (
     count   INTEGER DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
+CREATE TABLE IF NOT EXISTS leak_checks (
+    day   TEXT PRIMARY KEY,
+    count INTEGER DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS finding_triage (
     user_id     TEXT NOT NULL,
     target_name TEXT NOT NULL,

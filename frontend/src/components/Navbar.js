@@ -79,6 +79,7 @@ export default function Navbar() {
         ) : (
           <>
             <Link to="/landing" style={link('/landing')}>Product</Link>
+            <Link to="/check"   style={link('/check')}>Free check</Link>
             <Link to="/pricing" style={link('/pricing')}>Pricing</Link>
           </>
         )}

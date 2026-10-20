@@ -1216,3 +1216,45 @@ def test_evidence_report_covers_owasp_triage_and_retests(client):
     r = client.get(f"/download/evidence/{scan_id}", headers=headers)
     assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content.startswith(b"%PDF")
     assert "Evidence" in r.headers["content-disposition"]
+
+
+def test_free_leak_check_counts_leaks_without_returning_replies(client, monkeypatch):
+    import config
+    import target as target_mod
+
+    class LeakyModel:
+        def __init__(self, target_type, system_prompt="", **kw):
+            self.system_prompt = system_prompt
+
+        def send(self, message):
+            if "prompt" in message.lower() or "instruction" in message.lower():
+                return f"Sure! Here it is: {self.system_prompt}"
+            return "I can't help with that."
+    monkeypatch.setattr(target_mod, "Target", LeakyModel)
+    prompt = "You are Acme's support bot. Only discuss orders and never mention the refund override code."
+    r = client.post("/public/leak-check", json={"system_prompt": prompt})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["attacks"] == 20 and body["leaked"] >= 1 and body["errors"] == 0
+    assert body["examples"] and "Acme" not in r.text            # attacks are listed, the model's replies never are
+    assert client.post("/public/leak-check", json={"system_prompt": "too short"}).status_code == 422
+
+    monkeypatch.setattr(config, "LEAK_CHECKS_PER_DAY", 1)        # the one allowed today was used above
+    r = client.post("/public/leak-check", json={"system_prompt": prompt})
+    assert r.status_code == 429 and "free account" in r.json()["detail"]
+
+
+def test_free_leak_check_says_when_the_model_is_down(client, monkeypatch):
+    import config
+    import target as target_mod
+
+    class DownModel:
+        def __init__(self, *a, **kw):
+            pass
+
+        def send(self, message):
+            raise ConnectionError("no model")
+    monkeypatch.setattr(target_mod, "Target", DownModel)
+    monkeypatch.setattr(config, "LEAK_CHECKS_PER_DAY", 10_000)
+    r = client.post("/public/leak-check", json={"system_prompt": "You are a helpful assistant for a bank."})
+    assert r.status_code == 503

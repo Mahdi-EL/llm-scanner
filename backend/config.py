@@ -89,6 +89,9 @@ QUICK_SCAN_PER_CATEGORY = _int("QUICK_SCAN_PER_CATEGORY", 5)
 # Free accounts run quick scans only (full scans cost ~10x the model calls). Off by default.
 FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", False)
 
+# Free no-signup leak checks (20 attacks each on the server's model key) across all visitors per day.
+LEAK_CHECKS_PER_DAY  = _int("LEAK_CHECKS_PER_DAY", 300)
+
 # ── Firewall gateway (/gateway/<target id>/v1) ────────────────
 GATEWAY_TIMEOUT      = _int("GATEWAY_TIMEOUT", 120)      # seconds for the model's API to answer
 GATEWAY_CONCURRENCY  = _int("GATEWAY_CONCURRENCY", 16)   # gateway requests in flight; the rest queue

@@ -61,6 +61,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/gateway/{target_id}/v1/chat/completions` | yes | OpenAI-compatible chat completions through the AI firewall. Set your OpenAI client's base_url to /gateway/{target_id}/v1 and its api_key to an LLM Scanner API key. |
 | GET | `/health` |  | Liveness check, plus whether storage, email and billing are configured. |
 | GET | `/models` | yes | Groq models this server can use for simulated and Groq targets, and the defaults in use. |
+| POST | `/public/leak-check` |  | Free, no account: sends 20 extraction and override attacks at a system prompt on the demo model and says how many got it out. Graded by rules (the canary, verbatim copies); replies are never returned or stored. |
 | GET | `/results/{scan_id}` | yes | The full report data (summary + every finding) of a finished scan. |
 | POST | `/scan` | yes | Queues a scan. Poll GET /scan/{id} for progress. |
 | GET | `/scan/compare/{base_id}/{head_id}` | yes | What got worse or better between two finished scans. |
