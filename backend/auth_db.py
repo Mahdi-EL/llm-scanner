@@ -187,7 +187,7 @@ def delete_user(user_id: str):
     """Removes the account and everything attached to it except scans (deleted by the caller)."""
     with transaction() as conn:
         for table in ("api_keys", "refresh_tokens", "targets", "schedules", "custom_prompts", "share_links",
-                      "firewall_usage", "remediation_usage", "gateway_events"):
+                      "firewall_usage", "remediation_usage", "gateway_events", "finding_triage"):
             conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
 

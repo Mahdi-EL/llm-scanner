@@ -70,6 +70,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/scan/{scan_id}/retest` | yes | Runs only the attacks that failed in this scan again, optionally with a new system prompt. |
 | DELETE | `/scan/{scan_id}/share` | yes | Disables the scan's share link. |
 | POST | `/scan/{scan_id}/share` | yes | Creates a read-only link to a finished scan that expires after `days` (default 7). |
+| PUT | `/scan/{scan_id}/triage` | yes | Marks a failed finding as a false positive or an accepted risk ("open" clears the mark). The mark applies to that attack in every scan of the same target: re-tests, suggestions and regression alerts leave it out, and the scan shows its score after triage. |
 | GET | `/scans` | yes | Your scans, newest first (summary only; findings come from /scan/{id}). |
 | GET | `/scans/stats` | yes | Totals over all your finished scans: count, average score, critical findings, clean scans. |
 | GET | `/shared/{token}` |  | A shared report: findings and summary only, never the target's configuration. |

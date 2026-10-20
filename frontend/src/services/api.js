@@ -145,6 +145,7 @@ export const scansAPI = {
   remediate: (id, body = {}) => api.post(`/scan/${id}/remediate`, body),
   retest : (id, body = {}) => api.post(`/scan/${id}/retest`, body),
   unshare: id       => api.delete(`/scan/${id}/share`),
+  triage : (id, key, status, note) => api.put(`/scan/${id}/triage`, { key, status, note }),
   shared : token    => api.get(`/shared/${token}`),
   categories: ()    => api.get('/categories'),
   categoryStats: () => api.get('/analytics/categories'),

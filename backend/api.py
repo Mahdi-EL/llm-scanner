@@ -700,6 +700,7 @@ def export_account(request: Request, user: dict = Depends(require_session)):
         "share_links"   : store.list_shares(user["id"]),
         "firewall_usage": services.firewall_usage(user),
         "gateway_last_7_days": gateway.stats(user["id"]),
+        "triage"        : store.list_triage(user["id"]),
         "scans"         : scans,
     }
 
@@ -777,7 +778,7 @@ def compare_scans(base_id: str, head_id: str, user: dict = Depends(require_user)
     """What got worse or better between two finished scans."""
     base = _get_complete_scan(base_id, user)
     head = _get_complete_scan(head_id, user)
-    diff = analysis.diff_findings(_report_data(base).get("results", []), _report_data(head).get("results", []))
+    diff = analysis.diff_findings(_results_after_triage(base, user), _results_after_triage(head, user))
     return {
         "base": {"scan_id": base_id, "security_score": base.get("security_score", 0),
                  "grade": base.get("grade"), "created_at": base.get("created_at")},
@@ -800,12 +801,44 @@ def get_scan_status(scan_id: str, user: dict = Depends(require_user)):
     """Status and progress; includes the findings once the scan is complete."""
     scan = _get_owned_scan(scan_id, user)
     out = scan_db.public_scan(scan, include_results=scan["status"] == "complete")
+    results = (out.get("results") or {}).get("results") if isinstance(out.get("results"), dict) else None
+    if results:
+        marks = store.triage_for(user["id"], scan["target_name"])
+        keyed = [{**r, "key": store.finding_key(r.get("category", ""), r.get("attack", ""))} for r in results]
+        out["results"] = {**out["results"], "results": keyed}
+        out["triage"] = {r["key"]: marks[r["key"]] for r in keyed if r["key"] in marks}
+        out["triaged_summary"] = scoring.summarize(store.apply_triage(user["id"], scan["target_name"], results)) \
+            if out["triage"] else None
     if out.get("target_id") and not store.get_target(user["id"], out["target_id"]):
         out["target_id"] = None        # the saved target was deleted: nothing to re-scan or take a key from
     out["shared_until"] = store.share_expiry(user["id"], scan_id) if scan["status"] == "complete" else None
     if scan["status"] == "complete" and scan.get("results"):
         out["recommendations"] = report.recommendations(scan["results"].get("results", []))
     return out
+
+
+def _results_after_triage(scan: dict, user: dict) -> list:
+    return store.apply_triage(user["id"], scan["target_name"], _report_data(scan).get("results", []))
+
+
+class TriageRequest(BaseModel):
+    key   : str = Field(..., min_length=8, max_length=64)
+    status: Literal["false_positive", "accepted_risk", "open"]
+    note  : Optional[str] = Field(None, max_length=500)
+
+
+@app.put("/scan/{scan_id}/triage")
+def triage_finding(scan_id: str, body: TriageRequest, user: dict = Depends(require_user)):
+    """Marks a failed finding as a false positive or an accepted risk ("open" clears the mark). The mark
+    applies to that attack in every scan of the same target: re-tests, suggestions and regression alerts
+    leave it out, and the scan shows its score after triage."""
+    scan = _get_complete_scan(scan_id, user)
+    failed = {store.finding_key(r.get("category", ""), r.get("attack", ""))
+              for r in remediation.failed_findings(_report_data(scan).get("results", []))}
+    if body.key not in failed:
+        raise HTTPException(status_code=404, detail="No failed finding with that key in this scan")
+    store.set_triage(user["id"], scan["target_name"], body.key, body.status, (body.note or "").strip() or None)
+    return {"key": body.key, "status": body.status}
 
 
 @app.post("/scan/{scan_id}/cancel")
@@ -999,14 +1032,15 @@ def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user:
         prompt = runner.DEFAULT_SYSTEM_PROMPT
     if not prompt:
         raise HTTPException(status_code=400, detail="Paste your system prompt: it wasn't stored with this scan")
-    if not remediation.failed_findings(_report_data(scan).get("results", [])):
+    results = _results_after_triage(scan, user)
+    if not remediation.failed_findings(results):
         raise HTTPException(status_code=400, detail="Nothing failed in this scan, so there is nothing to fix.")
     try:
         services.use_remediation(user)
     except services.ScanRejected as e:
         raise HTTPException(status_code=e.status, detail=e.message)
     try:
-        return remediation.suggest(prompt, _report_data(scan).get("results", []))
+        return remediation.suggest(prompt, results)
     except remediation.ProviderError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except remediation.RemediationError as e:
@@ -1018,7 +1052,7 @@ def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user:
 def retest_scan(request: Request, scan_id: str, body: RetestRequest, user: dict = Depends(require_user)):
     """Runs only the attacks that failed in this scan again, optionally with a new system prompt."""
     scan = _get_complete_scan(scan_id, user)
-    failures = remediation.failed_findings(_report_data(scan).get("results", []))
+    failures = remediation.failed_findings(_results_after_triage(scan, user))
     if not failures:
         raise HTTPException(status_code=400, detail="Nothing failed in this scan, so there is nothing to re-test")
     cfg = {k: v for k, v in _scan_config(scan).items() if k in _RETEST_KEEP}

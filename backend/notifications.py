@@ -137,7 +137,10 @@ def _regression_alert(user: dict, scan: dict, alert_drop: int) -> None:
                                               schedule_id=scan.get("schedule_id"))
     if not previous:
         return
-    diff = analysis.diff_findings(_results(previous), _results(scan))
+    import store
+    # Findings the user marked as false positives or accepted risks don't count as regressions
+    diff = analysis.diff_findings(store.apply_triage(user["id"], previous["target_name"], _results(previous)),
+                                  store.apply_triage(user["id"], scan["target_name"], _results(scan)))
     old, new = previous.get("security_score") or 0, scan.get("security_score") or 0
     dropped = diff["same_attacks"] and old - new >= alert_drop
     new_critical = sum(1 for f in diff["introduced"] if f.get("severity") == "CRITICAL")

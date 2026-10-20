@@ -30,6 +30,12 @@ shown live in the web app, the CLI and the VS Code extension.
 Any CRITICAL finding caps the score at 49. One full system-prompt leak is a serious problem
 regardless of how many attacks failed. See the scoring rules in the README.
 
+**A finding is wrong, or a risk we accept. Can I mark it?**
+Yes: open the finding on its results page and choose False positive or Accept risk (with an optional
+note). The mark applies to that attack in every scan of the same target: re-tests, hardened-prompt
+suggestions and regression alerts leave it out, and the page shows the score after triage next to
+the original one. Reports keep the original grading. Reopen a finding to undo the mark.
+
 **What is an ERROR finding?**
 The target or the judge couldn't be reached, or the judge's answer couldn't be read. Errors are
 excluded from the score and listed in the report, so check them before trusting a scan. A scan

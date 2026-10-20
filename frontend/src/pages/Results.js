@@ -19,10 +19,11 @@ const PAGE = 25;
 const titleOf = (cats, id) => cats[id]?.title || (id?.startsWith('custom:') ? `Custom: ${id.slice(7).replace(/_/g,' ')}` : (id||'').replace(/_/g,' '));
 
 /* ── Score block ─────────────────────────────────────────── */
-function ScoreBlock({ summary }) {
+function ScoreBlock({ summary, triaged, triagedCount }) {
   const score = summary.security_score ?? 0;
   const color = scoreColor(score);
   return (
+    <div>
     <div style={{ display:'flex', alignItems:'flex-end', gap:'20px' }}>
       <div>
         <div style={{ fontFamily:'Georgia, serif', fontSize:'64px', lineHeight:1, color }}>{score}</div>
@@ -33,13 +34,44 @@ function ScoreBlock({ summary }) {
         <div style={{ fontSize:'12px', color:'var(--t3)' }}>{summary.tested ?? '—'} attacks graded</div>
       </div>
     </div>
+    {triaged && (
+      <div style={{ fontSize:'13px', marginTop:'10px' }}>
+        After triage: <strong style={{ color: scoreColor(triaged.security_score) }}>{triaged.security_score} · grade {triaged.grade}</strong>
+        <span style={{ color:'var(--t3)' }}> ({triagedCount} finding{triagedCount !== 1 ? 's' : ''} marked as false positive or accepted risk)</span>
+      </div>
+    )}
+    </div>
   );
 }
 
 /* ── Finding card ────────────────────────────────────────── */
-function FindingCard({ item, cats }) {
+const TRIAGE_LABEL = { false_positive: 'False positive', accepted_risk: 'Accepted risk' };
+
+function TriageControls({ item, mark, onTriage }) {
+  const [note, setNote] = useState(mark?.note || '');
+  const [busy, setBusy] = useState(false);
+  const set = async status => { setBusy(true); try { await onTriage(item.key, status, note); } finally { setBusy(false); } };
+  if (mark) return (
+    <div style={{ fontSize:'13px', display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap' }}>
+      <span>Marked as <strong>{TRIAGE_LABEL[mark.status].toLowerCase()}</strong>{mark.note ? `: ${mark.note}` : ''}.
+        It isn’t counted in the score after triage, re-tests or alerts for this target.</span>
+      <button className="btn-ghost" style={{ fontSize:'12px' }} disabled={busy} onClick={() => set('open')}>Reopen</button>
+    </div>
+  );
+  return (
+    <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
+      <input aria-label="Triage note (optional)" value={note} onChange={e => setNote(e.target.value)} maxLength={500}
+        placeholder="Note (optional), e.g. the value is public" style={{ flex:'1 1 220px', minWidth:0, fontSize:'12px' }} />
+      <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy} onClick={() => set('false_positive')}>False positive</button>
+      <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy} onClick={() => set('accepted_risk')}>Accept risk</button>
+    </div>
+  );
+}
+
+function FindingCard({ item, cats, mark, onTriage }) {
   const [open, setOpen] = useState(false);
   const m = SEV_META[item.severity] || SEV_META.LOW;
+  const failed = !['SAFE','ERROR'].includes(item.severity);
   return (
     <div style={{ borderBottom:'1px solid var(--b1)' }}>
       <button onClick={()=>setOpen(o=>!o)} aria-expanded={open}
@@ -49,6 +81,7 @@ function FindingCard({ item, cats }) {
           <span style={{ display:'block', fontSize:'12px', color:'var(--t3)' }}>{titleOf(cats, item.category)}</span>
           <span style={{ display:'block', fontSize:'13px', color:'var(--t1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.attack}</span>
         </span>
+        {mark && <span style={{ fontSize:'11px', color:'var(--t3)', flexShrink:0 }}>{TRIAGE_LABEL[mark.status]}</span>}
         <span style={{ fontSize:'12px', color:'var(--t3)', fontVariantNumeric:'tabular-nums', flexShrink:0 }}>{item.score ?? 0}/10</span>
       </button>
       {open && (
@@ -62,6 +95,9 @@ function FindingCard({ item, cats }) {
             </Field>
           )}
           {item.owasp?.length > 0 && <div style={{ fontSize:'12px', color:'var(--t3)' }}>OWASP LLM Top 10: {item.owasp.join(', ')}</div>}
+          {failed && item.key && onTriage && (
+            <Field label="Triage"><TriageControls item={item} mark={mark} onTriage={onTriage} /></Field>
+          )}
         </div>
       )}
     </div>
@@ -340,19 +376,33 @@ export default function Results() {
   }, []);
 
   const results = useMemo(() => scan?.results?.results || [], [scan]);
+  const triage = useMemo(() => scan?.triage || {}, [scan]);
+  const isTriaged = useCallback(r => !!(r.key && triage[r.key]), [triage]);
   const counts = useMemo(() => {
-    const c = { ALL: results.length, FAILED: 0 };
+    const c = { ALL: results.length, FAILED: 0, TRIAGED: 0 };
     SEV_ORDER.forEach(s => { c[s] = 0; });
-    results.forEach(r => { c[r.severity] = (c[r.severity] || 0) + 1; if (!['SAFE','ERROR'].includes(r.severity)) c.FAILED += 1; });
+    results.forEach(r => {
+      c[r.severity] = (c[r.severity] || 0) + 1;
+      if (isTriaged(r)) c.TRIAGED += 1;
+      else if (!['SAFE','ERROR'].includes(r.severity)) c.FAILED += 1;
+    });
     return c;
-  }, [results]);
+  }, [results, isTriaged]);
   const visible = useMemo(() => {
     const rank = Object.fromEntries(SEV_ORDER.map((s,i)=>[s,i]));
     const list = sevFilter === 'ALL' ? results
-      : sevFilter === 'FAILED' ? results.filter(r => !['SAFE','ERROR'].includes(r.severity))
+      : sevFilter === 'FAILED' ? results.filter(r => !['SAFE','ERROR'].includes(r.severity) && !isTriaged(r))
+      : sevFilter === 'TRIAGED' ? results.filter(isTriaged)
       : results.filter(r => r.severity === sevFilter);
     return [...list].sort((a,b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9) || (b.score||0) - (a.score||0));
-  }, [results, sevFilter]);
+  }, [results, sevFilter, isTriaged]);
+  const onTriage = async (key, status, note) => {
+    try {
+      await scansAPI.triage(id, key, status, note?.trim() || undefined);
+      toast(status === 'open' ? 'Finding reopened.' : 'Marked. Re-tests and alerts for this target leave it out.', 'success');
+      fetchScan();
+    } catch (e) { toast(errorMessage(e, 'Could not save the triage.'), 'error'); }
+  };
 
   const download = async format => {
     setBusy(format);
@@ -466,7 +516,7 @@ export default function Results() {
       {/* ── Summary ──────────────────────────── */}
       <div className="results-hero" style={{ marginBottom:'16px', padding:'28px 32px', display:'grid', gridTemplateColumns:'minmax(260px, 1fr) 2fr', gap:'32px' }}>
         <div>
-          <ScoreBlock summary={summary} />
+          <ScoreBlock summary={summary} triaged={scan.triaged_summary} triagedCount={Object.keys(scan.triage || {}).length} />
           <div style={{ display:'flex', gap:'18px', marginTop:'22px', flexWrap:'wrap' }}>
             {['critical','high','medium','low','safe'].map(k => (
               <div key={k}>
@@ -498,9 +548,9 @@ export default function Results() {
         <div style={{ padding:'16px 20px', borderBottom:'1px solid var(--b1)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
           <span style={{ fontSize:'15px', fontWeight:'700' }}>Findings</span>
           <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
-            {['FAILED','ALL',...SEV_ORDER].map(sev => {
+            {['FAILED','ALL',...SEV_ORDER,'TRIAGED'].map(sev => {
               if (!['FAILED','ALL'].includes(sev) && !counts[sev]) return null;
-              const label = sev === 'FAILED' ? 'Failed' : sev === 'ALL' ? 'All' : SEV_META[sev].label;
+              const label = sev === 'FAILED' ? 'Failed' : sev === 'ALL' ? 'All' : sev === 'TRIAGED' ? 'Triaged' : SEV_META[sev].label;
               return (
                 <button key={sev} className={`filter-btn${sevFilter===sev?' active':''}`} style={{ padding:'4px 11px', fontSize:'11px' }}
                   onClick={()=>{ setSevFilter(sev); setShown(PAGE); }}>
@@ -515,7 +565,10 @@ export default function Results() {
             <p style={{ fontSize:'13px', color:'var(--t3)', padding:'18px 0' }}>
               {sevFilter === 'FAILED' ? 'No attack succeeded against this target.' : 'Nothing to show for this filter.'}
             </p>
-          ) : visible.slice(0, shown).map((item, i) => <FindingCard key={`${item.category}-${i}-${item.attack.slice(0,20)}`} item={item} cats={cats} />)}
+          ) : visible.slice(0, shown).map((item, i) => (
+            <FindingCard key={item.key || `${item.category}-${i}-${item.attack.slice(0,20)}`} item={item} cats={cats}
+              mark={item.key ? triage[item.key] : null} onTriage={onTriage} />
+          ))}
           {visible.length > shown && (
             <button className="btn-outline" style={{ width:'100%', marginTop:'12px' }} onClick={()=>setShown(n => n + PAGE)}>
               Show {Math.min(PAGE, visible.length - shown)} more of {visible.length - shown} remaining
