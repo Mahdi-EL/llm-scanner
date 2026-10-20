@@ -184,7 +184,9 @@ export default function Settings() {
       </Section>
 
       <Section title="Password" desc="Changing it signs you out on every other device.">
-        <div style={{ padding:'20px', display:'grid', gap:'12px' }}>
+        <form onSubmit={e => { e.preventDefault(); savePassword(); }} style={{ padding:'20px', display:'grid', gap:'12px' }}>
+          {/* lets password managers file the new password under the right account */}
+          <input type="text" name="username" autoComplete="username" value={user?.username || ''} readOnly hidden />
           <div className="form-group" style={{ marginBottom:0 }}>
             <label htmlFor="set-current-password">Current password</label>
             <input id="set-current-password" type="password" autoComplete="current-password" value={pwForm.current} onChange={e => setPwForm(p => ({ ...p, current:e.target.value }))} />
@@ -200,8 +202,8 @@ export default function Settings() {
                 style={{ borderColor: pwForm.confirm && pwForm.next !== pwForm.confirm ? '#b42318' : '' }} />
             </div>
           </div>
-          <div><button className="btn-primary" style={{ fontSize:'13px' }} onClick={savePassword} disabled={pwLoading}>{pwLoading ? 'Updating…' : 'Update password'}</button></div>
-        </div>
+          <div><button type="submit" className="btn-primary" style={{ fontSize:'13px' }} disabled={pwLoading}>{pwLoading ? 'Updating…' : 'Update password'}</button></div>
+        </form>
       </Section>
 
       <Section title="API keys" desc="For CI pipelines, the SDK and the VS Code extension. Send the key in an X-API-Key header.">
@@ -241,13 +243,13 @@ export default function Settings() {
       </Section>
 
       <Section title="Delete account" desc="Deletes your account, every scan and every report, and cancels any subscription. This can’t be undone." danger>
-        <div style={{ display:'flex', gap:'8px', padding:'16px 20px', flexWrap:'wrap' }}>
+        <form onSubmit={e => { e.preventDefault(); deleteAccount(); }} style={{ display:'flex', gap:'8px', padding:'16px 20px', flexWrap:'wrap' }}>
           <input aria-label="Your password, to confirm deletion" type="password" autoComplete="current-password" value={deletePw} onChange={e => setDeletePw(e.target.value)} placeholder="Your password" style={{ flex:1, minWidth:'200px' }} />
-          <button onClick={deleteAccount} disabled={busy==='delete'}
+          <button type="submit" disabled={busy==='delete'}
             style={{ padding:'8px 16px', fontSize:'12px', fontWeight:'600', background:'rgba(180,35,24,0.08)', border:'1px solid rgba(180,35,24,0.4)', color:'#b42318', borderRadius:'6px', cursor:'pointer' }}>
             {busy==='delete' ? 'Deleting…' : 'Delete my account'}
           </button>
-        </div>
+        </form>
       </Section>
     </div>
   );
