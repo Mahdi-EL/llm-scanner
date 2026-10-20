@@ -17,8 +17,10 @@ const PAGE_TITLES = {
 
 // Notifications come from the user's own recent scans. What has been read is
 // remembered per browser (a convenience only; nothing breaks without it).
-const READ_KEY = 'notifs_read_until';
-const HIDDEN_KEY = 'notifs_hidden';
+// Per account, so another account signing in on this browser starts with its own state.
+const READ_KEY   = id => `notifs_read_until:${id}`;
+const HIDDEN_KEY = id => `notifs_hidden:${id}`;
+const OPENED_KEY = id => `notifs_opened:${id}`;
 
 function storageGet(key, fallback) {
   try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
@@ -61,8 +63,15 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
   const { user }  = useAuth();
   const [notifOpen, setNotifOpen] = useState(false);
   const [items,     setItems]     = useState([]);
-  const [readUntil, setReadUntil] = useState(() => storageGet(READ_KEY, ''));
-  const [hidden,    setHidden]    = useState(() => storageGet(HIDDEN_KEY, []));
+  const uid = user?.id || 'anon';
+  const [readUntil, setReadUntil] = useState(() => storageGet(READ_KEY(uid), ''));
+  const [hidden,    setHidden]    = useState(() => storageGet(HIDDEN_KEY(uid), []));
+  const [opened,    setOpened]    = useState(() => storageGet(OPENED_KEY(uid), []));
+  useEffect(() => {
+    setReadUntil(storageGet(READ_KEY(uid), ''));
+    setHidden(storageGet(HIDDEN_KEY(uid), []));
+    setOpened(storageGet(OPENED_KEY(uid), []));
+  }, [uid]);
   const panelRef  = useRef(null);
 
   const load = useCallback(() => {
@@ -74,7 +83,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
 
   const notifs = items
     .filter(n => !hidden.includes(n.id))
-    .map(n => ({ ...n, time: relTime(n.when), read: !!readUntil && n.when <= readUntil }));
+    .map(n => ({ ...n, time: relTime(n.when), read: opened.includes(n.id) || (!!readUntil && n.when <= readUntil) }));
   const unread = notifs.filter(n => !n.read).length;
 
   useEffect(() => {
@@ -86,10 +95,13 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
 
   const markAllRead  = () => {
     const latest = items.reduce((m, n) => (n.when > m ? n.when : m), '');
-    setReadUntil(latest); storageSet(READ_KEY, latest);
+    setReadUntil(latest); storageSet(READ_KEY(uid), latest);
   };
-  const dismiss      = id  => { const next = [...hidden, id].slice(-200); setHidden(next); storageSet(HIDDEN_KEY, next); };
-  const open         = n   => { setNotifOpen(false); navigate(`/results/${n.id}`); };
+  const dismiss      = id  => { const next = [...hidden, id].slice(-200); setHidden(next); storageSet(HIDDEN_KEY(uid), next); };
+  const open         = n   => {
+    if (!opened.includes(n.id)) { const next = [...opened, n.id].slice(-200); setOpened(next); storageSet(OPENED_KEY(uid), next); }
+    setNotifOpen(false); navigate(`/results/${n.id}`);
+  };
 
   const page    = PAGE_TITLES[location.pathname]
     || (location.pathname.startsWith('/results/') ? { title:'Scan results', icon:'📄' } : { title:'LLMScanner', icon:'🔐' });
