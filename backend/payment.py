@@ -51,7 +51,7 @@ PLANS = {
         "scan_limit"    : _FREE_SCANS,
         "firewall_daily": _FREE_FIREWALL,
         "features"      : [f"{_FREE_SCANS:,} scans per month", "All 22 attack categories",
-                           "PDF, HTML and Markdown reports",
+                           "PDF, HTML and Markdown reports", "API keys for CI, the SDK and VS Code",
                            *_firewall_feature(_FREE_FIREWALL, "Try the AI firewall")],
     },
     "pro": {
@@ -62,7 +62,7 @@ PLANS = {
         "price_id"      : os.getenv("STRIPE_PRO_PRICE_ID", ""),
         "scan_limit"    : _PRO_SCANS,
         "firewall_daily": _PRO_FIREWALL,
-        "features"      : [f"{_PRO_SCANS:,} scans per month", "API keys and CI access",
+        "features"      : [f"{_PRO_SCANS:,} scans per month", "Everything in Free",
                            "Scheduled scans and alerts", *_firewall_feature(_PRO_FIREWALL, "AI firewall API"),
                            "Email support"],
     },
