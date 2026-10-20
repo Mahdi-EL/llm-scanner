@@ -629,7 +629,10 @@ def delete_account(request: Request, body: DeleteAccountRequest, user: dict = De
     """Deletes the account, its scans and report files. Cancels any subscription."""
     if not auth_db.verify_password(body.password, user["hashed_password"]):
         raise HTTPException(status_code=403, detail="Password is incorrect")
-    payment.cancel_subscription(user.get("stripe_subscription_id"))
+    if not payment.cancel_subscription(user.get("stripe_subscription_id")):
+        # deleting the account anyway would leave a subscription billing nobody can manage
+        raise HTTPException(status_code=502, detail="We couldn't cancel your subscription just now, so your "
+                                                    "account wasn't deleted. Please try again in a few minutes.")
     for scan_id in scan_db.user_scan_ids(user["id"]):
         _delete_scan_everything(scan_db.get_scan(scan_id))
     auth_db.delete_user(user["id"])

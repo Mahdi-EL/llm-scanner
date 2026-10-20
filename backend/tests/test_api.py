@@ -859,3 +859,26 @@ def test_a_scan_of_a_deleted_target_no_longer_points_at_it(client):
     assert client.get(f"/scan/{scan_id}", headers=headers).json()["target_id"] == target["id"]
     client.delete(f"/api/targets/{target['id']}", headers=headers)
     assert client.get(f"/scan/{scan_id}", headers=headers).json()["target_id"] is None
+
+
+def test_account_is_kept_when_its_subscription_cant_be_cancelled(client, monkeypatch):
+    user_id, headers = _register(client)
+    with api.auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET stripe_subscription_id = 'sub_1' WHERE id = ?", (user_id,))
+    outcome = {}
+
+    class Sub:
+        @staticmethod
+        def cancel(sub_id):
+            if outcome.get("error"):
+                raise outcome["error"]
+    monkeypatch.setattr(api.payment, "billing_enabled", lambda: True)
+    monkeypatch.setattr(api.payment, "_stripe", lambda: type("S", (), {"Subscription": Sub}))
+    outcome["error"] = ConnectionError("stripe down")
+    r = client.request("DELETE", "/auth/me", headers=headers, json={"password": "password123"})
+    assert r.status_code == 502 and api.auth_db.get_user_by_id(user_id)
+    gone = RuntimeError("No such subscription")
+    gone.code = "resource_missing"
+    outcome["error"] = gone                      # already cancelled in Stripe: fine to delete
+    r = client.request("DELETE", "/auth/me", headers=headers, json={"password": "password123"})
+    assert r.status_code == 200 and api.auth_db.get_user_by_id(user_id) is None
