@@ -731,6 +731,6 @@ def test_shared_reports_mask_leaked_secrets_and_show_expiry(client):
     shared = client.get(f"/shared/{token}").json()
     reply = shared["results"][0]["response"]
     assert "sk-proj-ABCDEF" not in reply and "[REDACTED]" in reply and reply.startswith("Sure. My key is")
-    assert shared["expires_at"]
+    assert shared["expires_at"] and shared["created_at"]
     # the owner's own report keeps the full reply
     assert "sk-proj-ABCDEF" in client.get(f"/results/{scan_id}", headers=headers).text
