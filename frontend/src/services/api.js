@@ -122,6 +122,7 @@ export const authAPI = {
 // ── Scans ─────────────────────────────────────────────────────
 export const scansAPI = {
   list   : (params = {}) => api.get('/scans', { params: { limit: 200, ...params } }),
+  stats  : ()          => api.get('/scans/stats'),
   /** Every scan summary (pages through /scans), up to `cap`. Resolves to { scans, total }. */
   listAll: async (params = {}, cap = 1000) => {
     const scans = [];

@@ -735,8 +735,14 @@ def list_all_scans(request: Request, user: dict = Depends(require_user),
                    target_name: Optional[str] = Query(None, max_length=120)):
     """Your scans, newest first (summary only; findings come from /scan/{id})."""
     scans = scan_db.list_scans(user["id"], limit=limit, offset=offset, status=status, target_name=target_name)
-    total = scan_db.count_user_scans(user["id"], status=status) if not target_name else len(scans)
+    total = scan_db.count_user_scans(user["id"], status=status, target_name=target_name)
     return {"total": total, "limit": limit, "offset": offset, "scans": scans}
+
+
+@app.get("/scans/stats")
+def scan_stats(user: dict = Depends(require_user)):
+    """Totals over all your finished scans: count, average score, critical findings, clean scans."""
+    return scan_db.user_scan_stats(user["id"])
 
 
 @app.get("/analytics/categories")
