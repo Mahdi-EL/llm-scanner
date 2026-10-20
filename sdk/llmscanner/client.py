@@ -64,13 +64,15 @@ class Client:
              api_key: Optional[str] = None, model: Optional[str] = None, system_prompt: Optional[str] = None,
              categories: Optional[List[str]] = None, baseline_question: Optional[str] = None,
              input_field: Optional[str] = None, output_field: Optional[str] = None,
-             target_id: Optional[str] = None, include_custom_prompts: bool = True) -> Scan:
-        """Queues a scan and returns immediately. Use wait() to get the report."""
+             target_id: Optional[str] = None, include_custom_prompts: bool = True,
+             quick: bool = False) -> Scan:
+        """Queues a scan and returns immediately. Use wait() to get the report.
+        quick=True runs about 5 attacks per category (~110) instead of all ~1,090."""
         body = {"target_name": target_name, "target_type": target_type, "api_url": api_url,
                 "api_key": api_key, "model": model, "system_prompt": system_prompt,
                 "categories": categories, "baseline_question": baseline_question,
                 "input_field": input_field, "output_field": output_field, "target_id": target_id,
-                "include_custom_prompts": include_custom_prompts}
+                "include_custom_prompts": include_custom_prompts, "quick": quick}
         data = self._json("POST", "/scan", json={k: v for k, v in body.items() if v is not None})
         return Scan(scan_id=data["scan_id"], target_name=target_name, status=data.get("status", "pending"))
 

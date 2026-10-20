@@ -27,6 +27,7 @@ and checkpoints, so a server restart resumes a scan instead of losing it.
 ## Features
 
 - 1,090 attack prompts in 22 categories (including 15 multi-turn conversations), each mapped to the OWASP LLM Top 10 (2025)
+- Quick scans: about 110 attacks spread across every category, for a check on each change
 - Your own custom attack prompts, run with every scan
 - Reports in PDF, HTML, Markdown and JSON; read-only share links that expire
 - Saved targets (keys stored encrypted), daily or weekly scheduled scans, regression alerts
@@ -86,6 +87,7 @@ llmscanner scan --name "Support bot" --type openai_compatible --url https://api.
     target-key: ${{ secrets.OPENAI_API_KEY }}
     model: gpt-4o-mini
     fail-on: high
+    quick: "true"        # ~110 attacks on every PR; drop it for a full scan
 ```
 
 **Engine only, no server:** `python backend/scanner.py --target "Demo" --categories extraction`

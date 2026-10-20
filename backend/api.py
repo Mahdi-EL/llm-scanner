@@ -290,6 +290,7 @@ def _public_user(user: dict) -> dict:
         "webhook_url"       : user.get("webhook_url"),
         "has_webhook_secret": bool(user.get("webhook_secret")),
         "has_billing"       : bool(user.get("stripe_customer_id")),
+        "full_scans"        : _can_run_full_scans(user),
     }
 
 
@@ -372,6 +373,7 @@ class ScanRequest(TargetConfig):
     categories            : Categories = None
     target_id             : Optional[str] = Field(None, max_length=64)
     include_custom_prompts: bool = True
+    quick                 : bool = False      # ~5 attacks per category instead of all of them
 
     @field_validator("target_name")
     @classmethod
@@ -535,11 +537,17 @@ def health_check():
 @app.get("/categories")
 def list_categories():
     """The built-in attack categories, with what they test and their OWASP mapping."""
+    from scanner import spread
     return {"categories": [
         {"id": cat, "title": catalog.info(cat)["title"], "tests": catalog.info(cat)["tests"],
-         "owasp": catalog.owasp_labels(cat), "attacks": len(prompts)}
+         "owasp": catalog.owasp_labels(cat), "attacks": len(prompts),
+         "quick_attacks": len(spread(prompts, config.QUICK_SCAN_PER_CATEGORY))}
         for cat, prompts in ATTACK_PROMPTS.items()
     ], "total_attacks": sum(len(p) for p in ATTACK_PROMPTS.values())}
+
+
+def _can_run_full_scans(user: dict) -> bool:
+    return not (config.FREE_QUICK_SCANS_ONLY and user.get("plan", "free") == "free")
 
 
 @app.get("/models")
@@ -746,6 +754,10 @@ def start_scan(request: Request, body: ScanRequest, user: dict = Depends(require
         cfg, api_key, target_id = dict(saved["config"]), saved.get("api_key"), saved["id"]
     if body.categories:
         cfg["categories"] = body.categories
+    if not body.quick and not _can_run_full_scans(user):
+        raise HTTPException(status_code=402, detail="Full scans need a paid plan. Run a quick scan "
+                                                    "(about 110 attacks), or upgrade to run all 1,090.")
+    cfg["quick"] = body.quick
     try:
         scan_id = services.queue_scan(user, cfg, api_key, target_name=body.target_name,
                                       target_id=target_id,

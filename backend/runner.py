@@ -202,6 +202,7 @@ def execute(scan_id: str) -> None:
             generate_reports=False,
             extra_attacks=extra,
             attacks=cfg.get("attacks"),
+            quick=bool(cfg.get("quick")),
         )
         if scan_id in _cancel or scan_db.get_scan(scan_id) is None:
             raise ScanAborted("Scan cancelled")       # cancelled or deleted while the last attacks ran

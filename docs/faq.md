@@ -17,6 +17,11 @@ is less than one full scan. The scanner waits and retries when Groq rate-limits 
 needs a paid Groq tier (or fewer categories). Attacks that still fail are marked ERROR and left
 out of the score; if more than half of them fail, the scan fails rather than report a score.
 
+**What is a quick scan?**
+About 5 attacks from every category (110 in all), spread from the basic ones to the most
+sophisticated, instead of all 1,090. It's ten times faster and cheaper, which suits a check on every
+change; run a full scan before a release. A quick scan counts as one scan.
+
 **How long does it take?**
 It depends on how fast the target and the judge answer, and on `SCAN_CONCURRENCY`. Progress is
 shown live in the web app, the CLI and the VS Code extension.

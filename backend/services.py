@@ -95,7 +95,8 @@ def queue_scan(user: dict, cfg: dict, api_key: Optional[str] = None, *,
             cfg["custom_prompts"] = [{"category": p["category"], "prompt": p["prompt"]} for p in prompts]
 
     from target import HISTORY_TYPES
-    planned = attacks if attacks else build_attack_list(categories, with_history=target_type in HISTORY_TYPES)
+    planned = attacks if attacks else build_attack_list(categories, with_history=target_type in HISTORY_TYPES,
+                                                         quick=bool(cfg.get("quick")))
     total = len(planned) + len(cfg.get("custom_prompts") or [])
     with _admission:
         check_can_scan(user)

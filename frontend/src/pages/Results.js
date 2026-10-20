@@ -440,6 +440,7 @@ export default function Results() {
             {scan.duration_seconds ? ` · took ${formatDuration(scan.duration_seconds)}` : ''}
             {scan.config?.target_type ? ` · ${typeLabel(scan.config.target_type)}` : ''}
             {scan.config?.model ? ` · ${scan.config.model}` : ''}
+            {scan.config?.quick ? ' · quick scan' : ''}
           </p>
         </div>
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>

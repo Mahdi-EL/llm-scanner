@@ -52,6 +52,9 @@ export default function NewScan() {
   const [saveTarget, setSaveTarget] = useState(false);
   const [customCount, setCustomCount] = useState(0);
   const [includeCustom, setIncludeCustom] = useState(true);
+  const fullAllowed = user?.full_scans !== false;
+  const [quick, setQuick] = useState(!fullAllowed);
+  useEffect(() => { if (!fullAllowed) setQuick(true); }, [fullAllowed]);
   const [models, setModels] = useState({ default_target: '', groq: [] });
   const savedOnce = useRef(null);   // {key, id} of a target saved by an earlier attempt that then failed
 
@@ -77,8 +80,11 @@ export default function NewScan() {
 
   const attackCount = useMemo(() => {
     const pool = chosen ? categories.filter(c => chosen.includes(c.id)) : categories;
-    return pool.reduce((n, c) => n + c.attacks, 0) + (includeCustom ? customCount : 0);
-  }, [categories, chosen, includeCustom, customCount]);
+    return pool.reduce((n, c) => n + (quick ? (c.quick_attacks ?? c.attacks) : c.attacks), 0)
+      + (includeCustom ? customCount : 0);
+  }, [categories, chosen, includeCustom, customCount, quick]);
+  const quickTotal = categories.reduce((n, c) => n + (c.quick_attacks ?? 0), 0);
+  const fullTotal  = categories.reduce((n, c) => n + c.attacks, 0);
 
   const payload = () => {
     const out = { target_type: form.target_type };
@@ -126,6 +132,7 @@ export default function NewScan() {
         : { target_name: form.target_name.trim(), ...payload() };
       if (chosen) body.categories = chosen;
       body.include_custom_prompts = includeCustom;
+      body.quick = quick;
       const res = await scansAPI.start(body);
       toast('Scan queued.', 'success');
       navigate(`/results/${res.data.scan_id}`);
@@ -269,6 +276,28 @@ export default function NewScan() {
           </Section>
         </>
       )}
+
+      <Section title="Depth" subtitle="A quick scan samples every category, from basic to advanced attacks. Run a full scan before you ship.">
+        <div role="group" aria-label="Scan depth" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'10px' }}>
+          {[
+            { id:true,  label:'Quick scan', desc:`About ${quickTotal ? fmtNum(quickTotal) : '110'} attacks, 5 per category. Done in a few minutes.` },
+            { id:false, label:'Full scan',  desc:`All ${fullTotal ? fmtNum(fullTotal) : '1,090'} attacks.`, locked: !fullAllowed },
+          ].map(o => {
+            const active = quick === o.id;
+            return (
+              <button key={o.label} type="button" aria-pressed={active} disabled={o.locked}
+                onClick={() => setQuick(o.id)}
+                style={{ padding:'14px 16px', textAlign:'left', cursor: o.locked ? 'not-allowed' : 'pointer', borderRadius:'8px', fontFamily:'inherit',
+                         opacity: o.locked ? 0.6 : 1, background: active ? 'var(--s2)' : 'transparent',
+                         border: `1px solid ${active ? 'var(--t1)' : 'var(--b1)'}` }}>
+                <div style={{ fontSize:'13px', fontWeight:'700', color:'var(--t1)' }}>{o.label}</div>
+                <div style={{ fontSize:'12px', color:'var(--t3)', lineHeight:1.45, marginTop:'4px' }}>{o.desc}</div>
+                {o.locked && <div style={{ fontSize:'12px', marginTop:'6px' }}>Included in paid plans. <Link to="/pricing">See plans</Link></div>}
+              </button>
+            );
+          })}
+        </div>
+      </Section>
 
       <Section title="Attack categories" subtitle={chosen ? `${chosen.length} of ${categories.length} categories selected` : (categories.length ? `All ${categories.length} categories` : 'All categories')}>
         <div style={{ display:'flex', gap:'8px', marginBottom:'10px' }}>
