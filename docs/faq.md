@@ -13,7 +13,7 @@ calls per model. Choose fewer categories for a cheaper, faster scan.
 Groq's free tier allows about 1,000 requests per day and 8,000 tokens per minute per model, which
 is less than one full scan. The scanner waits and retries when Groq rate-limits it, but a full scan
 needs a paid Groq tier (or fewer categories). Attacks that still fail are marked ERROR and left
-out of the score.
+out of the score; if more than half of them fail, the scan fails rather than report a score.
 
 **How long does it take?**
 It depends on how fast the target and the judge answer, and on `SCAN_CONCURRENCY`. Progress is
@@ -25,7 +25,9 @@ regardless of how many attacks failed. See the scoring rules in the README.
 
 **What is an ERROR finding?**
 The target or the judge couldn't be reached, or the judge's answer couldn't be read. Errors are
-excluded from the score and listed in the report, so check them before trusting a scan.
+excluded from the score and listed in the report, so check them before trusting a scan. A scan
+where more than half the attacks errored (`MAX_ERROR_PERCENT`, default 50) fails instead of
+reporting a score.
 
 **Where is my data stored, and for how long?**
 In the API's SQLite database until you delete the scan or your account (Settings → Delete account).
