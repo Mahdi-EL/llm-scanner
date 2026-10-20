@@ -499,3 +499,15 @@ def test_attack_categories_doc_matches_the_library():
     counts = {c: int(n) for c, n in re.findall(r"`([a-z_]+)` · (\d+) (?:prompts|conversations)", doc)}
     assert counts == {c: len(p) for c, p in ATTACK_PROMPTS.items()}
     assert f"{sum(counts.values()):,} attack prompts in {len(counts)} categories" in doc
+
+
+def test_a_scan_where_most_attacks_errored_fails_instead_of_scoring(few_attacks, monkeypatch):
+    """4 of 6 attacks erroring would otherwise grade the 2 that worked: 100/100, grade A."""
+    import scanner
+    few_attacks["extraction"] = ["boom 1", "boom 2", "boom 3"]
+    few_attacks["roleplay"] = ["boom 4", "b", "c"]
+    with pytest.raises(scanner.ScanAborted, match="4 of 6 attacks couldn't be completed.*target exploded"):
+        scanner.run_full_scan(FakeTarget(), target_name="Fake", judge=FakeJudge(), concurrency=1)
+    monkeypatch.setattr(scanner.config, "MAX_ERROR_PERCENT", 80)
+    assert scanner.run_full_scan(FakeTarget(), target_name="Fake", judge=FakeJudge(),
+                                 concurrency=1)["summary"]["errors"] == 4
