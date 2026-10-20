@@ -68,7 +68,8 @@ def cmd_scan(args) -> int:
             system_prompt = f.read()
     scan = client.scan(args.name, target_type=args.type, api_url=args.url, api_key=args.target_key,
                        model=args.model, system_prompt=system_prompt, categories=args.categories,
-                       baseline_question=args.baseline, target_id=args.target_id)
+                       baseline_question=args.baseline, input_field=args.input_field,
+                       output_field=args.output_field, target_id=args.target_id)
     print(f"Scan {scan.scan_id} queued for {args.name}")
     if not args.wait:
         return 0
@@ -128,9 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--target-key", default=os.getenv("LLMSCANNER_TARGET_KEY"),
                       help="the target's own API key (default: $LLMSCANNER_TARGET_KEY)")
     scan.add_argument("--model")
-    scan.add_argument("--prompt", help="system prompt (simulation/groq) or known prompt for leak detection")
+    scan.add_argument("--prompt", help="system prompt: sent to simulation, groq and openai_compatible targets; "
+                                       "used only for leak detection with custom_rest")
     scan.add_argument("--prompt-file")
     scan.add_argument("--baseline", help="a harmless question for the baseline reply")
+    scan.add_argument("--input-field", help="custom_rest: JSON field the message is sent in (default: message)")
+    scan.add_argument("--output-field", help="custom_rest: JSON field the reply is read from (default: response)")
     scan.add_argument("--categories", nargs="+")
     scan.add_argument("--target-id", help="use a saved target instead of --type/--url/--target-key")
     scan.add_argument("--wait", action="store_true", help="wait for the result")
