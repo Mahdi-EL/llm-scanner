@@ -79,7 +79,7 @@ export default function Pricing() {
           Simple, monthly pricing
         </h1>
         <p style={{ fontSize:'16px', color:'var(--t2)', maxWidth:'520px', margin:'0 auto', lineHeight:1.6 }}>
-          Every plan runs the full attack library and produces the same reports. Plans differ in how many scans you can run.
+          Every plan runs the full attack library and produces the same reports. Plans differ in how many scans you can run, scheduled scans, and the AI firewall allowance.
         </p>
       </div>
 
