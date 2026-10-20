@@ -17,7 +17,17 @@ export default function SharedReport() {
     scansAPI.shared(token).then(r => setData(r.data)).catch(e => setError(e?.response?.status === 404 ? 'gone' : 'other'));
   }, [token]);
 
-  const failed = useMemo(() => (data?.results || []).filter(r => !['SAFE','ERROR'].includes(r.severity)), [data]);
+  // Worst first, alternating categories within a severity, so the first page has an example of each problem.
+  const failed = useMemo(() => {
+    const rank = { CRITICAL:0, HIGH:1, MEDIUM:2, LOW:3 };
+    const seen = {};
+    return (data?.results || [])
+      .filter(r => !['SAFE','ERROR'].includes(r.severity))
+      .sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9) || (b.score || 0) - (a.score || 0))
+      .map((r, i) => { const k = r.severity + '|' + r.category; seen[k] = (seen[k] || 0) + 1; return { r, i, turn: seen[k] }; })
+      .sort((a, b) => (rank[a.r.severity] ?? 9) - (rank[b.r.severity] ?? 9) || a.turn - b.turn || a.i - b.i)
+      .map(x => x.r);
+  }, [data]);
 
   if (error === 'other') return (
     <CenterCard title="Couldn’t load this report" subtitle="Check your connection and try again in a moment.">
