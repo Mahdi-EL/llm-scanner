@@ -139,6 +139,18 @@ CREATE TABLE IF NOT EXISTS firewall_usage (
     count   INTEGER DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
+CREATE TABLE IF NOT EXISTS gateway_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL,
+    target_id       TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    input_verdict   TEXT,
+    output_verdict  TEXT,
+    rules           TEXT,
+    latency_ms      INTEGER,
+    upstream_status INTEGER,
+    screened        INTEGER DEFAULT 1
+);
 CREATE TABLE IF NOT EXISTS remediation_usage (
     user_id TEXT NOT NULL,
     day     TEXT NOT NULL,
@@ -216,6 +228,7 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_status ON scans (status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gateway_user_time ON gateway_events (user_id, created_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_targets_user ON targets (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_schedules_next ON schedules (enabled, next_run_at)")

@@ -167,6 +167,10 @@ export const schedulesAPI = {
   remove: id          => api.delete(`/api/schedules/${id}`),
 };
 
+export const gatewayAPI = {
+  stats: (targetId, days = 7) => api.get('/api/gateway/stats', { params: { target_id: targetId, days } }),
+};
+
 export const firewallAPI = {
   usage : ()   => api.get('/api/firewall/usage'),
   check : text => api.post('/api/firewall/check', { text }),

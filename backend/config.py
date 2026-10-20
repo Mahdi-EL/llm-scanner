@@ -88,6 +88,12 @@ MAX_ERROR_PERCENT    = _int("MAX_ERROR_PERCENT", 50)
 QUICK_SCAN_PER_CATEGORY = _int("QUICK_SCAN_PER_CATEGORY", 5)
 # Free accounts run quick scans only (full scans cost ~10x the model calls). Off by default.
 FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", False)
+
+# ── Firewall gateway (/gateway/<target id>/v1) ────────────────
+GATEWAY_TIMEOUT      = _int("GATEWAY_TIMEOUT", 120)      # seconds for the model's API to answer
+GATEWAY_CONCURRENCY  = _int("GATEWAY_CONCURRENCY", 16)   # gateway requests in flight; the rest queue
+GATEWAY_BLOCK_SCORE  = float(os.getenv("GATEWAY_BLOCK_SCORE", "0.8"))   # Prompt Guard score that blocks
+GATEWAY_BLOCK_MESSAGE = os.getenv("GATEWAY_BLOCK_MESSAGE") or "I can't help with that request."
 # Lets local development scan http://localhost targets. Never enable in production.
 ALLOW_PRIVATE_TARGETS = _bool("ALLOW_PRIVATE_TARGETS", False) and not IS_PROD
 

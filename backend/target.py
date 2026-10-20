@@ -176,25 +176,13 @@ class Target:
     def _post(self, url, **kwargs):
         """POSTs and reads the reply, at most MAX_REPLY_BYTES and self.timeout seconds in all
         (requests' timeout is per read, so a reply that trickles in would never time out)."""
-        import requests
-
         netguard.check_url(url)
         response = self._session().post(url, timeout=self.timeout, allow_redirects=False, stream=True, **kwargs)
-        try:
-            if 300 <= response.status_code < 400:
-                raise RuntimeError(f"Target answered with a redirect ({response.status_code}); "
-                                   "use the final URL instead")
-            body, started = bytearray(), time.monotonic()
-            for chunk in response.iter_content(64 * 1024):
-                body += chunk
-                if len(body) > MAX_REPLY_BYTES:
-                    raise RuntimeError(f"The target's reply is over {MAX_REPLY_BYTES // (1024 * 1024)} MB; "
-                                       "check the URL points at the chat API")
-                if time.monotonic() - started > self.timeout:
-                    raise requests.Timeout("reply took too long to arrive")
-            response._content = bytes(body)
-        finally:
+        if 300 <= response.status_code < 400:
             response.close()
+            raise RuntimeError(f"Target answered with a redirect ({response.status_code}); "
+                               "use the final URL instead")
+        netguard.read_capped(response, MAX_REPLY_BYTES, self.timeout)
         response.raise_for_status()
         return response
 

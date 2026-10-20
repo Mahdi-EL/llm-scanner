@@ -17,6 +17,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/api/firewall/check` | yes | Screens a user message before it reaches your model: allow, review or block, with reasons. Every started 2,000 characters count as one check against your plan's daily allowance. |
 | POST | `/api/firewall/check-output` | yes | Screens a model reply before it reaches the user: flags and masks leaked secrets, the canary and copies of the system prompt. Free of charge on plans that include the firewall. |
 | GET | `/api/firewall/usage` | yes | Firewall checks used today (UTC) and your plan's daily allowance. |
+| GET | `/api/gateway/stats` | yes | Gateway requests in the last `days` days: blocked and flagged inputs, masked or replaced replies. |
 | GET | `/api/keys` | yes | Lists your API keys (prefix only, never the full secret). |
 | POST | `/api/keys` | yes | Creates an API key. The full key is returned ONCE: store it now. |
 | DELETE | `/api/keys/{key_id}` | yes | Revokes an API key immediately. |
@@ -56,6 +57,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | GET | `/download/json/{scan_id}` | yes | Downloads the raw results as JSON. |
 | GET | `/download/md/{scan_id}` | yes | Downloads the Markdown report. |
 | GET | `/download/{scan_id}` | yes | Downloads the PDF report. |
+| POST | `/gateway/{target_id}/v1/chat/completions` | yes | OpenAI-compatible chat completions through the AI firewall. Set your OpenAI client's base_url to /gateway/{target_id}/v1 and its api_key to an LLM Scanner API key. |
 | GET | `/health` |  | Liveness check, plus whether storage, email and billing are configured. |
 | GET | `/models` | yes | Groq models this server can use for simulated and Groq targets, and the defaults in use. |
 | GET | `/results/{scan_id}` | yes | The full report data (summary + every finding) of a finished scan. |
