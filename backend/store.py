@@ -204,6 +204,14 @@ def resolve_share(token: str) -> Optional[dict]:
     return {"scan_id": row["scan_id"], "expires_at": row["expires_at"]}
 
 
+def list_shares(user_id: str) -> list:
+    """The user's share links (only a hash of each token is stored, so no URLs)."""
+    with transaction() as conn:
+        rows = conn.execute("SELECT scan_id, expires_at, created_at FROM share_links WHERE user_id = ? "
+                            "ORDER BY created_at DESC", (user_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
 def revoke_share(user_id: str, scan_id: str) -> bool:
     with transaction() as conn:
         return conn.execute("DELETE FROM share_links WHERE scan_id = ? AND user_id = ?",
