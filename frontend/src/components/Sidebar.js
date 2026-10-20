@@ -92,8 +92,8 @@ const NAV_BOTTOM = [
 
 const PLAN_STYLE = {
   free      : { bg:'rgba(17,24,39,0.06)',  color:'#545b68', border:'rgba(17,24,39,0.1)' },
-  pro       : { bg:'rgba(37,99,235,0.15)',   color:'#2563eb',               border:'rgba(37,99,235,0.3)' },
-  enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#16a34a',               border:'rgba(34,197,94,0.3)' },
+  pro       : { bg:'rgba(37,99,235,0.15)',   color:'#1d4ed8',               border:'rgba(37,99,235,0.3)' },
+  enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#166534',               border:'rgba(34,197,94,0.3)' },
 };
 
 export default function Sidebar({ mobileOpen = false, onClose }) {
