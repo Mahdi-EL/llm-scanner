@@ -181,14 +181,20 @@ def create_portal_session(user: dict) -> dict:
         return {"error": "Payment provider error. Please try again later."}
 
 
-def cancel_subscription(subscription_id: str) -> None:
-    """Cancels immediately (used when an account is deleted). Best effort."""
+def cancel_subscription(subscription_id: str) -> bool:
+    """Cancels immediately (used when an account is deleted). False if Stripe refused or was
+    unreachable; a subscription that is already gone counts as cancelled."""
     if not subscription_id or not billing_enabled():
-        return
+        return True
+    stripe = _stripe()
     try:
-        _stripe().Subscription.cancel(subscription_id)
-    except Exception:
+        stripe.Subscription.cancel(subscription_id)
+        return True
+    except Exception as e:
+        if getattr(e, "code", None) == "resource_missing":
+            return True
         log.warning("Couldn't cancel subscription %s", subscription_id, exc_info=True)
+        return False
 
 
 def _first_time(event_id: str, event_type: str) -> bool:
