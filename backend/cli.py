@@ -449,10 +449,17 @@ Examples :
         "info"    : cmd_info,
     }
 
-    if args.command in commands:
-        commands[args.command](args)
-    else:
+    if args.command not in commands:
         parser.print_help()
+        return
+    try:
+        commands[args.command](args)
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except Exception as e:                      # a readable line instead of a traceback
+        import errors
+        print_error(errors.explain(e, server_side=True))
+        sys.exit(1)
 
 
 if __name__ == "__main__":
