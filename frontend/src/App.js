@@ -29,6 +29,7 @@ const ResetPassword  = lazy(() => import('./pages/ResetPassword'));
 const VerifyEmail    = lazy(() => import('./pages/VerifyEmail'));
 const SharedReport   = lazy(() => import('./pages/SharedReport'));
 const LeakCheck      = lazy(() => import('./pages/LeakCheck'));
+const InviteAccept   = lazy(() => import('./pages/InviteAccept'));
 
 /* ── Layout shells ──────────────────────────────────────────── */
 
@@ -121,7 +122,7 @@ const TITLES = {
   '/threat-intel': 'Attack library', '/settings': 'Settings', '/pricing': 'Pricing', '/login': 'Sign in',
   '/register': 'Create account', '/forgot-password': 'Reset password', '/reset-password': 'Reset password',
   '/verify-email': 'Confirm email', '/results/': 'Scan results', '/shared/': 'Shared report',
-  '/check': 'Free leak check',
+  '/check': 'Free leak check', '/invite': 'Team invite',
 };
 const BASE_TITLE = 'LLM Scanner: red-team your AI applications';
 
@@ -153,12 +154,13 @@ function AppRoutes() {
       <Route path="/" element={user ? app(<Dashboard />) : <PublicShell><LandingPage /></PublicShell>} />
       <Route path="/landing"         element={<PublicShell><LandingPage /></PublicShell>} />
       <Route path="/login"           element={user ? <Navigate to={next} replace /> : <PublicShell><Login /></PublicShell>} />
-      <Route path="/register"        element={user ? <Navigate to="/" replace /> : <PublicShell><Register /></PublicShell>} />
+      <Route path="/register"        element={user ? <Navigate to={next} replace /> : <PublicShell><Register /></PublicShell>} />
       <Route path="/forgot-password" element={<PublicShell><ForgotPassword /></PublicShell>} />
       <Route path="/reset-password"  element={<PublicShell><ResetPassword /></PublicShell>} />
       <Route path="/verify-email"    element={<PublicShell><VerifyEmail /></PublicShell>} />
       <Route path="/shared/:token"   element={<PublicShell><SharedReport /></PublicShell>} />
       <Route path="/check"           element={<PublicShell><LeakCheck /></PublicShell>} />
+      <Route path="/invite"          element={<PublicShell><InviteAccept /></PublicShell>} />
 
       {/* ── Pricing: sidebar when signed in, navbar when not ── */}
       <Route path="/pricing" element={user ? <AppShell><Pricing /></AppShell> : <PublicShell><Pricing /></PublicShell>} />

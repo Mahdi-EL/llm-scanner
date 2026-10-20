@@ -191,3 +191,11 @@ def test_only_admins_see_the_webhook_url(client):
     assert client.get("/api/webhook", headers=in_ws(dave, owner)).status_code == 403
     assert client.get("/auth/me", headers=in_ws(dave, owner)).json()["workspace"]["webhook_url"] is None
     assert "secret" in client.get("/api/webhook", headers=owner["auth"]).json()["webhook_url"]
+
+
+def test_browsers_may_send_the_workspace_header():
+    """Without this in the CORS preflight, the web app can't make a single request inside a workspace."""
+    with TestClient(api.app) as c:
+        r = c.options("/scans", headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET",
+                                         "Access-Control-Request-Headers": "authorization,x-workspace"})
+    assert r.status_code == 200 and "x-workspace" in r.headers.get("access-control-allow-headers", "").lower()
