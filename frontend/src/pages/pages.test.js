@@ -10,8 +10,10 @@ vi.mock('../services/api', async () => {
     plansAPI: { list: vi.fn(), checkout: vi.fn(), portal: vi.fn() },
     scansAPI: {
       get: vi.fn(), list: vi.fn(), compare: vi.fn(), categories: vi.fn(), cancel: vi.fn(),
-      share: vi.fn(), delete: vi.fn(), shared: vi.fn(),
+      share: vi.fn(), delete: vi.fn(), shared: vi.fn(), models: vi.fn(), start: vi.fn(), testTarget: vi.fn(),
     },
+    targetsAPI: { list: vi.fn(), create: vi.fn() },
+    promptsAPI: { list: vi.fn() },
     downloadReport: vi.fn(),
   };
 });
@@ -23,6 +25,7 @@ const api = await import('../services/api');
 const { default: Pricing } = await import('./Pricing');
 const { default: Results } = await import('./Results');
 const { default: SharedReport } = await import('./SharedReport');
+const { default: NewScan } = await import('./NewScan');
 
 function renderAt(path, element, route) {
   return render(
@@ -99,4 +102,17 @@ test('SharedReport tells an expired link apart from a network error', async () =
   api.scansAPI.shared.mockRejectedValueOnce(new Error('Network Error'));
   renderAt('/shared/tok', <SharedReport />, '/shared/:token');
   expect(await screen.findByText('Couldn’t load this report')).toBeInTheDocument();
+});
+
+test('NewScan refuses to launch a saved target with no category picked', async () => {
+  api.scansAPI.categories.mockResolvedValue(CATEGORIES);
+  api.scansAPI.models.mockResolvedValue({ data: { default_target: '', groq: [] } });
+  api.promptsAPI.list.mockResolvedValue({ data: { prompts: [] } });
+  api.targetsAPI.list.mockResolvedValue({ data: { targets: [{ id: 't1', name: 'Saved bot', config: { target_type: 'groq' } }] } });
+  renderAt('/new-scan?target=t1', <NewScan />, '/new-scan');
+  expect(await screen.findByDisplayValue('Saved bot')).toBeInTheDocument();
+  expect(await screen.findByText('All 1 categories')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Clear'));
+  fireEvent.click(screen.getByText(/^Launch scan/));
+  expect(api.scansAPI.start).not.toHaveBeenCalled();
 });

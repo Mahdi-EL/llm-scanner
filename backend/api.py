@@ -274,6 +274,16 @@ Slug = Annotated[str, BeforeValidator(_slugify), _must_match(
     SLUG_PATTERN, "Categories use letters, numbers, dashes or underscores (up to 40 characters)")]
 
 
+def _some_categories(value):
+    """An empty list would be read as "no filter" and run every attack; leave the field out for that."""
+    if value is not None and len(value) == 0:
+        raise ValueError("Pick at least one attack category, or leave categories out to run them all")
+    return value
+
+
+Categories = Annotated[Optional[List[str]], Field(max_length=50), AfterValidator(_some_categories)]
+
+
 class TargetConfig(BaseModel):
     target_type      : TargetType = "simulation"
     system_prompt    : Optional[str] = Field(None, max_length=20000)
@@ -291,7 +301,7 @@ class TargetConfig(BaseModel):
 
 class ScanRequest(TargetConfig):
     target_name           : DisplayName = Field(..., max_length=120)
-    categories            : Optional[List[str]] = Field(None, max_length=50)
+    categories            : Categories = None
     target_id             : Optional[str] = Field(None, max_length=64)
     include_custom_prompts: bool = True
 
@@ -391,13 +401,13 @@ class TargetUpdate(BaseModel):
 class ScheduleCreate(BaseModel):
     target_id : str = Field(..., max_length=64)
     frequency : Literal["daily", "weekly"] = "weekly"
-    categories: Optional[List[str]] = Field(None, max_length=50)
+    categories: Categories = None
     alert_drop: int = Field(5, ge=1, le=100)
 
 
 class ScheduleUpdate(BaseModel):
     frequency : Optional[Literal["daily", "weekly"]] = None
-    categories: Optional[List[str]] = Field(None, max_length=50)
+    categories: Categories = None
     alert_drop: Optional[int] = Field(None, ge=1, le=100)
     enabled   : Optional[bool] = None
 

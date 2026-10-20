@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { scansAPI, targetsAPI, promptsAPI, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -52,6 +52,7 @@ export default function NewScan() {
   const [customCount, setCustomCount] = useState(0);
   const [includeCustom, setIncludeCustom] = useState(true);
   const [models, setModels] = useState({ default_target: '', groq: [] });
+  const savedOnce = useRef(null);   // {key, id} of a target saved by an earlier attempt that then failed
 
   useEffect(() => {
     scansAPI.categories().then(r => setCategories(r.data.categories)).catch(() => {});
@@ -83,11 +84,11 @@ export default function NewScan() {
 
   const validate = () => {
     if (!form.target_name.trim()) return 'Give the target a name.';
+    if (chosen && chosen.length === 0) return 'Pick at least one attack category.';
     if (savedTarget) return null;
     if (needsURL && !form.api_url.trim()) return 'Enter the API URL.';
     if (needsURL && !/^https?:\/\//i.test(form.api_url.trim())) return 'The URL must start with http:// or https://';
     if (form.target_type === 'groq' && !form.api_key.trim()) return 'Enter your Groq API key.';
-    if (chosen && chosen.length === 0) return 'Pick at least one attack category.';
     return null;
   };
 
@@ -107,8 +108,13 @@ export default function NewScan() {
     try {
       let useTarget = targetId || null;
       if (!useTarget && saveTarget) {
-        const { data } = await targetsAPI.create({ name: form.target_name.trim(), ...payload() });
-        useTarget = data.id;
+        const config = { name: form.target_name.trim(), ...payload() };
+        const key = JSON.stringify(config);
+        if (savedOnce.current?.key !== key) {
+          const { data } = await targetsAPI.create(config);
+          savedOnce.current = { key, id: data.id };
+        }
+        useTarget = savedOnce.current.id;
       }
       const body = useTarget
         ? { target_name: form.target_name.trim(), target_id: useTarget }
@@ -257,7 +263,7 @@ export default function NewScan() {
         </>
       )}
 
-      <Section title="Attack categories" subtitle={chosen ? `${chosen.length} of ${categories.length} categories selected` : `All ${categories.length || 21} categories`}>
+      <Section title="Attack categories" subtitle={chosen ? `${chosen.length} of ${categories.length} categories selected` : (categories.length ? `All ${categories.length} categories` : 'All categories')}>
         <div style={{ display:'flex', gap:'8px', marginBottom:'10px' }}>
           <button type="button" className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => setChosen(null)}>Select all</button>
           <button type="button" className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => setChosen([])}>Clear</button>
