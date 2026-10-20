@@ -143,7 +143,7 @@ function FixIt({ scan, failedCount }) {
     <div className="card-glow" style={{ padding:'22px 24px', marginTop:'16px' }}>
       <h2 style={{ fontSize:'15px', fontWeight:'700', marginBottom:'4px' }}>Fix it</h2>
       <p style={{ fontSize:'13px', color:'var(--t3)', marginBottom:'14px' }}>
-        Get a hardened system prompt written from these {failedCount} failed attacks, then re-run only those attacks to check the fix.
+        Get a hardened system prompt written from these {failedCount} failed attacks, then re-run only those attacks to check the fix (a re-test counts as one scan).
       </p>
       {needsPastedPrompt && !suggestion && (
         <div className="form-group">
