@@ -246,7 +246,7 @@ export default function Settings() {
         {newSecret && <SecretBox value={newSecret} onDone={() => setNewSecret(null)} note="This is your signing secret. Use it to verify that events come from us. It won’t be shown again." />}
         <div style={{ display:'flex', gap:'8px', padding:'16px 20px', flexWrap:'wrap' }}>
           <input aria-label="Webhook URL" value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)} maxLength={2048} placeholder="https://hooks.example.com/llm-scanner" style={{ flex:1, minWidth:'240px' }} />
-          <button className="btn-primary" style={{ fontSize:'12px' }} disabled={busy==='webhook'} onClick={saveWebhook}>Save</button>
+          <button className="btn-primary" style={{ fontSize:'12px' }} disabled={busy==='webhook'} onClick={saveWebhook} aria-label="Save webhook">Save</button>
           {user?.webhook_url && <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy==='test'} onClick={testWebhook}>Send test</button>}
           {user?.has_webhook_secret && <button className="btn-ghost" style={{ fontSize:'12px' }} disabled={busy==='rotate'} onClick={rotateSecret}>New secret</button>}
         </div>
@@ -256,7 +256,7 @@ export default function Settings() {
         <div style={{ display:'flex', gap:'8px', padding:'16px 20px', flexWrap:'wrap', alignItems:'center' }}>
           <input aria-label="Name on reports" value={brand} onChange={e => setBrand(e.target.value)} maxLength={80}
             placeholder="e.g. Acme Security Consulting" disabled={!paidPlan} style={{ flex:1, minWidth:'240px' }} />
-          <button className="btn-primary" style={{ fontSize:'12px' }} disabled={!paidPlan || busy==='brand'} onClick={saveBrand}>Save</button>
+          <button className="btn-primary" style={{ fontSize:'12px' }} disabled={!paidPlan || busy==='brand'} onClick={saveBrand} aria-label="Save report branding">Save</button>
           {!paidPlan && <span style={{ fontSize:'12px', color:'var(--t3)' }}>Part of the paid plans. <a href="/pricing" onClick={e => { e.preventDefault(); navigate('/pricing'); }}>See plans</a></span>}
         </div>
       </Section>
