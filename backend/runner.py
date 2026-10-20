@@ -9,6 +9,7 @@
 """
 import json
 import logging
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -191,7 +192,16 @@ def execute(scan_id: str) -> None:
             extra_attacks=extra,
             attacks=cfg.get("attacks"),
         )
+        if scan_id in _cancel or scan_db.get_scan(scan_id) is None:
+            raise ScanAborted("Scan cancelled")       # cancelled or deleted while the last attacks ran
         paths = report.write_reports(data, config.REPORTS_DIR, scan_id, scan["target_name"])
+        if scan_db.get_scan(scan_id) is None:          # deleted while the reports were written
+            for path in filter(None, paths.values()):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+            return
         s = data["summary"]
         scan_db.update_scan(
             scan_id,

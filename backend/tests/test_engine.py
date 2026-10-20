@@ -329,6 +329,28 @@ def test_runner_marks_unusable_scans_failed(monkeypatch):
     assert scan["api_key_enc"] is None
 
 
+def test_a_scan_deleted_as_it_finishes_leaves_no_report_files(monkeypatch, tmp_path):
+    """Its reports hold the model's replies: they must not outlive the deleted scan."""
+    import database
+    import runner
+    import scan_db
+    database.init_db()
+    monkeypatch.setattr(runner.config, "REPORTS_DIR", str(tmp_path))
+    monkeypatch.setattr(runner, "Judge", FakeJudge)
+    monkeypatch.setattr(runner.notifications, "scan_finished", lambda *a, **k: None)
+    scan_id = scan_db.create_scan("Gone", "groq", user_id="u-gone", config={"target_type": "groq"})
+    monkeypatch.setattr(runner, "build_target", lambda scan: (FakeTarget(), None, None))
+    real_write = runner.report.write_reports
+
+    def write_then_delete(*a, **k):
+        paths = real_write(*a, **k)
+        scan_db.delete_scan(scan_id)           # the user deletes it while the files are written
+        return paths
+    monkeypatch.setattr(runner.report, "write_reports", write_then_delete)
+    runner.execute(scan_id)
+    assert scan_db.get_scan(scan_id) is None and list(tmp_path.iterdir()) == []
+
+
 # ── Scheduler ─────────────────────────────────────────────────
 def test_scheduler_queues_due_scans(monkeypatch):
     import auth_db
