@@ -9,6 +9,7 @@ attacks/catalog.py and only cover the categories that actually failed.
 import html
 import json
 import os
+import re
 import secrets
 from collections import OrderedDict, defaultdict
 from datetime import datetime
@@ -538,8 +539,14 @@ def write_one(data, fmt, path, target_name="AI Application"):
 
 # ─── Multilingual PDF ────────────────────────────────────────
 
+PDF_LANGUAGES = ("en", "fr", "es", "de")   # Arabic needs a bundled Arabic font and right-to-left shaping
+_PICTOGRAPHS = re.compile("[\u2600-\u27bf\ufe0f\U0001f000-\U0001faff]")
+
+
 def generate_multilingual_report(json_path, output_path, target_name="AI Application", language="en"):
-    """PDF with headings in another language (en, fr, ar, es, de). Findings stay in English."""
+    """PDF with headings in another language (en, fr, es, de). Findings stay in English."""
+    if language not in PDF_LANGUAGES:
+        raise ValueError(f"PDF reports are available in {', '.join(PDF_LANGUAGES)}, not {language!r}")
     if language == "en":
         return build_pdf(load(json_path), output_path, target_name)
     try:
@@ -565,15 +572,20 @@ def generate_multilingual_report(json_path, output_path, target_name="AI Applica
     rows = [[_p(t.t("status")), "#"]]
     for key, label in [("critical", "critical_label"), ("high", "high_label"), ("medium", "medium_label"),
                        ("low", "low_label"), ("safe", "safe_label")]:
-        rows.append([_p(t.t(label)), str(summary.get(key, 0))])
+        rows.append([_p(_PICTOGRAPHS.sub("", t.t(label)).strip()), str(summary.get(key, 0))])   # no emoji glyphs in the PDF fonts
     table = Table([[Paragraph(a, S["cell"]), Paragraph(b, S["cell"])] for a, b in rows],
                   colWidths=[8 * cm, 3 * cm])
     table.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.3, C_BORDER)]))
     story += [table, Paragraph(_p(t.t("vulnerability_details")), S["h2"])]
-    for r in _serious_spread(results)[:15]:
+    serious = _serious_spread(results)
+    if not serious:
+        story.append(Paragraph("—", S["small"]))
+    for r in serious[:15]:
         story.append(Paragraph(f"<b>{r['severity']}</b> · {_p(catalog.info(r.get('category', ''))['title'])}: "
                                f"{_p(_clip(r.get('attack'), 200))}", S["small"]))
     story.append(Paragraph(_p(t.t("recommendations")), S["h2"]))
+    if not recommendations(results):
+        story.append(Paragraph("—", S["small"]))
     for r in recommendations(results):
         story.append(Paragraph(f"<b>{r['priority']} · {_p(r['title'])}</b><br/>" +
                                "".join(f"• {_p(tip)}<br/>" for tip in r["fix"]), S["body"]))
@@ -585,7 +597,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="LLM Scanner report generator")
-    parser.add_argument("--lang", default="en", choices=["en", "fr", "ar", "es", "de"])
+    parser.add_argument("--lang", default="en", choices=PDF_LANGUAGES)
     parser.add_argument("--input", default="results/scan_results.json")
     parser.add_argument("--output", default=None)
     parser.add_argument("--target", default="AI Application")

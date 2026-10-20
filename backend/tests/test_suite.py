@@ -571,3 +571,15 @@ def test_truncated_reports_show_every_failing_category():
     mixed = _serious_spread([{"category": "a", "attack": "h", "severity": "HIGH", "score": 9},
                              {"category": "b", "attack": "c", "severity": "CRITICAL", "score": 7}])
     assert [r["severity"] for r in mixed] == ["CRITICAL", "HIGH"]
+
+
+def test_translated_pdf_has_no_emoji_and_refuses_arabic(tmp_path):
+    import json as _json
+    from report import generate_multilingual_report, _PICTOGRAPHS
+    src = tmp_path / "r.json"
+    src.write_text(_json.dumps({"scan_date": "2026-10-20 07:46 UTC", "summary": {"security_score": 100},
+                                "results": [{"category": "extraction", "attack": "a", "severity": "SAFE"}]}))
+    assert os.path.getsize(generate_multilingual_report(str(src), str(tmp_path / "fr.pdf"), "Bot", "fr")) > 500
+    assert _PICTOGRAPHS.sub("", "CRITIQUE 🚨").strip() == "CRITIQUE" and _PICTOGRAPHS.sub("", "MOYEN ⚠️").strip() == "MOYEN"
+    with pytest.raises(ValueError):
+        generate_multilingual_report(str(src), str(tmp_path / "ar.pdf"), "Bot", "ar")
