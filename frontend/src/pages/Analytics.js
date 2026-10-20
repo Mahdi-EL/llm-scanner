@@ -113,18 +113,21 @@ function SparkBar({ values }) {
 }
 
 /* ── Trend indicator ─────────────────────────────────────────── */
-function Trend({ value, label }) {
-  const up = value >= 0;
+function Trend({ value, label, title }) {
+  const up = value > 0;
+  if (value === 0) return (
+    <div title={title} style={{ fontSize:'11px', fontWeight:'600', color:'var(--t3)' }}>Unchanged {label}</div>
+  );
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:'600',
+    <div title={title} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', fontWeight:'600',
       color: up ? '#16a34a' : '#dc2626' }}>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
         {up
           ? <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>
           : <><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></>
         }
       </svg>
-      {Math.abs(value)}% {label}
+      {Math.abs(value)} pts {label}
     </div>
   );
 }
@@ -179,10 +182,11 @@ export default function Analytics() {
     label: new Date(s.created_at).toLocaleDateString('en-US', { month:'short', day:'numeric' }),
   }));
 
-  /* Trend delta (last vs prev) */
-  const trendDelta = trendData.length >= 2
-    ? Math.round(trendData[trendData.length-1].score - trendData[trendData.length-2].score)
-    : null;
+  /* Change since the latest target's previous scan (scores of different targets don't compare) */
+  const latest = completed[completed.length - 1];
+  const prevSame = latest && [...completed].reverse().slice(1).find(s => s.target_name === latest.target_name);
+  const trendDelta = prevSame ? Math.round(latest.summary.security_score - prevSame.summary.security_score) : null;
+  const trendTitle = latest ? `Latest ${latest.target_name} scan vs its previous one` : undefined;
 
   /* Stats */
   const total     = Math.max(totalScans, scans.length);
@@ -255,7 +259,7 @@ export default function Analytics() {
           <div key={k.label} className="stat-card-glow">
             <div className="stat-number" style={{ color:k.color, fontSize:'30px' }}>{k.val != null ? `${k.val}${k.suffix}` : '—'}</div>
             <div className="stat-label">{k.label}</div>
-            {k.label === 'Avg Security Score' && trendDelta != null && <Trend value={trendDelta} label="vs last" />}
+            {k.label === 'Avg Security Score' && trendDelta != null && <Trend value={trendDelta} label="vs previous scan" title={trendTitle} />}
           </div>
         ))}
       </div>
@@ -273,7 +277,7 @@ export default function Analytics() {
             </div>
             {trendDelta != null && (
               <div style={{ textAlign:'right' }}>
-                <Trend value={trendDelta} label="since last scan" />
+                <Trend value={trendDelta} label="since this target's last scan" title={trendTitle} />
               </div>
             )}
           </div>
