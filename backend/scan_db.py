@@ -126,12 +126,29 @@ def list_scans(user_id: str, limit: int = 50, offset: int = 0, status: Optional[
     return [{**dict(r), "summary": summary_of(dict(r))} for r in rows]
 
 
-def count_user_scans(user_id: str, status: Optional[str] = None) -> int:
+def count_user_scans(user_id: str, status: Optional[str] = None, target_name: Optional[str] = None) -> int:
+    where, args = ["user_id = ?"], [user_id]
+    if status:
+        where.append("status = ?")
+        args.append(status)
+    if target_name:
+        where.append("target_name = ?")
+        args.append(target_name)
     with transaction() as conn:
-        if status:
-            return conn.execute("SELECT COUNT(*) FROM scans WHERE user_id = ? AND status = ?",
-                                (user_id, status)).fetchone()[0]
-        return conn.execute("SELECT COUNT(*) FROM scans WHERE user_id = ?", (user_id,)).fetchone()[0]
+        return conn.execute(f"SELECT COUNT(*) FROM scans WHERE {' AND '.join(where)}", args).fetchone()[0]
+
+
+def user_scan_stats(user_id: str) -> dict:
+    """Totals over all of a user's finished scans (the dashboard only loads the latest page)."""
+    with transaction() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS completed, AVG(security_score) AS avg_score, "
+            "COALESCE(SUM(critical_count), 0) AS critical, "
+            "COALESCE(SUM(CASE WHEN COALESCE(critical_count, 0) = 0 AND COALESCE(high_count, 0) = 0 "
+            "THEN 1 ELSE 0 END), 0) AS clean "
+            "FROM scans WHERE user_id = ? AND status = 'complete'", (user_id,)).fetchone()
+    return {"completed": row["completed"], "critical": row["critical"], "clean": row["clean"],
+            "avg_score": None if row["avg_score"] is None else round(row["avg_score"])}
 
 
 def count_scans_this_month(user_id: str) -> int:

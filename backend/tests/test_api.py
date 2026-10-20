@@ -811,3 +811,16 @@ def test_regression_email_says_what_happened(monkeypatch):
     email_service.send_score_drop("a@b.c", "Bot", 49, 49, "s2", new_critical=2)
     assert "dropped to 60" in sent[0][0] and "down from 80" in sent[0][1] and "&lt;x&gt;" in sent[0][1]
     assert "2 new critical findings" in sent[1][0] and "down from" not in sent[1][1]
+
+
+def test_scan_stats_cover_every_finished_scan(client):
+    user_id, headers = _register(client)
+    assert client.get("/scans/stats", headers=headers).json() == {"completed": 0, "critical": 0, "clean": 0, "avg_score": None}
+    for score, crit in ((90, 0), (40, 3), (70, 0)):
+        scan_id = _seed_complete_scan(user_id, score=score, target="Bot" if crit else "Other")
+        scan_db.update_scan(scan_id, critical_count=crit)
+    stats = client.get("/scans/stats", headers=headers).json()
+    assert stats == {"completed": 3, "critical": 3, "clean": 2, "avg_score": 67}
+    # a filtered list reports the real count, not the page size
+    page = client.get("/scans?target_name=Other&limit=1", headers=headers).json()
+    assert page["total"] == 2 and len(page["scans"]) == 1

@@ -67,5 +67,6 @@ _This page is generated from the FastAPI routes in `backend/api.py`._
 | DELETE | `/scan/{scan_id}/share` | yes | Disables the scan's share link. |
 | POST | `/scan/{scan_id}/share` | yes | Creates a read-only link to a finished scan that expires after `days` (default 7). |
 | GET | `/scans` | yes | Your scans, newest first (summary only; findings come from /scan/{id}). |
+| GET | `/scans/stats` | yes | Totals over all your finished scans: count, average score, critical findings, clean scans. |
 | GET | `/shared/{token}` |  | A shared report: findings and summary only, never the target's configuration. |
 | POST | `/targets/test` | yes | Sends one harmless question to a target and reports what happened. |

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { scansAPI, saveBlob } from '../services/api';
+import { scansAPI, saveBlob, errorMessage } from '../services/api';
 import { usePolling } from '../utils/hooks';
 import { relTime, toCSV, isActive, scoreColor, riskLabel } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
@@ -189,6 +189,7 @@ function EmptyHero({ onStart, onLibrary }) {
 export default function Dashboard() {
   const [scans,   setScans]   = useState([]);
   const [total,   setTotal]   = useState(0);
+  const [stats,   setStats]   = useState(null);   // totals over every finished scan, not just the loaded page
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [search,  setSearch]  = useState('');
@@ -201,9 +202,10 @@ export default function Dashboard() {
   // Newest first, as the API returns them.
   const fetchScans = async () => {
     try {
-      const res = await scansAPI.list();
+      const [res, st] = await Promise.all([scansAPI.list(), scansAPI.stats().catch(() => null)]);
       setScans(res.data.scans);
       setTotal(res.data.total);
+      setStats(st?.data || null);
       setLoadError(false);
     } catch {
       setLoadError(true);
@@ -216,10 +218,15 @@ export default function Dashboard() {
   // Refresh only while something is queued or running (and the tab is visible).
   usePolling(fetchScans, 4000, scans.some(isActive));
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
     if (!scans.length) { toast('No scans to export.', 'warning'); return; }
+    let all = scans;
+    if (total > scans.length) {            // the dashboard only loads the latest page
+      try { all = (await scansAPI.listAll({}, 10000)).scans; }
+      catch (e) { toast(errorMessage(e, 'Could not load every scan for the export.'), 'error'); return; }
+    }
     const headers = ['Target','Status','Score','Grade','Critical','High','Medium','Low','Errors','Date'];
-    const rows = scans.map(s => [
+    const rows = all.map(s => [
       s.target_name, s.status,
       s.status === 'complete' ? s.summary?.security_score : '',
       s.summary?.grade ?? '',
@@ -234,11 +241,13 @@ export default function Dashboard() {
   /* ── Derived data ──────────────────────────────────────── */
   const completedScans = useMemo(()=>scans.filter(s=>s.status==='complete'), [scans]);
   const running  = useMemo(()=>scans.filter(isActive).length, [scans]);
-  const critical = useMemo(()=>completedScans.reduce((a,s)=>a+(s.summary?.critical||0),0), [completedScans]);
+  const critical = useMemo(()=>stats ? stats.critical : completedScans.reduce((a,s)=>a+(s.summary?.critical||0),0), [stats, completedScans]);
   const avgScore = useMemo(()=>{
+    if (stats) return stats.avg_score;
     const scored = completedScans.filter(s=>s.summary?.security_score!=null);
     return scored.length ? Math.round(scored.reduce((a,s)=>a+s.summary.security_score,0)/scored.length) : null;
-  }, [completedScans]);
+  }, [stats, completedScans]);
+  const completedCount = stats ? stats.completed : completedScans.length;
   // Oldest to newest, for the trend chart.
   const chronological = useMemo(()=>[...completedScans].reverse().slice(-12), [completedScans]);
   const scoreTrend = chronological.map(s=>s.summary?.security_score ?? 0);
@@ -250,7 +259,7 @@ export default function Dashboard() {
   const trendColor = trendDelta==null || trendDelta===0 ? 'var(--t3)' : trendDelta>0 ? '#16a34a' : '#dc2626';
   const trendText = trendDelta===0 ? 'Unchanged' : trendDelta!=null ? `${trendDelta>0?'↑':'↓'} ${Math.abs(trendDelta)} pts` : '';
   const latestScan = scans[0]||null;
-  const cleanScans = completedScans.filter(s=>!(s.summary?.critical>0)&&!(s.summary?.high>0)).length;
+  const cleanScans = stats ? stats.clean : completedScans.filter(s=>!(s.summary?.critical>0)&&!(s.summary?.high>0)).length;
 
   const filtered = useMemo(()=>
     scans
@@ -265,7 +274,7 @@ export default function Dashboard() {
 
   const STATS = [
     { label:'Total Scans',       value:total,    color:'var(--t1)',
-      sub: `${completedScans.length} completed`, subColor:'var(--t3)',
+      sub: `${completedCount} completed`, subColor:'var(--t3)',
       iconBg:'rgba(17,24,39,0.05)',
       icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
     },
@@ -378,7 +387,7 @@ export default function Dashboard() {
               {[
                 { label:'Last scan',   val:latestScan ? relTime(latestScan.created_at) : '—' },
                 { label:'Total scans', val:total,       vc:'var(--t1)' },
-                { label:'Clean scans', val:`${cleanScans}/${completedScans.length}`, vc: cleanScans>0 ? '#15803d' : 'var(--t1)' },
+                { label:'Clean scans', val:`${cleanScans}/${completedCount}`, vc: cleanScans>0 ? '#15803d' : 'var(--t1)' },
               ].map(row=>(
                 <div key={row.label} style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <span style={{ fontSize:'11px', color:'var(--t3)' }}>{row.label}</span>
@@ -444,7 +453,7 @@ export default function Dashboard() {
               <div>
                 <h2 style={{ fontSize:'14px', fontWeight:'700', color:'var(--t1)', letterSpacing:'-0.2px' }}>Scan History</h2>
                 <p style={{ fontSize:'12px', color:'var(--t3)', marginTop:'2px' }}>
-                  {total} scan{total!==1?'s':''} · {completedScans.length} completed{scans.length<total ? ` · showing latest ${scans.length}` : ''}
+                  {total} scan{total!==1?'s':''} · {completedCount} completed{scans.length<total ? ` · showing latest ${scans.length}` : ''}
                 </p>
               </div>
               <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
