@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import LoadError from '../components/LoadError';
 import { useNavigate } from 'react-router-dom';
 import { scansAPI } from '../services/api';
 import { scoreColor } from '../utils/format';
@@ -162,17 +163,18 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [list, cats] = await Promise.all([scansAPI.listAll(), scansAPI.categoryStats()]);
-        setScans([...list.scans].reverse());           // oldest first, for the charts
-        setTotalScans(list.total);
-        setCatStats(cats.data.categories);
-      } catch { /* empty state below */ }
-      finally { setLoading(false); }
-    })();
+  const [loadError, setLoadError] = useState(false);
+  const load = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const [list, cats] = await Promise.all([scansAPI.listAll(), scansAPI.categoryStats()]);
+      setScans([...list.scans].reverse());           // oldest first, for the charts
+      setTotalScans(list.total);
+      setCatStats(cats.data.categories);
+    } catch { setLoadError(true); }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   const completed = scans.filter(s => s.status === 'complete' && s.summary?.security_score != null);
 
@@ -233,6 +235,7 @@ export default function Analytics() {
       <span style={{ color:'var(--t3)', fontSize:'14px' }}>Loading analytics…</span>
     </div>
   );
+  if (loadError) return <LoadError title="Analytics" what="your analytics" onRetry={load} />;
 
   return (
     <div>

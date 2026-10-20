@@ -390,8 +390,8 @@ export default function Results() {
   );
   if (notFound || !scan) return (
     <div className="empty-state" style={{ padding:'100px 40px' }}>
-      <h3>Scan not found</h3>
-      <p>{notFound ? 'This scan may have been deleted, or the link is wrong.' : 'We couldn’t load this scan. Check your connection.'}</p>
+      <h3>{notFound ? 'Scan not found' : 'Couldn’t load this scan'}</h3>
+      <p>{notFound ? 'This scan may have been deleted, or the link is wrong.' : 'Check your connection; the server may be waking up.'}</p>
       <button className="btn-primary" onClick={()=> notFound ? navigate('/') : fetchScan()}>{notFound ? 'Back to Dashboard' : 'Retry'}</button>
     </div>
   );

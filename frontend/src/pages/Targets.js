@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import LoadError from '../components/LoadError';
 import { useNavigate } from 'react-router-dom';
 import { targetsAPI, schedulesAPI, scansAPI, API_URL, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -153,15 +154,17 @@ export default function Targets() {
   const [schedules, setSchedules] = useState([]);
   const [adding, setAdding]       = useState(false);
   const [loading, setLoading]     = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const paid = user?.plan && user.plan !== 'free';
 
   const load = useCallback(async () => {
     try {
       const [t, s] = await Promise.all([targetsAPI.list(), schedulesAPI.list()]);
       setTargets(t.data.targets); setSchedules(s.data.schedules);
-    } catch (e) { toast(errorMessage(e), 'error'); }
+      setLoadError(false);
+    } catch { setLoadError(true); }
     finally { setLoading(false); }
-  }, [toast]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -210,6 +213,8 @@ jobs:
           target-key: \${{ secrets.OPENAI_API_KEY }}
           model: gpt-4o-mini
           fail-on: high`;
+
+  if (loadError) return <LoadError title="Targets and CI" what="your saved targets" onRetry={load} />;
 
   return (
     <div style={{ maxWidth:'860px' }}>

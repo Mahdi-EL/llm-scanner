@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import LoadError from '../components/LoadError';
 import { useNavigate } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -73,18 +74,19 @@ export default function Reports() {
   const navigate = useNavigate();
   const toast    = useToast();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { scans: all, total } = await scansAPI.listAll({ status: 'complete' });
-        setScans(all);
-        setTotal(total);
-      } catch (e) {
-        toast(errorMessage(e, 'Couldn\u2019t load your reports.'), 'error');
-      }
-      finally { setLoading(false); }
-    })();
+  const [loadError, setLoadError] = useState(false);
+  const load = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const { scans: all, total } = await scansAPI.listAll({ status: 'complete' });
+      setScans(all);
+      setTotal(total);
+    } catch {
+      setLoadError(true);
+    }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   const completed = useMemo(() => scans.filter(s => s.status === 'complete'), [scans]);
 
@@ -140,6 +142,8 @@ export default function Reports() {
   };
 
   const scoreColor = stats.avgScore >= 80 ? '#16a34a' : stats.avgScore >= 50 ? '#b45309' : stats.avgScore != null ? '#dc2626' : 'var(--t3)';
+
+  if (loadError) return <LoadError title="Reports" what="your reports" onRetry={load} />;
 
   return (
     <div>
