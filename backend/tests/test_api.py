@@ -908,3 +908,19 @@ def test_scan_reports_its_live_share_link(client):
     client.delete(f"/scan/{scan_id}/share", headers=headers)
     assert client.get(f"/scan/{scan_id}", headers=headers).json()["shared_until"] is None
     assert client.get(f"/shared/{link['token']}").status_code == 404
+
+
+def test_api_keys_can_scan_but_not_manage_the_account(client):
+    user_id, headers = _register(client)
+    key = client.post("/api/keys", headers=headers, json={"name": "ci"}).json()["key"]
+    via_key = {"X-API-Key": key}
+    assert client.get("/scans", headers=via_key).status_code == 200
+    assert client.get("/categories", headers=via_key).status_code == 200
+    blocked = [("POST", "/api/keys", {"name": "x"}), ("GET", "/api/keys", None), ("PUT", "/api/webhook", {"url": None}),
+               ("POST", "/api/webhook/rotate", None), ("GET", "/auth/me/export", None),
+               ("PUT", "/auth/password", {"current_password": "password123", "new_password": "another-pass-1"}),
+               ("DELETE", "/auth/me", {"password": "password123"}), ("POST", "/api/billing/portal", None)]
+    for method, path, body in blocked:
+        r = client.request(method, path, headers=via_key, json=body)
+        assert r.status_code == 403 and "API keys can't" in r.json()["detail"], (method, path, r.status_code)
+    assert api.auth_db.get_user_by_id(user_id)

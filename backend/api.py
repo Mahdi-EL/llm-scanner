@@ -241,7 +241,10 @@ def _user_from_request(request: Request) -> Optional[dict]:
     key = request.headers.get("X-API-Key") or (credentials if scheme.lower() == "apikey" else None)
     if key:
         user_id = auth_db.get_user_by_api_key(key)
-        return auth_db.get_user_by_id(user_id) if user_id else None
+        user = auth_db.get_user_by_id(user_id) if user_id else None
+        if user:
+            user["_via_api_key"] = True
+        return user
     return None
 
 
@@ -249,6 +252,16 @@ def require_user(request: Request) -> dict:
     user = _user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+
+def require_session(request: Request) -> dict:
+    """A signed-in user, not an API key: a key leaked from a CI pipeline must not be able to mint
+    new keys, redirect the webhook, export the account, touch billing or change the password."""
+    user = require_user(request)
+    if user.get("_via_api_key"):
+        raise HTTPException(status_code=403, detail="API keys can't do this. Sign in to the web app to manage "
+                                                    "keys, webhooks, billing and your account.")
     return user
 
 
@@ -625,7 +638,7 @@ def reset_password(request: Request, body: PasswordResetConfirm):
 
 @app.put("/auth/password")
 @limiter.limit("10/minute")
-def change_password(request: Request, body: PasswordChangeRequest, user: dict = Depends(require_user)):
+def change_password(request: Request, body: PasswordChangeRequest, user: dict = Depends(require_session)):
     """Changes the password, signs out every other session, and returns fresh tokens."""
     _check_new_password(body.new_password)
     if not auth_db.verify_password(body.current_password, user["hashed_password"]):
@@ -658,7 +671,7 @@ def resend_verification(request: Request, user: dict = Depends(require_user)):
 
 @app.get("/auth/me/export")
 @limiter.limit("5/minute")
-def export_account(request: Request, user: dict = Depends(require_user)):
+def export_account(request: Request, user: dict = Depends(require_session)):
     """Everything we store about you, as JSON (GDPR data portability)."""
     scans = []
     for scan_id in scan_db.user_scan_ids(user["id"]):
@@ -680,7 +693,7 @@ def export_account(request: Request, user: dict = Depends(require_user)):
 
 @app.delete("/auth/me")
 @limiter.limit("3/minute")
-def delete_account(request: Request, body: DeleteAccountRequest, user: dict = Depends(require_user)):
+def delete_account(request: Request, body: DeleteAccountRequest, user: dict = Depends(require_session)):
     """Deletes the account, its scans and report files. Cancels any subscription."""
     if not auth_db.verify_password(body.password, user["hashed_password"]):
         raise HTTPException(status_code=403, detail="Password is incorrect")
@@ -1173,7 +1186,7 @@ def delete_prompt(prompt_id: str, user: dict = Depends(require_user)):
 
 # ── API keys (programmatic / CI access) ───────────────────────
 @app.post("/api/keys")
-def create_api_key_endpoint(body: ApiKeyCreate, user: dict = Depends(require_user)):
+def create_api_key_endpoint(body: ApiKeyCreate, user: dict = Depends(require_session)):
     """Creates an API key. The full key is returned ONCE: store it now."""
     if sum(1 for k in auth_db.list_api_keys(user["id"]) if not k["revoked"]) >= 20:
         raise HTTPException(status_code=400, detail="You can have up to 20 active API keys")
@@ -1181,13 +1194,13 @@ def create_api_key_endpoint(body: ApiKeyCreate, user: dict = Depends(require_use
 
 
 @app.get("/api/keys")
-def list_api_keys_endpoint(user: dict = Depends(require_user)):
+def list_api_keys_endpoint(user: dict = Depends(require_session)):
     """Lists your API keys (prefix only, never the full secret)."""
     return {"keys": auth_db.list_api_keys(user["id"])}
 
 
 @app.delete("/api/keys/{key_id}")
-def revoke_api_key_endpoint(key_id: str, user: dict = Depends(require_user)):
+def revoke_api_key_endpoint(key_id: str, user: dict = Depends(require_session)):
     """Revokes an API key immediately."""
     if not auth_db.revoke_api_key(user["id"], key_id):
         raise HTTPException(status_code=404, detail="API key not found")
@@ -1202,7 +1215,7 @@ def get_webhook(user: dict = Depends(require_user)):
 
 
 @app.put("/api/webhook")
-def set_webhook(body: WebhookBody, user: dict = Depends(require_user)):
+def set_webhook(body: WebhookBody, user: dict = Depends(require_session)):
     """Sets (or clears, with null) the URL we POST scan events to. Returns the signing
     secret the first time one is created."""
     if body.url:
@@ -1219,14 +1232,14 @@ def set_webhook(body: WebhookBody, user: dict = Depends(require_user)):
 
 
 @app.post("/api/webhook/rotate")
-def rotate_webhook_secret(user: dict = Depends(require_user)):
+def rotate_webhook_secret(user: dict = Depends(require_session)):
     """Creates a new webhook signing secret (the old one stops working)."""
     return {"secret": auth_db.rotate_webhook_secret(user["id"])}
 
 
 @app.post("/api/webhook/test")
 @limiter.limit("5/minute")
-def test_webhook(request: Request, user: dict = Depends(require_user)):
+def test_webhook(request: Request, user: dict = Depends(require_session)):
     """Sends a test `ping` event to your webhook."""
     if not user.get("webhook_url"):
         raise HTTPException(status_code=400, detail="Set a webhook URL first")
@@ -1262,7 +1275,7 @@ def list_plans():
 
 @app.post("/api/checkout")
 @limiter.limit("10/minute")
-def checkout(request: Request, body: CheckoutRequest, user: dict = Depends(require_user)):
+def checkout(request: Request, body: CheckoutRequest, user: dict = Depends(require_session)):
     """Creates a Stripe Checkout session for the signed-in user."""
     result = payment.create_checkout_session(body.plan, user)
     if "error" in result:
@@ -1271,7 +1284,7 @@ def checkout(request: Request, body: CheckoutRequest, user: dict = Depends(requi
 
 
 @app.post("/api/billing/portal")
-def billing_portal(user: dict = Depends(require_user)):
+def billing_portal(user: dict = Depends(require_session)):
     """A link to Stripe's portal to update cards, see invoices or cancel."""
     result = payment.create_portal_session(user)
     if "error" in result:
