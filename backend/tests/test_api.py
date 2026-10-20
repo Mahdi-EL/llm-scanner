@@ -416,9 +416,11 @@ def test_custom_prompts_are_added_to_scans(client):
 def test_export_and_delete_account(client):
     user_id, headers = _register(client)
     scan_id = _seed_complete_scan(user_id, RESULTS)
+    token = client.post(f"/scan/{scan_id}/share", headers=headers, json={}).json()["token"]
     export = client.get("/auth/me/export", headers=headers).json()
     assert export["profile"]["id"] == user_id and export["scans"][0]["scan_id"] == scan_id
-    assert "hashed_password" not in json.dumps(export)
+    assert export["share_links"][0]["scan_id"] == scan_id and set(export["firewall_usage"]) >= {"used", "limit"}
+    assert "hashed_password" not in json.dumps(export) and token not in json.dumps(export)
     assert client.request("DELETE", "/auth/me", headers=headers, json={"password": "wrong"}).status_code == 403
     assert client.request("DELETE", "/auth/me", headers=headers, json={"password": "password123"}).status_code == 200
     assert scan_db.get_scan(scan_id) is None

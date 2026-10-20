@@ -617,6 +617,8 @@ def export_account(request: Request, user: dict = Depends(require_user)):
         "saved_targets" : store.list_targets(user["id"]),
         "schedules"     : store.list_schedules(user["id"]),
         "custom_prompts": store.list_prompts(user["id"]),
+        "share_links"   : store.list_shares(user["id"]),
+        "firewall_usage": services.firewall_usage(user),
         "scans"         : scans,
     }
 
