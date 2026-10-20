@@ -69,6 +69,12 @@ JUDGE_MODEL    = os.getenv("JUDGE_MODEL", "openai/gpt-oss-120b")
 JUDGE_FALLBACK_MODEL = os.getenv("JUDGE_FALLBACK_MODEL", "qwen/qwen3.8-27b")
 JUDGE_API_KEY  = os.getenv("JUDGE_API_KEY") or GROQ_API_KEY
 JUDGE_BASE_URL = os.getenv("JUDGE_BASE_URL") or None
+# Short, plain refusals ("I'm sorry, I can't help with that.") that the rule detectors cleared are
+# graded SAFE without a judge call: on a well-defended target that's most replies.
+JUDGE_SKIP_CLEAR_REFUSALS = _bool("JUDGE_SKIP_CLEAR_REFUSALS", True)
+# Groq's reasoning_effort for gpt-oss judges ("low" | "medium" | "high"). Unset = the provider's
+# default. "low" spends far fewer (billed) reasoning tokens; check grading quality before using it.
+JUDGE_REASONING_EFFORT = (os.getenv("JUDGE_REASONING_EFFORT") or "").strip().lower() or None
 
 # ── Scans ─────────────────────────────────────────────────────
 MAX_CONCURRENT_SCANS = _int("MAX_CONCURRENT_SCANS", 3)   # scans running at once

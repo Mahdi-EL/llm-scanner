@@ -40,6 +40,7 @@ class Target:
         self.timeout     = kwargs.get("timeout") or config.TARGET_TIMEOUT
         self.logs        = []
         self.calls       = 0
+        self.prompt_tokens = self.completion_tokens = 0
         self._lock       = threading.Lock()
         self._local      = threading.local()
         self._client     = None
@@ -140,7 +141,7 @@ class Target:
                 messages=[{"role": "system", "content": self.system_prompt}, *history],
                 timeout=self.timeout,
             )
-            self._count()
+            self._count(response.usage)
             return response.choices[0].message.content or ""
         url = self.api_url if self.api_url.endswith("/chat/completions") else f"{self.api_url}/chat/completions"
         messages = ([{"role": "system", "content": self.system_prompt}] if self.system_prompt else []) + history
@@ -148,7 +149,7 @@ class Target:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         data = self._post(url, headers=headers, json={"model": self.model, "messages": messages}).json()
-        self._count()
+        self._count(data.get("usage") if isinstance(data, dict) else None)
         return data["choices"][0]["message"].get("content") or ""
 
     def get_baseline(self, question=None):
@@ -213,7 +214,7 @@ class Target:
             ],
             timeout=self.timeout,
         )
-        self._count()
+        self._count(response.usage)
         return response.choices[0].message.content or ""
 
     def _send_openai(self, message):
@@ -226,7 +227,7 @@ class Target:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         data = self._post(url, headers=headers, json={"model": self.model, "messages": messages}).json()
-        self._count()
+        self._count(data.get("usage") if isinstance(data, dict) else None)
         return data["choices"][0]["message"].get("content") or ""
 
     def _send_rest(self, message):
@@ -270,9 +271,13 @@ class Target:
         return data.get(self.output_field, str(data)) if isinstance(data, dict) else str(data)
 
     # ── Bookkeeping ──────────────────────────────────────────
-    def _count(self):
+    def _count(self, usage=None):
+        from judge import usage_tokens
+        tokens_in, tokens_out = usage_tokens(usage)
         with self._lock:
             self.calls += 1
+            self.prompt_tokens += tokens_in
+            self.completion_tokens += tokens_out
 
     def _log(self, message, response, elapsed, status):
         with self._lock:

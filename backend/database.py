@@ -172,6 +172,10 @@ SCAN_COLUMNS = {
     "llm_calls"        : "INTEGER DEFAULT 0",
     "target_id"        : "TEXT",
     "schedule_id"      : "TEXT",
+    # model tokens billed to this server's keys (judge, plus the target for simulation scans)
+    "tokens_in"        : "INTEGER DEFAULT 0",
+    "tokens_out"       : "INTEGER DEFAULT 0",
+    "graded_by_rules"  : "INTEGER DEFAULT 0",
 }
 USER_COLUMNS = {
     "webhook_url"           : "TEXT",

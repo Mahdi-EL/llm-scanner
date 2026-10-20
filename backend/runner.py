@@ -137,6 +137,17 @@ def build_target(scan: dict):
     return target, canary, system_prompt
 
 
+def _server_tokens(usage: dict, target_type: str) -> dict:
+    """Tokens this server pays for: the judge always, the target only for simulation scans (Groq
+    scans use the user's own key)."""
+    tokens_in = usage.get("judge_prompt_tokens", 0)
+    tokens_out = usage.get("judge_completion_tokens", 0)
+    if target_type == "simulation":
+        tokens_in += usage.get("target_prompt_tokens", 0)
+        tokens_out += usage.get("target_completion_tokens", 0)
+    return {"tokens_in": tokens_in, "tokens_out": tokens_out, "graded_by_rules": usage.get("graded_by_rules", 0)}
+
+
 def _friendly(exc: Exception, target_type: str = None) -> str:
     # Simulation targets run on this server's own Groq key, not the user's.
     return errors.explain(exc, server_side=target_type == "simulation")
@@ -212,6 +223,7 @@ def execute(scan_id: str) -> None:
             medium_count=s["medium"], low_count=s["low"], safe_count=s["safe"], error_count=s["errors"],
             completed_at=utcnow(), duration_seconds=data.get("duration_seconds", 0),
             llm_calls=data.get("llm_calls", 0), current_category=None, api_key_enc=None,
+            **_server_tokens(data.get("usage") or {}, cfg.get("target_type") or scan["target_type"]),
         )
         scan_db.save_findings(scan_id, data["results"])
         log.info("Scan %s complete: score %s", scan_id, s["security_score"])

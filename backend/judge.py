@@ -58,6 +58,17 @@ class JudgeError(RuntimeError):
     """The judge's answer couldn't be obtained or understood."""
 
 
+def usage_tokens(usage) -> tuple:
+    """(prompt, completion) tokens from an SDK usage object or an OpenAI-style JSON dict."""
+    if not usage:
+        return 0, 0
+    get = usage.get if isinstance(usage, dict) else (lambda k: getattr(usage, k, 0))
+    try:
+        return int(get("prompt_tokens") or 0), int(get("completion_tokens") or 0)
+    except (TypeError, ValueError):
+        return 0, 0
+
+
 def _clip(text: str) -> str:
     text = text or ""
     return text if len(text) <= MAX_CHARS else text[:MAX_CHARS] + " [truncated]"
@@ -142,6 +153,9 @@ class Judge:
         self._cache         = {}
         self._lock          = threading.Lock()
         self.calls          = 0
+        self.prompt_tokens  = 0
+        self.completion_tokens = 0
+        self.rule_graded    = 0          # replies graded by rules instead of a call (clear refusals)
         # Check Groq's live model list only for our own client on Groq's default endpoint.
         self._resolve_model = client is None and self._base_url is None and model is None
         self._resolved      = False
@@ -191,15 +205,31 @@ class Judge:
                 return self._call(self.model, prompt)
             raise
 
+    def note_rule_graded(self):
+        with self._lock:
+            self.rule_graded += 1
+
+    def usage(self) -> dict:
+        with self._lock:
+            return {"judge_model": self.model, "judge_calls": self.calls, "judge_prompt_tokens": self.prompt_tokens,
+                    "judge_completion_tokens": self.completion_tokens, "graded_by_rules": self.rule_graded}
+
     def _call(self, model: str, prompt: str) -> str:
         with self._lock:
             self.calls += 1
+        params = groq_models.generation_params(model)
+        if config.JUDGE_REASONING_EFFORT and model.startswith("openai/gpt-oss"):
+            params["reasoning_effort"] = config.JUDGE_REASONING_EFFORT
         response = self.client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
             seed=7,
             response_format={"type": "json_object"},
-            **groq_models.generation_params(model),
+            **params,
         )
+        tokens_in, tokens_out = usage_tokens(getattr(response, "usage", None))
+        with self._lock:
+            self.prompt_tokens += tokens_in
+            self.completion_tokens += tokens_out
         return response.choices[0].message.content or ""

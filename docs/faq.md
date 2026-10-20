@@ -7,7 +7,9 @@ prompts and uses the target's API quota.
 **What does a scan cost?**
 Each attack is one call to the target plus one call to the judge model (Groq by default); a
 multi-turn attack is three target calls. A full scan is about 1,090 attacks, so roughly 1,100
-calls per model. Choose fewer categories for a cheaper, faster scan.
+calls per model. Plain refusals ("I'm sorry, I can't help with that.") that the rule detectors
+cleared are graded without a judge call. Choose fewer categories, or a quick scan, for a cheaper,
+faster scan.
 
 **Why does a full scan stall or take hours on a free Groq key?**
 Groq's free tier allows about 1,000 requests per day and 8,000 tokens per minute per model, which

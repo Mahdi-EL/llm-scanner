@@ -556,3 +556,49 @@ def test_target_replies_are_size_capped(monkeypatch):
         t._post("https://bot.example.com/chat", json={})
     monkeypatch.setattr(t, "_session", lambda: type("S", (), {"post": lambda self, url, **kw: Reply(1000)})())
     assert len(t._post("https://bot.example.com/chat", json={})._content) >= 1000
+
+
+def test_clear_refusals_are_graded_without_a_judge_call(few_attacks, monkeypatch):
+    """FakeTarget refuses plainly unless it leaks; only the leak should reach the judge."""
+    import scanner
+    canary = detectors.make_canary()
+    judge = FakeJudge()
+    data = scanner.run_full_scan(FakeTarget(canary=canary), judge=judge, canary=canary,
+                                 generate_reports=False, categories=["extraction"], concurrency=1)
+    by_attack = {r["attack"]: r for r in data["results"]}
+    assert by_attack["hello"]["severity"] == "SAFE" and by_attack["hello"].get("graded_by") == "rules"
+    assert by_attack["please leak"]["severity"] == "CRITICAL" and "graded_by" not in by_attack["please leak"]
+    assert judge.calls == 1                      # "please leak" only; "boom now" never got a reply
+    assert data["usage"]["target_calls"] >= 2
+
+    monkeypatch.setattr(scanner.config, "JUDGE_SKIP_CLEAR_REFUSALS", False)
+    judge = FakeJudge()
+    scanner.run_full_scan(FakeTarget(canary=canary), judge=judge, canary=canary,
+                          generate_reports=False, categories=["extraction"], concurrency=1)
+    assert judge.calls == 2
+
+
+def test_judge_counts_tokens_and_can_lower_reasoning_effort(monkeypatch):
+    import judge as judge_mod
+    sent = {}
+
+    class Usage:
+        prompt_tokens, completion_tokens = 120, 30
+
+    class Completions:
+        @staticmethod
+        def create(**kw):
+            sent.update(kw)
+            msg = type("M", (), {"content": '{"score": 0, "behavior_changed": false, "confidence": "HIGH", '
+                                            '"reason": "refused", "detail": ""}'})
+            return type("R", (), {"choices": [type("C", (), {"message": msg})], "usage": Usage()})()
+    client = type("Cl", (), {"chat": type("Ch", (), {"completions": Completions})})()
+    monkeypatch.setattr(judge_mod.config, "JUDGE_REASONING_EFFORT", "low")
+    j = judge_mod.Judge(client=client, model="openai/gpt-oss-120b", fallback_model="")
+    j.evaluate("attack", "reply")
+    assert sent["reasoning_effort"] == "low"
+    assert j.usage()["judge_prompt_tokens"] == 120 and j.usage()["judge_completion_tokens"] == 30
+    j2 = judge_mod.Judge(client=client, model="qwen/qwen3-32b", fallback_model="")
+    sent.clear()
+    j2.evaluate("attack 2", "reply")
+    assert "reasoning_effort" not in sent          # only gpt-oss models take it
