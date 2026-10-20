@@ -39,24 +39,38 @@ def verify_signature(secret: str, body: bytes, header: str, tolerance: int = 300
     return hmac.compare_digest(sign(secret, body, timestamp), header)
 
 
-def send_webhook(user: dict, event: str, payload: dict) -> bool:
+RETRY_DELAYS = (2, 10)    # seconds before the 2nd and 3rd attempt
+
+
+def send_webhook(user: dict, event: str, payload: dict, attempts: int = 3) -> bool:
+    """POSTs a signed event. Retries timeouts, connection errors, 429 and 5xx (each attempt is
+    signed afresh, so the timestamp stays current); a 4xx other than 429 is final."""
     url = user.get("webhook_url")
     if not url:
         return False
     body = json.dumps({"event": event, **payload}, separators=(",", ":")).encode()
-    headers = {"Content-Type": "application/json", "User-Agent": "LLMScanner-Webhook/1.0",
-               "X-LLMScanner-Event": event}
-    if user.get("webhook_secret"):
-        headers["X-LLMScanner-Signature"] = sign(user["webhook_secret"], body, int(time.time()))
-    try:
-        response = netguard.safe_post(url, data=body, headers=headers, timeout=5)
-        ok = 200 <= response.status_code < 300
-        if not ok:
-            log.warning("Webhook %s answered %s", event, response.status_code)
-        return ok
-    except Exception:
-        log.warning("Webhook %s to user %s failed", event, user.get("id"), exc_info=True)
-        return False
+    for attempt in range(attempts):
+        if attempt:
+            time.sleep(RETRY_DELAYS[min(attempt, len(RETRY_DELAYS)) - 1])
+        headers = {"Content-Type": "application/json", "User-Agent": "LLMScanner-Webhook/1.0",
+                   "X-LLMScanner-Event": event}
+        if user.get("webhook_secret"):
+            headers["X-LLMScanner-Signature"] = sign(user["webhook_secret"], body, int(time.time()))
+        try:
+            response = netguard.safe_post(url, data=body, headers=headers, timeout=5)
+        except netguard.UnsafeURLError:
+            log.warning("Webhook %s to user %s blocked: unsafe URL", event, user.get("id"))
+            return False
+        except Exception:
+            log.warning("Webhook %s to user %s failed (attempt %d/%d)", event, user.get("id"),
+                        attempt + 1, attempts, exc_info=True)
+            continue
+        if 200 <= response.status_code < 300:
+            return True
+        log.warning("Webhook %s answered %s (attempt %d/%d)", event, response.status_code, attempt + 1, attempts)
+        if response.status_code != 429 and response.status_code < 500:
+            return False
+    return False
 
 
 def _payload(scan: dict) -> dict:

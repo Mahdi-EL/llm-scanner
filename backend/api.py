@@ -1169,7 +1169,7 @@ def test_webhook(request: Request, user: dict = Depends(require_user)):
     """Sends a test `ping` event to your webhook."""
     if not user.get("webhook_url"):
         raise HTTPException(status_code=400, detail="Set a webhook URL first")
-    ok = notifications.send_webhook(user, "ping", {"message": "Test event from LLM Scanner"})
+    ok = notifications.send_webhook(user, "ping", {"message": "Test event from LLM Scanner"}, attempts=1)
     return {"delivered": ok}
 
 
