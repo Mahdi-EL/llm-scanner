@@ -558,3 +558,16 @@ def test_cli_has_commands():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
+
+def test_truncated_reports_show_every_failing_category():
+    """The PDF and Markdown list only 25 findings; each failing category must still appear."""
+    from report import _serious_spread, render_markdown
+    results = ([{"category": "extraction", "attack": f"e{i}", "severity": "CRITICAL", "score": 9} for i in range(30)]
+               + [{"category": "direct_override", "attack": f"o{i}", "severity": "CRITICAL", "score": 8} for i in range(3)])
+    top = _serious_spread(results)[:25]
+    assert sum(r["category"] == "direct_override" for r in top) == 3
+    assert "8 more are listed" in render_markdown({"results": results, "summary": {}}, "Bot")
+    # worst first still holds: a high finding never comes before a critical one
+    mixed = _serious_spread([{"category": "a", "attack": "h", "severity": "HIGH", "score": 9},
+                             {"category": "b", "attack": "c", "severity": "CRITICAL", "score": 7}])
+    assert [r["severity"] for r in mixed] == ["CRITICAL", "HIGH"]
