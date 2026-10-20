@@ -89,6 +89,8 @@ QUICK_SCAN_PER_CATEGORY = _int("QUICK_SCAN_PER_CATEGORY", 5)
 # Free accounts run quick scans only (full scans cost ~10x the model calls). Off by default.
 FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", False)
 
+# People per workspace on Pro, owner included (Free: 1, Enterprise: no limit).
+PRO_SEATS            = _int("PRO_SEATS", 5)
 # Free no-signup leak checks (20 attacks each on the server's model key) across all visitors per day.
 LEAK_CHECKS_PER_DAY  = _int("LEAK_CHECKS_PER_DAY", 300)
 

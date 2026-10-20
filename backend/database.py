@@ -139,6 +139,24 @@ CREATE TABLE IF NOT EXISTS firewall_usage (
     count   INTEGER DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
+CREATE TABLE IF NOT EXISTS memberships (
+    account_id TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    role       TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS team_invites (
+    id          TEXT PRIMARY KEY,
+    account_id  TEXT NOT NULL,
+    email       TEXT NOT NULL,
+    role        TEXT NOT NULL,
+    token_hash  TEXT UNIQUE NOT NULL,
+    invited_by  TEXT,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    accepted_at TEXT
+);
 CREATE TABLE IF NOT EXISTS leak_checks (
     day   TEXT PRIMARY KEY,
     count INTEGER DEFAULT 0
@@ -201,6 +219,7 @@ SCAN_COLUMNS = {
     "tokens_in"        : "INTEGER DEFAULT 0",
     "tokens_out"       : "INTEGER DEFAULT 0",
     "graded_by_rules"  : "INTEGER DEFAULT 0",
+    "created_by"       : "TEXT",       # the team member who started it, when not the account owner
 }
 USER_COLUMNS = {
     "webhook_url"           : "TEXT",
@@ -243,6 +262,7 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_status ON scans (status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_gateway_user_time ON gateway_events (user_id, created_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_targets_user ON targets (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_schedules_next ON schedules (enabled, next_run_at)")

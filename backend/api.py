@@ -36,6 +36,7 @@ import email_service
 import evidence
 import firewall
 import gateway
+import teams
 import leakcheck
 import groq_models
 import netguard
@@ -253,21 +254,81 @@ def _user_from_request(request: Request) -> Optional[dict]:
     return None
 
 
+WORKSPACE_HEADER = "X-Workspace"
+
+
+def _workspace_user(request: Request) -> Optional[dict]:
+    """The account a request acts on: the caller's own, or with X-Workspace the team workspace they
+    belong to. That account's row comes back (so every query stays scoped by its id), with the
+    caller's "_role" there and the signed-in person in "_actor". API keys always act in their own
+    account. None when nobody is signed in; 403 for a workspace the caller isn't in."""
+    person = _user_from_request(request)
+    if not person:
+        return None
+    workspace = (request.headers.get(WORKSPACE_HEADER) or "").strip()[:64]
+    if not workspace or workspace == person["id"] or person.get("_via_api_key"):
+        return {**person, "_role": "owner", "_actor": person}
+    role = teams.role_of(workspace, person["id"])
+    account = auth_db.get_user_by_id(workspace) if role else None
+    if not account:
+        raise HTTPException(status_code=403, detail="You're not a member of this workspace")
+    return {**account, "_role": role, "_actor": person}
+
+
+def _forbid_api_keys(user: dict) -> None:
+    if (user.get("_actor") or user).get("_via_api_key"):
+        raise HTTPException(status_code=403, detail="API keys can't do this. Sign in to the web app to manage "
+                                                    "keys, webhooks, billing and your account.")
+
+
 def require_user(request: Request) -> dict:
-    user = _user_from_request(request)
+    """Anyone in the workspace, viewers included: reading scans and reports."""
+    user = _workspace_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user
 
 
-def require_session(request: Request) -> dict:
-    """A signed-in user, not an API key: a key leaked from a CI pipeline must not be able to mint
-    new keys, redirect the webhook, export the account, touch billing or change the password."""
+def require_member(request: Request) -> dict:
+    """Members and up: running and changing scans, targets, schedules and custom attacks."""
     user = require_user(request)
-    if user.get("_via_api_key"):
-        raise HTTPException(status_code=403, detail="API keys can't do this. Sign in to the web app to manage "
-                                                    "keys, webhooks, billing and your account.")
+    if teams.RANK[user["_role"]] < teams.RANK["member"]:
+        raise HTTPException(status_code=403, detail="Viewers can read this workspace but can't change it.")
     return user
+
+
+def require_admin(request: Request) -> dict:
+    """Admins and the owner, signed in (not an API key: a key leaked from a CI pipeline must not be able
+    to mint new keys, redirect the webhook or change the team)."""
+    user = require_user(request)
+    _forbid_api_keys(user)
+    if teams.RANK[user["_role"]] < teams.RANK["admin"]:
+        raise HTTPException(status_code=403, detail="Only the workspace's owner and admins can do this.")
+    return user
+
+
+def require_owner_session(request: Request) -> dict:
+    """The account owner, signed in: billing."""
+    user = require_user(request)
+    _forbid_api_keys(user)
+    if user["_role"] != "owner":
+        raise HTTPException(status_code=403, detail="Only the workspace's owner can manage billing.")
+    return user
+
+
+def require_person(request: Request) -> dict:
+    """The signed-in person, whatever workspace is selected: their own profile and settings."""
+    person = _user_from_request(request)
+    if not person:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return person
+
+
+def require_session(request: Request) -> dict:
+    """The signed-in person, not an API key: password, data export, account deletion."""
+    person = require_person(request)
+    _forbid_api_keys(person)
+    return person
 
 
 def _token_response(user: dict) -> dict:
@@ -621,10 +682,26 @@ def logout(request: Request, body: LogoutRequest):
     return {"message": "Logged out"}
 
 
+_WORKSPACE_KEYS = ("plan", "scans_count", "scans_this_month", "scan_limit", "full_scans", "webhook_url",
+                   "has_webhook_secret", "has_billing", "report_brand")
+
+
 @app.get("/auth/me")
-def get_me(user: dict = Depends(require_user)):
-    """The signed-in user's profile, plan and usage."""
-    return _public_user(user)
+def get_me(request: Request, user: dict = Depends(require_person)):
+    """The signed-in user's profile, plan and usage, the workspaces they can act in, and (with
+    X-Workspace) the selected team workspace's plan, usage and their role there."""
+    out = {**_public_user(user), "workspaces": teams.workspaces_of(user["id"]), "workspace": None}
+    try:
+        current = _workspace_user(request)
+    except HTTPException:
+        current = None                   # a workspace they've left: the app falls back to their own
+    if current and current["id"] != user["id"]:
+        public = _public_user(current)
+        out["workspace"] = {"id": current["id"], "name": current["username"], "role": current["_role"],
+                            **{k: public[k] for k in _WORKSPACE_KEYS}}
+        if teams.RANK[current["_role"]] < teams.RANK["admin"]:
+            out["workspace"]["webhook_url"] = None      # webhook URLs often carry a secret (Slack's do)
+    return out
 
 
 @app.post("/auth/forgot-password")
@@ -674,7 +751,7 @@ def verify_email(request: Request, body: TokenBody):
 
 @app.post("/auth/resend-verification")
 @limiter.limit("3/minute")
-def resend_verification(request: Request, user: dict = Depends(require_user)):
+def resend_verification(request: Request, user: dict = Depends(require_person)):
     """Sends a new email confirmation link."""
     if user.get("email_verified"):
         return {"message": "Email already confirmed"}
@@ -704,6 +781,7 @@ def export_account(request: Request, user: dict = Depends(require_session)):
         "firewall_usage": services.firewall_usage(user),
         "gateway_last_7_days": gateway.stats(user["id"]),
         "triage"        : store.list_triage(user["id"]),
+        "workspaces"    : teams.workspaces_of(user["id"]),
         "scans"         : scans,
     }
 
@@ -720,6 +798,7 @@ def delete_account(request: Request, body: DeleteAccountRequest, user: dict = De
                                                     "account wasn't deleted. Please try again in a few minutes.")
     for scan_id in scan_db.user_scan_ids(user["id"]):
         _delete_scan_everything(scan_db.get_scan(scan_id))
+    teams.forget_user(user["id"])
     auth_db.delete_user(user["id"])
     log.info("Account %s deleted", user["id"])
     return {"message": "Your account and all its data have been deleted"}
@@ -752,7 +831,7 @@ def _report_data(scan: dict) -> dict:
 
 @app.post("/scan")
 @limiter.limit("20/minute")
-def start_scan(request: Request, body: ScanRequest, user: dict = Depends(require_user)):
+def start_scan(request: Request, body: ScanRequest, user: dict = Depends(require_member)):
     """Queues a scan. Poll GET /scan/{id} for progress."""
     cfg, api_key, target_id = body.target_config(), body.api_key, None
     if body.target_id:
@@ -772,6 +851,7 @@ def start_scan(request: Request, body: ScanRequest, user: dict = Depends(require
                                       include_custom_prompts=body.include_custom_prompts)
     except services.ScanRejected as e:
         raise HTTPException(status_code=e.status, detail=e.message)
+    _note_actor(scan_id, user)
     return {"scan_id": scan_id, "status": "pending", "target_name": body.target_name,
             "message": f"Scan started for {body.target_name}"}
 
@@ -831,7 +911,7 @@ class TriageRequest(BaseModel):
 
 
 @app.put("/scan/{scan_id}/triage")
-def triage_finding(scan_id: str, body: TriageRequest, user: dict = Depends(require_user)):
+def triage_finding(scan_id: str, body: TriageRequest, user: dict = Depends(require_member)):
     """Marks a failed finding as a false positive or an accepted risk ("open" clears the mark). The mark
     applies to that attack in every scan of the same target: re-tests, suggestions and regression alerts
     leave it out, and the scan shows its score after triage."""
@@ -845,7 +925,7 @@ def triage_finding(scan_id: str, body: TriageRequest, user: dict = Depends(requi
 
 
 @app.post("/scan/{scan_id}/cancel")
-def cancel_scan(scan_id: str, user: dict = Depends(require_user)):
+def cancel_scan(scan_id: str, user: dict = Depends(require_member)):
     """Stops a queued or running scan."""
     scan = _get_owned_scan(scan_id, user)
     if scan["status"] not in ("pending", "running"):
@@ -914,7 +994,7 @@ def _delete_scan_everything(scan: Optional[dict]) -> None:
 
 
 @app.delete("/scan/{scan_id}")
-def delete_scan_endpoint(scan_id: str, user: dict = Depends(require_user)):
+def delete_scan_endpoint(scan_id: str, user: dict = Depends(require_member)):
     """Deletes a scan, its findings and its report files."""
     _delete_scan_everything(_get_owned_scan(scan_id, user))
     return {"message": f"Scan {scan_id} deleted"}
@@ -1008,7 +1088,7 @@ def download_pdf(scan_id: str, user: dict = Depends(require_user)):
 
 # ── Share links (read-only, expiring) ─────────────────────────
 @app.post("/scan/{scan_id}/share")
-def share_scan(scan_id: str, body: Optional[ShareRequest] = None, user: dict = Depends(require_user)):
+def share_scan(scan_id: str, body: Optional[ShareRequest] = None, user: dict = Depends(require_member)):
     """Creates a read-only link to a finished scan that expires after `days` (default 7)."""
     body = body or ShareRequest()
     _get_complete_scan(scan_id, user)
@@ -1018,7 +1098,7 @@ def share_scan(scan_id: str, body: Optional[ShareRequest] = None, user: dict = D
 
 
 @app.delete("/scan/{scan_id}/share")
-def unshare_scan(scan_id: str, user: dict = Depends(require_user)):
+def unshare_scan(scan_id: str, user: dict = Depends(require_member)):
     """Disables the scan's share link."""
     _get_owned_scan(scan_id, user)
     store.revoke_share(user["id"], scan_id)
@@ -1061,7 +1141,7 @@ def _scan_config(scan: dict) -> dict:
 
 @app.post("/scan/{scan_id}/remediate")
 @limiter.limit("10/minute")
-def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user: dict = Depends(require_user)):
+def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user: dict = Depends(require_member)):
     """Suggests a hardened system prompt based on the attacks that succeeded in this scan (10 a day on Free, 100 on Pro)."""
     scan = _get_complete_scan(scan_id, user)
     cfg = _scan_config(scan)
@@ -1087,7 +1167,7 @@ def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user:
 
 @app.post("/scan/{scan_id}/retest")
 @limiter.limit("10/minute")
-def retest_scan(request: Request, scan_id: str, body: RetestRequest, user: dict = Depends(require_user)):
+def retest_scan(request: Request, scan_id: str, body: RetestRequest, user: dict = Depends(require_member)):
     """Runs only the attacks that failed in this scan again, optionally with a new system prompt."""
     scan = _get_complete_scan(scan_id, user)
     failures = remediation.failed_findings(_results_after_triage(scan, user))
@@ -1109,6 +1189,7 @@ def retest_scan(request: Request, scan_id: str, body: RetestRequest, user: dict 
                                      target_id=scan.get("target_id"), include_custom_prompts=False)
     except services.ScanRejected as e:
         raise HTTPException(status_code=e.status, detail=e.message)
+    _note_actor(new_id, user)
     return {"scan_id": new_id, "attacks": len(failures), "status": "pending"}
 
 
@@ -1121,7 +1202,7 @@ def firewall_usage(user: dict = Depends(require_user)):
 
 @app.post("/api/firewall/check")
 @limiter.limit("300/minute")
-def firewall_check(request: Request, body: FirewallInput, user: dict = Depends(require_user)):
+def firewall_check(request: Request, body: FirewallInput, user: dict = Depends(require_member)):
     """Screens a user message before it reaches your model: allow, review or block, with reasons.
     Every started 2,000 characters count as one check against your plan's daily allowance."""
     try:
@@ -1133,12 +1214,105 @@ def firewall_check(request: Request, body: FirewallInput, user: dict = Depends(r
 
 @app.post("/api/firewall/check-output")
 @limiter.limit("600/minute")
-def firewall_check_output(request: Request, body: FirewallOutput, user: dict = Depends(require_user)):
+def firewall_check_output(request: Request, body: FirewallOutput, user: dict = Depends(require_member)):
     """Screens a model reply before it reaches the user: flags and masks leaked secrets, the canary
     and copies of the system prompt. Free of charge on plans that include the firewall."""
     if not payment.firewall_limit(user.get("plan", "free")):
         raise HTTPException(status_code=402, detail="The AI firewall isn't included in your plan. Upgrade to use it.")
     return firewall.check_output(body.text, body.system_prompt, body.canary)
+
+
+# ── Teams ─────────────────────────────────────────────────────
+def _note_actor(scan_id: str, user: dict) -> None:
+    actor = user.get("_actor") or user
+    if actor["id"] != user["id"]:
+        scan_db.update_scan(scan_id, created_by=actor["id"])
+
+
+class InviteRequest(BaseModel):
+    email: EmailStr
+    role : Literal["viewer", "member", "admin"] = "member"
+
+
+class RoleRequest(BaseModel):
+    role: Literal["viewer", "member", "admin"]
+
+
+class AcceptRequest(BaseModel):
+    token: str = Field(..., min_length=10, max_length=100)
+
+
+def _team_error(e: "teams.TeamError"):
+    raise HTTPException(status_code=e.status, detail=str(e))
+
+
+@app.get("/api/team")
+def get_team(user: dict = Depends(require_user)):
+    """The workspace's people and seats; owners and admins also see pending invites."""
+    admin = teams.RANK[user["_role"]] >= teams.RANK["admin"]
+    return {"workspace": {"id": user["id"], "name": user["username"], "plan": user.get("plan", "free")},
+            "role": user["_role"], "members": teams.members(user["id"]),
+            "invites": teams.pending_invites(user["id"]) if admin else [],
+            "seats": {"used": teams.seats_used(user["id"]), "limit": teams.seat_limit(user.get("plan"))}}
+
+
+@app.post("/api/team/invites")
+@limiter.limit("30/hour")
+def invite_member(request: Request, body: InviteRequest, user: dict = Depends(require_admin)):
+    """Invites someone by email (7 days). The link is returned; it's emailed when email is set up."""
+    try:
+        invite = teams.create_invite(user, body.email, body.role, invited_by=user["_actor"]["id"])
+    except teams.TeamError as e:
+        _team_error(e)
+    link = f"{config.APP_URL}/invite?token={invite['token']}"
+    sent = email_service.send_team_invite(invite["email"], user["_actor"]["username"], user["username"], link) \
+        if user["_actor"].get("email_verified") else False
+    return {"id": invite["id"], "email": invite["email"], "role": invite["role"], "expires_at": invite["expires_at"],
+            "link": link, "emailed": bool(sent)}
+
+
+@app.delete("/api/team/invites/{invite_id}")
+def revoke_invite(invite_id: str, user: dict = Depends(require_admin)):
+    if not teams.revoke_invite(user["id"], invite_id[:64]):
+        raise HTTPException(status_code=404, detail="Invite not found")
+    return {"message": "Invite revoked"}
+
+
+@app.put("/api/team/members/{member_id}")
+def change_member_role(member_id: str, body: RoleRequest, user: dict = Depends(require_admin)):
+    if member_id == user["id"]:
+        raise HTTPException(status_code=400, detail="The owner's role can't change")
+    if not teams.set_role(user["id"], member_id[:64], body.role):
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"user_id": member_id, "role": body.role}
+
+
+@app.delete("/api/team/members/{member_id}")
+def remove_member(member_id: str, user: dict = Depends(require_user)):
+    """Removes someone from the workspace (owner and admins), or leaves it (anyone, for themselves)."""
+    actor = user["_actor"]
+    leaving = member_id == actor["id"]
+    if not leaving:
+        _forbid_api_keys(user)
+        if teams.RANK[user["_role"]] < teams.RANK["admin"]:
+            raise HTTPException(status_code=403, detail="Only the workspace's owner and admins can remove people.")
+    if member_id == user["id"]:
+        raise HTTPException(status_code=400, detail="The owner can't be removed; delete the account instead.")
+    if not teams.remove_member(user["id"], member_id[:64]):
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"message": "Left the workspace" if leaving else "Member removed"}
+
+
+@app.post("/api/team/accept")
+def accept_invite(body: AcceptRequest, person: dict = Depends(require_session)):
+    """Joins the workspace an invite is for. The invite must be for the signed-in person's email."""
+    try:
+        account_id = teams.accept_invite(body.token, person)
+    except teams.TeamError as e:
+        _team_error(e)
+    account = auth_db.get_user_by_id(account_id)
+    return {"workspace": {"id": account_id, "name": account["username"] if account else ""},
+            "role": teams.role_of(account_id, person["id"])}
 
 
 # ── Free leak check (no account) ──────────────────────────────
@@ -1208,7 +1382,7 @@ def gateway_stats(target_id: Optional[str] = Query(None, max_length=64), days: i
 # ── Target connection test ────────────────────────────────────
 @app.post("/targets/test")
 @limiter.limit("10/minute")
-def test_target(request: Request, body: TargetConfig, user: dict = Depends(require_user)):
+def test_target(request: Request, body: TargetConfig, user: dict = Depends(require_member)):
     """Sends one harmless question to a target and reports what happened."""
     if body.target_type in ("openai_compatible", "custom_rest") and not body.api_url:
         raise HTTPException(status_code=400, detail="This target type needs an API URL")
@@ -1243,7 +1417,7 @@ def list_targets(user: dict = Depends(require_user)):
 
 
 @app.post("/api/targets")
-def create_target(body: TargetCreate, user: dict = Depends(require_user)):
+def create_target(body: TargetCreate, user: dict = Depends(require_member)):
     """Saves a target; its API key is stored encrypted."""
     _check_target_url(body.api_url)
     if len(store.list_targets(user["id"])) >= 50:
@@ -1252,7 +1426,7 @@ def create_target(body: TargetCreate, user: dict = Depends(require_user)):
 
 
 @app.put("/api/targets/{target_id}")
-def update_target(target_id: str, body: TargetUpdate, user: dict = Depends(require_user)):
+def update_target(target_id: str, body: TargetUpdate, user: dict = Depends(require_member)):
     """Changes a saved target. Send clear_api_key=true to remove its key."""
     current = store.get_target(user["id"], target_id)
     if not current:
@@ -1265,7 +1439,7 @@ def update_target(target_id: str, body: TargetUpdate, user: dict = Depends(requi
 
 
 @app.delete("/api/targets/{target_id}")
-def delete_target(target_id: str, user: dict = Depends(require_user)):
+def delete_target(target_id: str, user: dict = Depends(require_member)):
     """Deletes a saved target and its schedule."""
     if not store.delete_target(user["id"], target_id):
         raise HTTPException(status_code=404, detail="Saved target not found")
@@ -1291,7 +1465,7 @@ def list_schedules(user: dict = Depends(require_user)):
 
 
 @app.post("/api/schedules")
-def create_schedule(body: ScheduleCreate, user: dict = Depends(require_user)):
+def create_schedule(body: ScheduleCreate, user: dict = Depends(require_member)):
     """Schedules daily or weekly scans of a saved target (Pro and Enterprise)."""
     _require_paid(user, "Scheduled scans")
     if not store.get_target(user["id"], body.target_id):
@@ -1301,7 +1475,7 @@ def create_schedule(body: ScheduleCreate, user: dict = Depends(require_user)):
 
 
 @app.put("/api/schedules/{schedule_id}")
-def update_schedule(schedule_id: str, body: ScheduleUpdate, user: dict = Depends(require_user)):
+def update_schedule(schedule_id: str, body: ScheduleUpdate, user: dict = Depends(require_member)):
     """Changes, pauses or resumes a schedule."""
     if not store.get_schedule(user["id"], schedule_id):
         raise HTTPException(status_code=404, detail="Schedule not found")
@@ -1312,7 +1486,7 @@ def update_schedule(schedule_id: str, body: ScheduleUpdate, user: dict = Depends
 
 
 @app.delete("/api/schedules/{schedule_id}")
-def delete_schedule(schedule_id: str, user: dict = Depends(require_user)):
+def delete_schedule(schedule_id: str, user: dict = Depends(require_member)):
     """Deletes a schedule."""
     if not store.delete_schedule(user["id"], schedule_id):
         raise HTTPException(status_code=404, detail="Schedule not found")
@@ -1327,7 +1501,7 @@ def list_prompts(user: dict = Depends(require_user)):
 
 
 @app.post("/api/prompts")
-def add_prompt(body: PromptCreate, user: dict = Depends(require_user)):
+def add_prompt(body: PromptCreate, user: dict = Depends(require_member)):
     """Adds a custom attack prompt; it runs with your future scans."""
     created = store.add_prompt(user["id"], body.category, body.prompt.strip())
     if not created:
@@ -1336,7 +1510,7 @@ def add_prompt(body: PromptCreate, user: dict = Depends(require_user)):
 
 
 @app.delete("/api/prompts/{prompt_id}")
-def delete_prompt(prompt_id: str, user: dict = Depends(require_user)):
+def delete_prompt(prompt_id: str, user: dict = Depends(require_member)):
     """Deletes a custom attack prompt."""
     if not store.delete_prompt(user["id"], prompt_id):
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -1345,7 +1519,7 @@ def delete_prompt(prompt_id: str, user: dict = Depends(require_user)):
 
 # ── API keys (programmatic / CI access) ───────────────────────
 @app.post("/api/keys")
-def create_api_key_endpoint(body: ApiKeyCreate, user: dict = Depends(require_session)):
+def create_api_key_endpoint(body: ApiKeyCreate, user: dict = Depends(require_admin)):
     """Creates an API key. The full key is returned ONCE: store it now."""
     if sum(1 for k in auth_db.list_api_keys(user["id"]) if not k["revoked"]) >= 20:
         raise HTTPException(status_code=400, detail="You can have up to 20 active API keys")
@@ -1353,13 +1527,13 @@ def create_api_key_endpoint(body: ApiKeyCreate, user: dict = Depends(require_ses
 
 
 @app.get("/api/keys")
-def list_api_keys_endpoint(user: dict = Depends(require_session)):
+def list_api_keys_endpoint(user: dict = Depends(require_admin)):
     """Lists your API keys (prefix only, never the full secret)."""
     return {"keys": auth_db.list_api_keys(user["id"])}
 
 
 @app.delete("/api/keys/{key_id}")
-def revoke_api_key_endpoint(key_id: str, user: dict = Depends(require_session)):
+def revoke_api_key_endpoint(key_id: str, user: dict = Depends(require_admin)):
     """Revokes an API key immediately."""
     if not auth_db.revoke_api_key(user["id"], key_id):
         raise HTTPException(status_code=404, detail="API key not found")
@@ -1372,7 +1546,7 @@ class BrandingBody(BaseModel):
 
 
 @app.put("/api/branding")
-def set_branding(body: BrandingBody, user: dict = Depends(require_session)):
+def set_branding(body: BrandingBody, user: dict = Depends(require_admin)):
     """Your organisation's name on reports instead of LLM Scanner (white-label, paid plans). Empty to remove."""
     if user.get("plan", "free") == "free":
         raise HTTPException(status_code=402, detail="Report branding is part of the paid plans.")
@@ -1381,13 +1555,13 @@ def set_branding(body: BrandingBody, user: dict = Depends(require_session)):
 
 
 @app.get("/api/webhook")
-def get_webhook(user: dict = Depends(require_user)):
+def get_webhook(user: dict = Depends(require_admin)):
     """Your webhook URL and whether a signing secret exists."""
     return {"webhook_url": user.get("webhook_url"), "has_secret": bool(user.get("webhook_secret"))}
 
 
 @app.put("/api/webhook")
-def set_webhook(body: WebhookBody, user: dict = Depends(require_session)):
+def set_webhook(body: WebhookBody, user: dict = Depends(require_admin)):
     """Sets (or clears, with null) the URL we POST scan events to. Returns the signing
     secret the first time one is created."""
     if body.url:
@@ -1404,14 +1578,14 @@ def set_webhook(body: WebhookBody, user: dict = Depends(require_session)):
 
 
 @app.post("/api/webhook/rotate")
-def rotate_webhook_secret(user: dict = Depends(require_session)):
+def rotate_webhook_secret(user: dict = Depends(require_admin)):
     """Creates a new webhook signing secret (the old one stops working)."""
     return {"secret": auth_db.rotate_webhook_secret(user["id"])}
 
 
 @app.post("/api/webhook/test")
 @limiter.limit("5/minute")
-def test_webhook(request: Request, user: dict = Depends(require_session)):
+def test_webhook(request: Request, user: dict = Depends(require_admin)):
     """Sends a test `ping` event to your webhook."""
     if not user.get("webhook_url"):
         raise HTTPException(status_code=400, detail="Set a webhook URL first")
@@ -1447,7 +1621,7 @@ def list_plans():
 
 @app.post("/api/checkout")
 @limiter.limit("10/minute")
-def checkout(request: Request, body: CheckoutRequest, user: dict = Depends(require_session)):
+def checkout(request: Request, body: CheckoutRequest, user: dict = Depends(require_owner_session)):
     """Creates a Stripe Checkout session for the signed-in user."""
     result = payment.create_checkout_session(body.plan, user, body.interval)
     if "error" in result:
@@ -1456,7 +1630,7 @@ def checkout(request: Request, body: CheckoutRequest, user: dict = Depends(requi
 
 
 @app.post("/api/billing/portal")
-def billing_portal(user: dict = Depends(require_session)):
+def billing_portal(user: dict = Depends(require_owner_session)):
     """A link to Stripe's portal to update cards, see invoices or cancel."""
     result = payment.create_portal_session(user)
     if "error" in result:
