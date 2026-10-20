@@ -974,7 +974,7 @@ def _scan_config(scan: dict) -> dict:
 @app.post("/scan/{scan_id}/remediate")
 @limiter.limit("10/minute")
 def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user: dict = Depends(require_user)):
-    """Suggests a hardened system prompt based on the attacks that succeeded in this scan."""
+    """Suggests a hardened system prompt based on the attacks that succeeded in this scan (10 a day on Free, 100 on Pro)."""
     scan = _get_complete_scan(scan_id, user)
     cfg = _scan_config(scan)
     prompt = body.system_prompt or cfg.get("system_prompt")
@@ -982,6 +982,12 @@ def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user:
         prompt = runner.DEFAULT_SYSTEM_PROMPT
     if not prompt:
         raise HTTPException(status_code=400, detail="Paste your system prompt: it wasn't stored with this scan")
+    if not remediation.failed_findings(_report_data(scan).get("results", [])):
+        raise HTTPException(status_code=400, detail="Nothing failed in this scan, so there is nothing to fix.")
+    try:
+        services.use_remediation(user)
+    except services.ScanRejected as e:
+        raise HTTPException(status_code=e.status, detail=e.message)
     try:
         return remediation.suggest(prompt, _report_data(scan).get("results", []))
     except remediation.ProviderError as e:

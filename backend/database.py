@@ -139,6 +139,12 @@ CREATE TABLE IF NOT EXISTS firewall_usage (
     count   INTEGER DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
+CREATE TABLE IF NOT EXISTS remediation_usage (
+    user_id TEXT NOT NULL,
+    day     TEXT NOT NULL,
+    count   INTEGER DEFAULT 0,
+    PRIMARY KEY (user_id, day)
+);
 CREATE TABLE IF NOT EXISTS share_links (
     token_hash TEXT PRIMARY KEY,
     scan_id    TEXT NOT NULL,

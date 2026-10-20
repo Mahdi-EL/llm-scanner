@@ -35,6 +35,9 @@ _PRO_SCANS    = _limit("PRO_SCAN_LIMIT", 200)
 _FREE_FIREWALL       = _limit("FREE_FIREWALL_DAILY", 20)
 _PRO_FIREWALL        = _limit("PRO_FIREWALL_DAILY", 2000)
 _ENTERPRISE_FIREWALL = _limit("ENTERPRISE_FIREWALL_DAILY", 20000)
+# "Suggest a hardened prompt" runs on the server's model key, so it has a daily allowance too.
+_REMEDIATION_DAILY = {"free": _limit("FREE_REMEDIATION_DAILY", 10), "pro": _limit("PRO_REMEDIATION_DAILY", 100),
+                      "enterprise": _limit("ENTERPRISE_REMEDIATION_DAILY", 500)}
 
 
 def _firewall_feature(checks: int, prefix: str) -> list:
@@ -83,6 +86,11 @@ PLANS = {
 def plan_limit(plan: str) -> Optional[int]:
     """Monthly scan limit for a plan (None = unlimited). Unknown plans get the free limit."""
     return PLANS.get(plan, PLANS["free"])["scan_limit"]
+
+
+def remediation_limit(plan: str) -> int:
+    """Hardened-prompt suggestions per day for a plan."""
+    return _REMEDIATION_DAILY.get(plan, _REMEDIATION_DAILY["free"])
 
 
 def firewall_limit(plan: str) -> int:

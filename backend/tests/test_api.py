@@ -924,3 +924,14 @@ def test_api_keys_can_scan_but_not_manage_the_account(client):
         r = client.request(method, path, headers=via_key, json=body)
         assert r.status_code == 403 and "API keys can't" in r.json()["detail"], (method, path, r.status_code)
     assert api.auth_db.get_user_by_id(user_id)
+
+
+def test_hardened_prompt_suggestions_have_a_daily_allowance(client, monkeypatch):
+    import remediation
+    monkeypatch.setattr(remediation, "suggest", lambda prompt, results, client=None: {"hardened_prompt": "ok"})
+    monkeypatch.setitem(api.payment._REMEDIATION_DAILY, "free", 2)
+    user_id, headers = _register(client)
+    sim = _seed_with_config(user_id, {"target_type": "simulation", "system_prompt": "You are a bot."})
+    clean = _seed_with_config(user_id, {"target_type": "simulation"}, results=[{**RESULTS[0], "severity": "SAFE"}])
+    assert client.post(f"/scan/{clean}/remediate", headers=headers, json={}).status_code == 400   # not counted
+    assert [client.post(f"/scan/{sim}/remediate", headers=headers, json={}).status_code for _ in range(3)] == [200, 200, 429]
