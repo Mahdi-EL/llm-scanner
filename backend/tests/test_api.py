@@ -4,6 +4,7 @@ account, sharing, target, schedule, prompt, webhook and download endpoints.
 No test calls an LLM: scans are seeded straight into the database.
 """
 import json
+import sys
 import time
 import uuid
 from contextlib import contextmanager
@@ -1050,3 +1051,82 @@ def test_quick_scans_sample_every_category_and_can_be_required_on_free(client, m
     assert client.get("/auth/me", headers=headers).json()["full_scans"] is False
     r = client.post("/scan", headers=headers, json={"target_name": "full"})
     assert r.status_code == 402 and "quick scan" in r.json()["detail"]
+
+
+class _FakeStripeAccount:
+    """Just enough of the stripe module for stripe_setup: products, prices, webhook endpoints."""
+    def __init__(self):
+        self.products, self.prices, self.endpoints = [], [], []
+        acct = self
+
+        class _List(dict):
+            def __init__(self, items):
+                super().__init__(data=items)
+
+            def auto_paging_iter(self):
+                return iter(self["data"])
+
+        class Product:
+            @staticmethod
+            def list(**kw):
+                return _List(list(acct.products))
+
+            @staticmethod
+            def create(**kw):
+                acct.products.append({"id": f"prod_{len(acct.products)}", **kw})
+                return acct.products[-1]
+
+        class Price:
+            @staticmethod
+            def list(lookup_keys=None, **kw):
+                return _List([p for p in acct.prices if p["lookup_key"] in (lookup_keys or [])])
+
+            @staticmethod
+            def create(product, unit_amount, currency, recurring, lookup_key):
+                acct.prices.append({"id": f"price_{len(acct.prices)}", "product": product, "unit_amount": unit_amount,
+                                    "currency": currency, "recurring": recurring, "lookup_key": lookup_key})
+                return acct.prices[-1]
+
+        class WebhookEndpoint:
+            @staticmethod
+            def list(**kw):
+                return _List(list(acct.endpoints))
+
+            @staticmethod
+            def create(url, enabled_events, description):
+                acct.endpoints.append({"id": "we_1", "url": url, "enabled_events": enabled_events, "secret": "whsec_new"})
+                return acct.endpoints[-1]
+
+            @staticmethod
+            def modify(endpoint_id, enabled_events):
+                acct.endpoints[0]["enabled_events"] = enabled_events
+
+        self.Product, self.Price, self.WebhookEndpoint = Product, Price, WebhookEndpoint
+
+
+def test_stripe_setup_creates_prices_and_webhook_once(monkeypatch, capsys):
+    import stripe_setup
+    fake = _FakeStripeAccount()
+    monkeypatch.setitem(sys.modules, "stripe", fake)
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123456789")
+    assert stripe_setup.main(["--api-url", "https://api.example.com/"]) == 0
+    first = capsys.readouterr().out
+    assert len(fake.products) == 2 and len(fake.prices) == 4 and len(fake.endpoints) == 1
+    assert {p["unit_amount"] for p in fake.prices} == {4900, 49000, 19900, 199000}
+    assert fake.endpoints[0]["url"] == "https://api.example.com/api/stripe-webhook"
+    assert "STRIPE_WEBHOOK_SECRET=whsec_new" in first and "STRIPE_PRO_YEARLY_PRICE_ID=price_1" in first
+    assert stripe_setup.main(["--api-url", "https://api.example.com"]) == 0      # again: nothing new
+    assert len(fake.products) == 2 and len(fake.prices) == 4 and len(fake.endpoints) == 1
+    assert "copy its signing secret" in capsys.readouterr().out
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "not-a-key")
+    assert stripe_setup.main(["--api-url", "https://api.example.com"]) == 2
+
+
+def test_stripe_setup_subscribes_to_every_event_the_api_handles():
+    import re
+    from pathlib import Path
+
+    import stripe_setup
+    source = (Path(__file__).resolve().parents[1] / "payment.py").read_text(encoding="utf-8")
+    handled = set(re.findall(r'"((?:checkout|customer|invoice)\.[a-z_.]+)"', source))
+    assert handled and handled <= set(stripe_setup.WEBHOOK_EVENTS)

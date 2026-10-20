@@ -73,7 +73,17 @@ Reports in `REPORTS_DIR` can always be rebuilt from the database, so they don't 
 
 ## 5. Stripe
 
-In the Stripe dashboard:
+Quickest: let the setup script create the products, monthly and yearly prices and the webhook,
+then paste what it prints into the API's environment. Run it with a test key first; it's safe to
+run again.
+
+```bash
+STRIPE_SECRET_KEY=sk_test_... python backend/stripe_setup.py --api-url https://<api>
+```
+
+Then do step 3 below and buy a plan once with the test card 4242 4242 4242 4242.
+
+Or by hand, in the Stripe dashboard:
 
 1. Create products and monthly prices for Pro and Enterprise; set `STRIPE_PRO_PRICE_ID` and
    `STRIPE_ENTERPRISE_PRICE_ID`. The Pricing page shows the amounts from Stripe. Optional: yearly
