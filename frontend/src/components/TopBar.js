@@ -120,8 +120,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
         <span className="topbar-page-icon">{page.icon}</span>
         <span className="topbar-page-title">{page.title}</span>
         {user?.workspace && (
-          <span style={{ fontSize:'12px', color:'var(--t3)', marginLeft:'10px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}
-            title="The team workspace you're working in. Switch in the sidebar.">
+          <span className="topbar-workspace" title="The team workspace you're working in. Switch in the sidebar.">
             in {user.workspace.name} · {user.workspace.role}
           </span>
         )}
