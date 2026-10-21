@@ -1077,6 +1077,16 @@ def test_checkout_switches_a_live_subscription_instead_of_adding_one(client, mon
     assert len(fake.created) == 1
 
 
+def test_a_plan_switch_changes_the_plan_item_not_an_add_on(client, monkeypatch):
+    user_id, headers = _register(client)
+    auth_db.set_stripe_ids(user_id, "cus_2", "sub_2")
+    fake = _CheckoutStripe(sub={"id": "sub_2", "status": "active", "items": {"data": [
+        {"id": "si_addon", "price": {"id": "price_support_addon"}}, {"id": "si_plan", "price": {"id": "price_pro"}}]}})
+    _billing_on(monkeypatch, fake)
+    assert client.post("/api/checkout", headers=headers, json={"plan": "enterprise"}).status_code == 200
+    assert fake.modified[0]["items"] == [{"id": "si_plan", "price": "price_ent"}]
+
+
 def test_a_yearly_subscription_maps_to_its_plan(client, monkeypatch):
     import payment
     user_id, _ = _register(client)
