@@ -24,6 +24,7 @@ const OWNER = { user: null, role: 'owner', canEdit: true, canAdmin: true };
 const auth = vi.hoisted(() => ({ value: null }));
 vi.mock('../context/AuthContext', () => ({ useAuth: () => auth.value }));
 vi.mock('../context/ToastContext', () => ({ useToast: () => vi.fn() }));
+vi.mock('../context/ConfirmContext', () => ({ useConfirm: () => () => Promise.resolve(true) }));
 
 const api = await import('../services/api');
 const { default: Pricing } = await import('./Pricing');

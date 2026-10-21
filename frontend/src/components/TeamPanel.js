@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { teamAPI, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { shortDate } from '../utils/format';
 
 const ROLES = [
@@ -15,6 +16,7 @@ const ROLES = [
 export default function TeamPanel() {
   const { user, role, switchWorkspace, refreshUser } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [team, setTeam] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -42,17 +44,20 @@ export default function TeamPanel() {
   };
   const changeRole = (id, r) => run(`role-${id}`, async () => { await teamAPI.setRole(id, r); load(); });
   const removeMember = m => run(`rm-${m.user_id}`, async () => {
-    if (!window.confirm(`Remove ${m.username} from this workspace?`)) return;
+    if (!(await confirm({ title: `Remove ${m.username}?`, confirmLabel: 'Remove',
+      body: 'They lose access to this workspace right away, and API keys they created here stop working.' }))) return;
     await teamAPI.remove(m.user_id); load();
   });
   const revoke = i => run(`inv-${i.id}`, async () => { await teamAPI.revokeInvite(i.id); load(); });
   const leave = () => run('leave', async () => {
-    if (!window.confirm('Leave this workspace? You will need a new invite to come back.')) return;
+    if (!(await confirm({ title: 'Leave this workspace?', confirmLabel: 'Leave',
+      body: 'You’ll need a new invite to come back, and API keys you created here stop working.' }))) return;
     await teamAPI.remove(user.id);
     switchWorkspace(user.id);
   });
   const leaveOther = w => run(`leave-${w.id}`, async () => {
-    if (!window.confirm(`Leave ${w.name}? You will need a new invite to come back.`)) return;
+    if (!(await confirm({ title: `Leave ${w.name}?`, confirmLabel: 'Leave',
+      body: 'You’ll need a new invite to come back, and API keys you created there stop working.' }))) return;
     await teamAPI.leave(w.id, user.id);
     await refreshUser();
     toast(`You left ${w.name}.`, 'success');

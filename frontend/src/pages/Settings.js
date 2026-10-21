@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import TeamPanel from '../components/TeamPanel';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { authAPI, keysAPI, webhookAPI, plansAPI, saveBlob, errorMessage, brandingAPI } from '../services/api';
 import { relTime } from '../utils/format';
 
@@ -50,6 +51,7 @@ export default function Settings() {
   const { user, logout, refreshUser, saveTokens, role, canAdmin } = useAuth();
   const navigate = useNavigate();
   const toast    = useToast();
+  const confirm  = useConfirm();
   const [params, setParams] = useSearchParams();
 
   const [pwForm, setPwForm]     = useState({ current:'', next:'', confirm:'' });
@@ -108,7 +110,8 @@ export default function Settings() {
   });
 
   const revokeKey = id => run(`revoke-${id}`, async () => {
-    if (!window.confirm('Revoke this key? Anything using it stops working immediately.')) return;
+    if (!(await confirm({ title: 'Revoke this key?', confirmLabel: 'Revoke key',
+      body: 'Anything using it stops working immediately.' }))) return;
     await keysAPI.revoke(id); loadKeys(); toast('Key revoked.', 'success');
   });
 
@@ -129,7 +132,8 @@ export default function Settings() {
   });
 
   const rotateSecret = () => run('rotate', async () => {
-    if (!window.confirm('Create a new signing secret? The old one stops working.')) return;
+    if (!(await confirm({ title: 'Create a new signing secret?', confirmLabel: 'Create new secret',
+      body: 'The old one stops working: update your webhook receiver with the new one.' }))) return;
     const { data } = await webhookAPI.rotate();
     setNewSecret(data.secret); await refreshUser();
   });
@@ -161,7 +165,8 @@ export default function Settings() {
 
   const deleteAccount = () => run('delete', async () => {
     if (!deletePw) { toast('Enter your password to confirm.', 'error'); return; }
-    if (!window.confirm('Delete your account, every scan and every report? This can’t be undone.')) return;
+    if (!(await confirm({ title: 'Delete your account?', confirmLabel: 'Delete account',
+      body: 'Every scan and report is deleted and any subscription is cancelled. This can’t be undone.' }))) return;
     await authAPI.deleteAccount(deletePw);
     await logout();
     navigate('/');
