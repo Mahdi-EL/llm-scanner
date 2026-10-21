@@ -536,13 +536,50 @@ class _FakeStripe:
             return json.loads(payload)
 
 
-def _stripe_event(client, monkeypatch, etype, obj, event_id=None):
+def _stripe_event(client, monkeypatch, etype, obj, event_id=None, created=None):
     import config
     import payment
     monkeypatch.setattr(config, "STRIPE_WEBHOOK_SECRET", "whsec_test")
     monkeypatch.setattr(payment, "_stripe", lambda: _FakeStripe)
     event = {"id": event_id or "evt_" + uuid.uuid4().hex, "type": etype, "data": {"object": obj}}
+    if created:
+        event["created"] = created
     return client.post("/api/stripe-webhook", content=json.dumps(event), headers={"stripe-signature": "x"})
+
+
+def test_stripe_events_delivered_out_of_order_dont_restore_a_cancelled_plan(client, monkeypatch):
+    user_id, _ = _register(client)
+    sub = {"id": "sub_o", "customer": "cus_o", "status": "active", "metadata": {"user_id": user_id, "plan": "pro"}}
+    _stripe_event(client, monkeypatch, "customer.subscription.created", sub, created=1_700_000_100)
+    _stripe_event(client, monkeypatch, "customer.subscription.deleted", dict(sub, status="canceled"), created=1_700_000_300)
+    assert auth_db.get_user_by_id(user_id)["plan"] == "free"
+    late = _stripe_event(client, monkeypatch, "customer.subscription.updated", sub, created=1_700_000_200)
+    assert late.status_code == 200
+    user = auth_db.get_user_by_id(user_id)
+    assert user["plan"] == "free" and user["stripe_subscription_id"] is None
+    _stripe_event(client, monkeypatch, "customer.subscription.created", dict(sub, id="sub_o2"), created=1_700_000_400)
+    assert auth_db.get_user_by_id(user_id)["plan"] == "pro"
+
+
+def test_housekeeping_prunes_only_expired_rows():
+    import database
+    from db import transaction
+    old, future, tag = "2020-01-01T00:00:00+00:00", "2999-01-01T00:00:00+00:00", uuid.uuid4().hex
+    with transaction() as conn:
+        for name, expires in (("old", old), ("new", future)):
+            conn.execute("INSERT INTO share_links (token_hash, scan_id, user_id, expires_at, created_at) "
+                         "VALUES (?, 's', 'u', ?, ?)", (f"{tag}-{name}", expires, old))
+            conn.execute("INSERT INTO refresh_tokens (token, user_id, expires_at, created_at) VALUES (?, 'u', ?, ?)",
+                         (f"{tag}-{name}", expires, old))
+        conn.execute("INSERT INTO gateway_events (user_id, target_id, created_at) VALUES (?, 't', ?)", (tag, old))
+    removed = database.prune()
+    assert removed["share_links"] >= 1 and removed["refresh_tokens"] >= 1 and removed["gateway_events"] >= 1
+    with transaction() as conn:
+        assert [r[0] for r in conn.execute("SELECT token_hash FROM share_links WHERE token_hash LIKE ?",
+                                           (f"{tag}-%",))] == [f"{tag}-new"]
+        assert [r[0] for r in conn.execute("SELECT token FROM refresh_tokens WHERE token LIKE ?",
+                                           (f"{tag}-%",))] == [f"{tag}-new"]
+        assert conn.execute("SELECT COUNT(*) FROM gateway_events WHERE user_id = ?", (tag,)).fetchone()[0] == 0
 
 
 def test_stripe_portal_plan_switch_uses_the_price(client, monkeypatch):

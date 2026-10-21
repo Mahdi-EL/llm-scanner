@@ -6,7 +6,7 @@ Authenticate with `Authorization: Bearer <access token>` (from `/auth/login`) or
 
 Errors are JSON with a readable `detail`: a string, or for invalid input (422) a list of `{loc, msg, type}` (the rejected value isn't echoed back). Request bodies are limited to 1 MB (413); 429 responses carry `Retry-After`.
 
-In a team workspace, send `X-Workspace: <account id>` with a signed-in session: viewers can read, members can also run and change scans, targets and schedules, admins can also manage keys, the webhook, branding and the team, and only the owner can manage billing. API keys always act in their own account.
+In a team workspace, send `X-Workspace: <account id>` with a signed-in session: viewers can read, members can also run and change scans, targets and schedules, admins can also manage keys, the webhook, branding and the team, and only the owner can manage billing. API keys always act in their own account. A key an admin creates in a team workspace belongs to that workspace and stops working when its creator leaves or becomes a viewer. Scans list `created_by_name` (the member who started them) and triage marks `decided_by`.
 
 _This page lists the FastAPI routes in `backend/api.py`; a test fails when a route is missing from it._
 
@@ -39,7 +39,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | PUT | `/api/targets/{target_id}` | yes | Changes a saved target. Send clear_api_key=true to remove its key. |
 | POST | `/api/waitlist` |  | Adds an email to the waitlist and sends one welcome email. |
 | GET | `/api/team` | yes | The workspace's people and seats; owners and admins also see pending invites. |
-| POST | `/api/team/accept` | yes | Joins the workspace an invite is for. The invite must be for the signed-in person's email. |
+| POST | `/api/team/accept` | yes | Joins the workspace an invite is for. The invite must be for the signed-in person's email, and that address must be confirmed. |
 | POST | `/api/team/invites` | yes | Invites someone by email (7 days). The link is returned; it's emailed when email is set up. |
 | DELETE | `/api/team/invites/{invite_id}` | yes | Revokes a pending invite (owner and admins). |
 | DELETE | `/api/team/members/{member_id}` | yes | Removes someone from the workspace (owner and admins), or leaves it (anyone, for themselves). |
@@ -51,7 +51,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/api/webhook/test` | yes | Sends a test `ping` event to your webhook. |
 | POST | `/auth/forgot-password` |  | Emails a password reset link. Answers the same whether or not the account exists; 503 when email delivery isn't set up on the server. |
 | POST | `/auth/login` |  | Log in with a username or email. Returns an access token and a refresh token. |
-| POST | `/auth/logout` |  | Revokes a refresh token; with everywhere=true, ends every session of the caller. |
+| POST | `/auth/logout` |  | Revokes a refresh token; with everywhere=true, ends every session of the signed-in person (not an API key, whatever workspace is selected). |
 | DELETE | `/auth/me` | yes | Deletes the account, its scans and report files. Cancels any subscription. |
 | GET | `/auth/me` | yes | The signed-in user's profile, plan and usage. |
 | GET | `/auth/me/export` | yes | Everything we store about you, as JSON (GDPR data portability). |

@@ -120,6 +120,10 @@ def accept_invite(token: str, person: dict) -> str:
             raise TeamError("This invite link is invalid or has expired. Ask for a new one.", 404)
         if (person.get("email") or "").lower() != row["email"]:
             raise TeamError(f"This invite is for {row['email']}. Sign in with that address to accept it.", 403)
+        if not person.get("email_verified"):
+            # anyone can sign up with an address they don't own; only a confirmed one proves the invite is theirs
+            raise TeamError("Confirm your email address first (use the link we emailed you), then accept the invite.",
+                            403)
         if row["account_id"] == person["id"]:
             raise TeamError("You can't join your own workspace", 409)
         conn.execute("INSERT INTO memberships (account_id, user_id, role, created_at) VALUES (?, ?, ?, ?) "
@@ -129,22 +133,35 @@ def accept_invite(token: str, person: dict) -> str:
     return row["account_id"]
 
 
+# API keys belong to the workspace, but the person who made one has it. Their keys stop working when
+# they leave or become a viewer: a key does what a member can (run scans, change targets, the gateway).
+_REVOKE_THEIR_KEYS = "UPDATE api_keys SET revoked = 1 WHERE user_id = ? AND created_by = ? AND revoked = 0"
+
+
 def set_role(account_id: str, user_id: str, role: str) -> bool:
     if role not in ROLES:
         raise TeamError("Role must be viewer, member or admin")
     with transaction() as conn:
-        return conn.execute("UPDATE memberships SET role = ? WHERE account_id = ? AND user_id = ?",
-                            (role, account_id, user_id)).rowcount > 0
+        changed = conn.execute("UPDATE memberships SET role = ? WHERE account_id = ? AND user_id = ?",
+                               (role, account_id, user_id)).rowcount > 0
+        if changed and role == "viewer":
+            conn.execute(_REVOKE_THEIR_KEYS, (account_id, user_id))
+    return changed
 
 
 def remove_member(account_id: str, user_id: str) -> bool:
     with transaction() as conn:
-        return conn.execute("DELETE FROM memberships WHERE account_id = ? AND user_id = ?",
-                            (account_id, user_id)).rowcount > 0
+        removed = conn.execute("DELETE FROM memberships WHERE account_id = ? AND user_id = ?",
+                               (account_id, user_id)).rowcount > 0
+        if removed:
+            conn.execute(_REVOKE_THEIR_KEYS, (account_id, user_id))
+    return removed
 
 
 def forget_user(user_id: str) -> None:
-    """When an account is deleted: its workspace's team and invites, and its own memberships."""
+    """When an account is deleted: its workspace's team and invites, its own memberships, and the keys
+    it made in other workspaces."""
     with transaction() as conn:
+        conn.execute("UPDATE api_keys SET revoked = 1 WHERE created_by = ? AND user_id != ?", (user_id, user_id))
         conn.execute("DELETE FROM memberships WHERE account_id = ? OR user_id = ?", (user_id, user_id))
         conn.execute("DELETE FROM team_invites WHERE account_id = ?", (user_id,))

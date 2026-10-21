@@ -29,7 +29,7 @@ _LIST_COLUMNS = (
     "scan_id, user_id, target_name, target_type, status, progress, completed_attacks, "
     "total_attacks, current_category, security_score, grade, critical_count, high_count, "
     "medium_count, low_count, safe_count, error_count, created_at, started_at, completed_at, "
-    "duration_seconds, error_message, model, target_id, schedule_id"
+    "duration_seconds, error_message, model, target_id, schedule_id, created_by"
 )
 
 

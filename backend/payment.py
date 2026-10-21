@@ -53,7 +53,9 @@ PLANS = {
         "price_id"      : None,
         "scan_limit"    : _FREE_SCANS,
         "firewall_daily": _FREE_FIREWALL,
-        "features"      : [f"{_FREE_SCANS:,} scans per month", "All 22 attack categories",
+        "features"      : [f"{_FREE_SCANS:,} scans per month",
+                           "Quick scans across all 22 attack categories" if config.FREE_QUICK_SCANS_ONLY
+                           else "All 22 attack categories",
                            "PDF, HTML and Markdown reports", "API keys for CI, the SDK and VS Code",
                            *_firewall_feature(_FREE_FIREWALL, "Try the AI firewall")],
     },
@@ -67,6 +69,7 @@ PLANS = {
         "scan_limit"    : _PRO_SCANS,
         "firewall_daily": _PRO_FIREWALL,
         "features"      : [f"{_PRO_SCANS:,} scans per month", "Everything in Free",
+                           *(["Full scans: every attack in the library"] if config.FREE_QUICK_SCANS_ONLY else []),
                            f"Up to {config.PRO_SEATS} people per workspace",
                            "Scheduled scans and alerts", "Evidence reports for audits and security reviews", "Your brand on reports",
                            *_firewall_feature(_PRO_FIREWALL, "AI firewall API"),
@@ -302,7 +305,7 @@ def handle_webhook(payload: bytes, sig_header: str) -> dict:
     obj = event["data"]["object"]
     metadata = obj.get("metadata") or {}
     result = {"type": event["type"], "event_id": event["id"], "user_id": metadata.get("user_id"), "plan": None,
-              "customer_id": obj.get("customer"), "subscription_id": None}
+              "customer_id": obj.get("customer"), "subscription_id": None, "created": event.get("created")}
 
     if event["type"] == "checkout.session.completed":
         result["user_id"] = metadata.get("user_id") or obj.get("client_reference_id")

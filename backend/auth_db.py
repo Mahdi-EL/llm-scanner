@@ -138,6 +138,16 @@ def get_user_for_login(identifier: str) -> Optional[dict]:
     return get_user_by_username(identifier)
 
 
+def usernames(user_ids) -> dict:
+    """{user id: username} for the ids that still exist."""
+    ids = [i for i in set(user_ids) if i][:500]
+    if not ids:
+        return {}
+    with transaction() as conn:
+        rows = conn.execute(f"SELECT id, username FROM users WHERE id IN ({','.join('?' * len(ids))})", ids)
+        return {r["id"]: r["username"] for r in rows}
+
+
 def get_user_by_stripe_customer(customer_id: str) -> Optional[dict]:
     return _get_user("stripe_customer_id = ?", customer_id) if customer_id else None
 
@@ -168,13 +178,17 @@ def update_plan(user_id: str, plan: str):
 
 
 def set_stripe_ids(user_id: str, customer_id: Optional[str] = None,
-                   subscription_id: Optional[str] = None):
+                   subscription_id: Optional[str] = None, event_at: Optional[int] = None):
+    """event_at: Stripe's `created` of the event being applied (later events are compared with it)."""
     with transaction() as conn:
         if customer_id:
             conn.execute("UPDATE users SET stripe_customer_id = ? WHERE id = ?", (customer_id, user_id))
         if subscription_id is not None:
             conn.execute("UPDATE users SET stripe_subscription_id = ? WHERE id = ?",
                          (subscription_id or None, user_id))
+        if event_at:
+            conn.execute("UPDATE users SET stripe_event_at = MAX(COALESCE(stripe_event_at, 0), ?) WHERE id = ?",
+                         (int(event_at), user_id))
 
 
 def mark_email_verified(user_id: str):
@@ -270,15 +284,16 @@ def revoke_all_sessions(user_id: str):
 
 
 # ── API keys (programmatic / CI access) ───────────────────────
-def create_api_key(user_id: str, name: str = "") -> dict:
-    """Generates a new API key. Returns the FULL key once (only its hash is stored)."""
+def create_api_key(user_id: str, name: str = "", created_by: Optional[str] = None) -> dict:
+    """Generates a new API key for an account. Returns the FULL key once (only its hash is stored).
+    created_by: the person who made it (an admin of a team workspace, or the owner)."""
     raw    = API_KEY_PREFIX + secrets.token_urlsafe(32)
     key_id = str(uuid.uuid4())
     label  = (name or "API key").strip()[:60] or "API key"
     with transaction() as conn:
-        conn.execute("INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at) "
-                     "VALUES (?, ?, ?, ?, ?, ?)",
-                     (key_id, user_id, label, token_hash(raw), raw[:14], utcnow()))
+        conn.execute("INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at, created_by) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                     (key_id, user_id, label, token_hash(raw), raw[:14], utcnow(), created_by or user_id))
     return {"id": key_id, "name": label, "key": raw, "prefix": raw[:14]}
 
 
@@ -299,10 +314,12 @@ def get_user_by_api_key(key: str) -> Optional[str]:
 
 
 def list_api_keys(user_id: str) -> list:
-    """Lists the user's keys WITHOUT the secret (prefix only)."""
+    """Lists the user's keys WITHOUT the secret (prefix only), with who created each one."""
     with transaction() as conn:
-        rows = conn.execute("SELECT id, name, prefix, created_at, last_used_at, revoked FROM api_keys "
-                            "WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
+        rows = conn.execute("SELECT k.id, k.name, k.prefix, k.created_at, k.last_used_at, k.revoked, "
+                            "COALESCE(k.created_by, k.user_id) AS created_by, u.username AS created_by_name "
+                            "FROM api_keys k LEFT JOIN users u ON u.id = COALESCE(k.created_by, k.user_id) "
+                            "WHERE k.user_id = ? ORDER BY k.created_at DESC", (user_id,)).fetchall()
     return [dict(r) for r in rows]
 
 

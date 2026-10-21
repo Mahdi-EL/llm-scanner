@@ -230,6 +230,14 @@ USER_COLUMNS = {
     "verify_token"          : "TEXT",
     "verify_token_expires"  : "TEXT",
     "report_brand"          : "TEXT",
+    # Stripe's `created` of the last billing event applied: Stripe doesn't deliver events in order
+    "stripe_event_at"       : "INTEGER",
+}
+OTHER_COLUMNS = {
+    # who created the key: a member's keys stop working when they leave the workspace or become a viewer
+    "api_keys"      : {"created_by": "TEXT"},
+    # who marked the finding (shown in the app and the evidence report)
+    "finding_triage": {"decided_by": "TEXT"},
 }
 
 
@@ -249,6 +257,8 @@ def init_db():
         conn.executescript(SCHEMA)
         conn.execute("INSERT OR IGNORE INTO global_stats (id) VALUES (1)")
         add_missing_columns(conn, "scans", SCAN_COLUMNS)
+        for table, wanted in OTHER_COLUMNS.items():
+            add_missing_columns(conn, table, wanted)
 
         had_verified = "email_verified" in {r[1] for r in conn.execute("PRAGMA table_info(users)")}
         add_missing_columns(conn, "users", USER_COLUMNS)
@@ -261,6 +271,7 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_status ON scans (status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_invites_account ON team_invites (account_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_gateway_user_time ON gateway_events (user_id, created_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens (user_id)")
@@ -275,6 +286,31 @@ def init_db():
     import auth_db
     auth_db.migrate_tokens()
     auth_db.seed_admin()
+
+
+# ── Housekeeping (the scheduler runs it every hour) ───────────
+def prune() -> dict:
+    """Deletes rows nothing reads any more: old gateway events and usage counters, expired share links,
+    refresh tokens and invites, and processed Stripe event ids past Stripe's retry window."""
+    from datetime import datetime, timedelta, timezone
+
+    def ago(days: float) -> str:
+        return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+
+    def day(days: float) -> str:               # the usage tables key on YYYY-MM-DD
+        return ago(days)[:10]
+
+    steps = {
+        "gateway_events"   : ("DELETE FROM gateway_events WHERE created_at < ?", ago(35)),
+        "share_links"      : ("DELETE FROM share_links WHERE expires_at < ?", ago(0)),
+        "refresh_tokens"   : ("DELETE FROM refresh_tokens WHERE expires_at < ?", ago(0)),
+        "team_invites"     : ("DELETE FROM team_invites WHERE expires_at < ?", ago(30)),
+        "stripe_events"    : ("DELETE FROM stripe_events WHERE processed_at < ?", ago(90)),
+        "firewall_usage"   : ("DELETE FROM firewall_usage WHERE day < ?", day(35)),
+        "remediation_usage": ("DELETE FROM remediation_usage WHERE day < ?", day(35)),
+    }
+    with transaction() as conn:
+        return {table: conn.execute(sql, (cutoff,)).rowcount for table, (sql, cutoff) in steps.items()}
 
 
 # ── Waitlist and stats (admin CLI) ────────────────────────────

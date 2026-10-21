@@ -60,10 +60,11 @@ def update_target(user_id: str, target_id: str, name: Optional[str] = None,
     if cfg is not None:
         new_cfg = {k: cfg[k] for k in TARGET_FIELDS if cfg.get(k) not in (None, "", [])}
     with transaction() as conn:
-        conn.execute("UPDATE targets SET name = ?, config_json = ?, updated_at = ? WHERE id = ?",
-                     (name or current["name"], json.dumps(new_cfg), utcnow(), target_id))
+        conn.execute("UPDATE targets SET name = ?, config_json = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+                     (name or current["name"], json.dumps(new_cfg), utcnow(), target_id, user_id))
         if api_key is not None:
-            conn.execute("UPDATE targets SET api_key_enc = ? WHERE id = ?", (vault.encrypt(api_key), target_id))
+            conn.execute("UPDATE targets SET api_key_enc = ? WHERE id = ? AND user_id = ?",
+                         (vault.encrypt(api_key), target_id, user_id))
     return get_target(user_id, target_id)
 
 
@@ -234,21 +235,24 @@ def finding_key(category: str, attack: str) -> str:
 
 
 def triage_for(user_id: str, target_name: str) -> dict:
-    """{finding_key: {"status", "note", "created_at"}} for one target."""
+    """{finding_key: {"status", "note", "created_at", "decided_by"}} for one target."""
     with transaction() as conn:
-        rows = conn.execute("SELECT finding_key, status, note, created_at FROM finding_triage "
+        rows = conn.execute("SELECT finding_key, status, note, created_at, decided_by FROM finding_triage "
                             "WHERE user_id = ? AND target_name = ?", (user_id, target_name)).fetchall()
-    return {r["finding_key"]: {"status": r["status"], "note": r["note"], "created_at": r["created_at"]} for r in rows}
+    return {r["finding_key"]: {"status": r["status"], "note": r["note"], "created_at": r["created_at"],
+                               "decided_by": r["decided_by"]} for r in rows}
 
 
-def set_triage(user_id: str, target_name: str, key: str, status: Optional[str], note: Optional[str] = None):
-    """Marks a finding (status None or "open" clears the mark)."""
+def set_triage(user_id: str, target_name: str, key: str, status: Optional[str], note: Optional[str] = None,
+               decided_by: Optional[str] = None):
+    """Marks a finding (status None or "open" clears the mark). decided_by: who made the call."""
     with transaction() as conn:
         if status in TRIAGE_STATUSES:
-            conn.execute("INSERT INTO finding_triage (user_id, target_name, finding_key, status, note, created_at) "
-                         "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, target_name, finding_key) "
-                         "DO UPDATE SET status = excluded.status, note = excluded.note, created_at = excluded.created_at",
-                         (user_id, target_name, key, status, note, utcnow()))
+            conn.execute("INSERT INTO finding_triage (user_id, target_name, finding_key, status, note, created_at, "
+                         "decided_by) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, target_name, finding_key) "
+                         "DO UPDATE SET status = excluded.status, note = excluded.note, "
+                         "created_at = excluded.created_at, decided_by = excluded.decided_by",
+                         (user_id, target_name, key, status, note, utcnow(), decided_by))
         else:
             conn.execute("DELETE FROM finding_triage WHERE user_id = ? AND target_name = ? AND finding_key = ?",
                          (user_id, target_name, key))
@@ -256,7 +260,7 @@ def set_triage(user_id: str, target_name: str, key: str, status: Optional[str], 
 
 def list_triage(user_id: str) -> list:
     with transaction() as conn:
-        rows = conn.execute("SELECT target_name, finding_key, status, note, created_at FROM finding_triage "
+        rows = conn.execute("SELECT target_name, finding_key, status, note, created_at, decided_by FROM finding_triage "
                             "WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
     return [dict(r) for r in rows]
 

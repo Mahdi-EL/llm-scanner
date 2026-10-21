@@ -50,12 +50,27 @@ def run_due() -> int:
     return started
 
 
+PRUNE_EVERY = 3600.0     # seconds between housekeeping runs
+
+
 def _loop(interval: float):
+    import time
+
+    import database
+    last_prune = 0.0
     while not _stop.wait(interval):
         try:
             run_due()
         except Exception:
             log.exception("Scheduler tick failed")
+        if time.monotonic() - last_prune >= PRUNE_EVERY:
+            last_prune = time.monotonic()
+            try:
+                removed = {k: v for k, v in database.prune().items() if v}
+                if removed:
+                    log.info("Housekeeping removed %s", removed)
+            except Exception:
+                log.exception("Housekeeping failed")
 
 
 def start(interval: float = 60.0):
