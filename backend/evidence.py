@@ -138,13 +138,13 @@ def build(scan: dict, data: dict, *, triaged_results: list, retests: list,
     if not triaged:
         story.append(Paragraph("No finding was marked as a false positive or an accepted risk.", S["body"]))
     else:
-        rows = [["Finding", "Graded", "Decision", "Note", "Date"]]
+        rows = [["Finding", "Graded", "Decision", "Note", "By", "Date"]]
         for r in triaged:
             t = r["triage"]
             rows.append([f"{catalog.info(r.get('category', ''))['title']}: {_clip(r.get('attack'), 120)}",
                          t.get("severity", ""), t["status"].replace("_", " "), t.get("note") or "—",
-                         (t.get("created_at") or "")[:10]])
-        story.append(_table(rows, [W * 0.38, W * 0.12, W * 0.15, W * 0.23, W * 0.12]))
+                         t.get("decided_by") or "—", (t.get("created_at") or "")[:10]])
+        story.append(_table(rows, [W * 0.32, W * 0.11, W * 0.14, W * 0.21, W * 0.11, W * 0.11]))
 
     story.append(Paragraph("Remediation evidence", S["h2"]))
     evidence = retest_evidence(triaged_results, retests)

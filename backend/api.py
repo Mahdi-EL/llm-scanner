@@ -673,12 +673,14 @@ def refresh_token(request: Request, body: RefreshRequest):
 
 @app.post("/auth/logout")
 def logout(request: Request, body: LogoutRequest):
-    """Revokes a refresh token; with everywhere=true, ends every session of the caller."""
+    """Revokes a refresh token; with everywhere=true, ends every session of the signed-in person (not an API
+    key, whatever workspace is selected)."""
     if body.refresh_token:
         auth_db.revoke_refresh_token(body.refresh_token)
     if body.everywhere:
-        user = require_user(request)
-        auth_db.revoke_all_sessions(user["id"])
+        # the person, whatever workspace is selected: a team member must not sign the owner out
+        person = require_session(request)
+        auth_db.revoke_all_sessions(person["id"])
     return {"message": "Logged out"}
 
 
@@ -883,7 +885,7 @@ def compare_scans(base_id: str, head_id: str, user: dict = Depends(require_user)
 def get_scan_status(scan_id: str, user: dict = Depends(require_user)):
     """Status and progress; includes the findings once the scan is complete."""
     scan = _get_owned_scan(scan_id, user)
-    out = scan_db.public_scan(scan, include_results=scan["status"] == "complete")
+    out = _with_creators([scan_db.public_scan(scan, include_results=scan["status"] == "complete")])[0]
     results = (out.get("results") or {}).get("results") if isinstance(out.get("results"), dict) else None
     if results:
         marks = store.triage_for(user["id"], scan["target_name"])
@@ -920,7 +922,8 @@ def triage_finding(scan_id: str, body: TriageRequest, user: dict = Depends(requi
               for r in remediation.failed_findings(_report_data(scan).get("results", []))}
     if body.key not in failed:
         raise HTTPException(status_code=404, detail="No failed finding with that key in this scan")
-    store.set_triage(user["id"], scan["target_name"], body.key, body.status, (body.note or "").strip() or None)
+    store.set_triage(user["id"], scan["target_name"], body.key, body.status, (body.note or "").strip() or None,
+                     decided_by=(user.get("_actor") or user)["username"])
     return {"key": body.key, "status": body.status}
 
 
@@ -943,7 +946,13 @@ def list_all_scans(request: Request, user: dict = Depends(require_user),
     """Your scans, newest first (summary only; findings come from /scan/{id})."""
     scans = scan_db.list_scans(user["id"], limit=limit, offset=offset, status=status, target_name=target_name)
     total = scan_db.count_user_scans(user["id"], status=status, target_name=target_name)
-    return {"total": total, "limit": limit, "offset": offset, "scans": scans}
+    return {"total": total, "limit": limit, "offset": offset, "scans": _with_creators(scans)}
+
+
+def _with_creators(scans: list) -> list:
+    """Adds created_by_name: the team member who started each scan (None for the owner's own)."""
+    names = auth_db.usernames(s.get("created_by") for s in scans)
+    return [{**s, "created_by_name": names.get(s.get("created_by"))} for s in scans]
 
 
 @app.get("/scans/stats")
@@ -1074,8 +1083,9 @@ def download_evidence(scan_id: str, user: dict = Depends(require_user)):
     triaged = store.apply_triage(user["id"], scan["target_name"], data.get("results", []))
     with transaction() as conn:
         retests = evidence.retests_of(conn, user["id"], scan)
+    person = user.get("_actor") or user          # who generated it, not the workspace it belongs to
     pdf = evidence.build(scan, data, triaged_results=triaged, retests=retests,
-                         prepared_by=f"{user['username']} ({user.get('email', '')})")
+                         prepared_by=f"{person['username']} ({person.get('email', '')})")
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="LLM_Scanner_Evidence_{scan_id}.pdf"'})
 
@@ -1305,7 +1315,8 @@ def remove_member(member_id: str, user: dict = Depends(require_user)):
 
 @app.post("/api/team/accept")
 def accept_invite(body: AcceptRequest, person: dict = Depends(require_session)):
-    """Joins the workspace an invite is for. The invite must be for the signed-in person's email."""
+    """Joins the workspace an invite is for. The invite must be for the signed-in person's email, and that
+    address must be confirmed."""
     try:
         account_id = teams.accept_invite(body.token, person)
     except teams.TeamError as e:
@@ -1523,7 +1534,7 @@ def create_api_key_endpoint(body: ApiKeyCreate, user: dict = Depends(require_adm
     """Creates an API key. The full key is returned ONCE: store it now."""
     if sum(1 for k in auth_db.list_api_keys(user["id"]) if not k["revoked"]) >= 20:
         raise HTTPException(status_code=400, detail="You can have up to 20 active API keys")
-    return auth_db.create_api_key(user["id"], body.name or "API key")
+    return auth_db.create_api_key(user["id"], body.name or "API key", created_by=user["_actor"]["id"])
 
 
 @app.get("/api/keys")
@@ -1654,6 +1665,10 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
+_STRIPE_STATE_EVENTS = ("checkout.session.completed", "customer.subscription.created",
+                        "customer.subscription.updated", "customer.subscription.deleted")
+
+
 def _apply_stripe_event(event: dict) -> None:
     user = auth_db.get_user_by_id(event.get("user_id")) if event.get("user_id") else None
     if not user and event.get("customer_id"):
@@ -1662,12 +1677,18 @@ def _apply_stripe_event(event: dict) -> None:
         if event.get("type") != "duplicate" and event.get("handled", True):
             log.warning("Stripe event %s matched no user", event.get("type"))
         return
+    # Stripe doesn't promise delivery order: a retried "active" from before a cancellation must not
+    # bring the paid plan back, so subscription events older than the last one applied are skipped.
+    created = event.get("created") if event.get("type") in _STRIPE_STATE_EVENTS else None
+    if created and (user.get("stripe_event_at") or 0) > created:
+        log.info("Ignoring Stripe %s older than the last applied event (user %s)", event["type"], user["id"])
+        return
     ended = event.get("ended_subscription")
     current = user.get("stripe_subscription_id")
     if ended and current and ended != current:
         log.info("Ignoring end of old subscription %s for user %s", ended, user["id"])
         return
-    auth_db.set_stripe_ids(user["id"], event.get("customer_id"), event.get("subscription_id"))
+    auth_db.set_stripe_ids(user["id"], event.get("customer_id"), event.get("subscription_id"), event_at=created)
     if event.get("plan"):
         auth_db.update_plan(user["id"], event["plan"])
         log.info("User %s plan set to %s (%s)", user["id"], event["plan"], event["type"])

@@ -27,7 +27,7 @@ def person(client, plan="free"):
     if plan != "free":
         with auth_db.transaction() as conn:
             conn.execute("UPDATE users SET plan = ? WHERE id = ?", (plan, body["user"]["id"]))
-    return {"id": body["user"]["id"], "email": f"{name}@example.com", "name": name,
+    return {"id": body["user"]["id"], "email": f"{name}@example.com", "name": name, "refresh": body["refresh_token"],
             "auth": {"Authorization": f"Bearer {body['access_token']}"}}
 
 
@@ -191,6 +191,69 @@ def test_only_admins_see_the_webhook_url(client):
     assert client.get("/api/webhook", headers=in_ws(dave, owner)).status_code == 403
     assert client.get("/auth/me", headers=in_ws(dave, owner)).json()["workspace"]["webhook_url"] is None
     assert "secret" in client.get("/api/webhook", headers=owner["auth"]).json()["webhook_url"]
+
+
+def test_signing_out_everywhere_inside_a_workspace_signs_out_only_the_person(client):
+    owner, dave = person(client, "pro"), person(client)
+    join(client, owner, dave, "viewer")
+    assert client.post("/auth/logout", headers=in_ws(dave, owner), json={"everywhere": True}).status_code == 200
+    assert client.post("/auth/refresh", json={"refresh_token": dave["refresh"]}).status_code == 401
+    assert client.post("/auth/refresh", json={"refresh_token": owner["refresh"]}).status_code == 200
+    owner_key = client.post("/api/keys", headers=owner["auth"], json={"name": "ci"}).json()["key"]
+    assert client.post("/auth/logout", headers={"X-API-Key": owner_key}, json={"everywhere": True}).status_code == 403
+
+
+def test_an_invite_needs_a_confirmed_address(client):
+    """Anyone can sign up with an address they don't own, so a leaked link alone mustn't be enough."""
+    owner, bob = person(client, "pro"), person(client)
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET email_verified = 0 WHERE id = ?", (bob["id"],))
+    token = client.post("/api/team/invites", headers=owner["auth"], json={"email": bob["email"]}).json()["link"].split("token=")[1]
+    r = client.post("/api/team/accept", headers=bob["auth"], json={"token": token})
+    assert r.status_code == 403 and "Confirm your email" in r.json()["detail"]
+    assert teams.role_of(owner["id"], bob["id"]) is None
+    auth_db.mark_email_verified(bob["id"])
+    assert client.post("/api/team/accept", headers=bob["auth"], json={"token": token}).status_code == 200
+
+
+def test_keys_a_member_made_stop_working_when_they_leave_or_become_a_viewer(client):
+    owner, bob, carol = person(client, "pro"), person(client), person(client)
+    join(client, owner, bob, "admin")
+    join(client, owner, carol, "admin")
+    bob_key = client.post("/api/keys", headers=in_ws(bob, owner), json={"name": "bob ci"}).json()["key"]
+    carol_key = client.post("/api/keys", headers=in_ws(carol, owner), json={"name": "carol ci"}).json()["key"]
+    owner_key = client.post("/api/keys", headers=owner["auth"], json={"name": "owner ci"}).json()["key"]
+    made_by = {k["name"]: k["created_by_name"] for k in client.get("/api/keys", headers=owner["auth"]).json()["keys"]}
+    assert made_by == {"bob ci": bob["name"], "carol ci": carol["name"], "owner ci": owner["name"]}
+
+    assert client.put(f"/api/team/members/{carol['id']}", headers=owner["auth"], json={"role": "member"}).status_code == 200
+    assert client.get("/scans", headers={"X-API-Key": carol_key}).status_code == 200    # a member can do what a key does
+    assert client.put(f"/api/team/members/{carol['id']}", headers=owner["auth"], json={"role": "viewer"}).status_code == 200
+    assert client.get("/scans", headers={"X-API-Key": carol_key}).status_code == 401
+    assert client.delete(f"/api/team/members/{bob['id']}", headers=in_ws(bob, owner)).status_code == 200   # leaves
+    assert client.get("/scans", headers={"X-API-Key": bob_key}).status_code == 401
+    assert client.get("/scans", headers={"X-API-Key": owner_key}).status_code == 200
+
+
+def test_scans_triage_and_evidence_name_the_person_not_the_workspace(client, monkeypatch):
+    import evidence
+    owner, bob = person(client, "pro"), person(client)
+    join(client, owner, bob)
+    scan_id = seed_scan(owner["id"])
+    started = client.post("/scan", headers=in_ws(bob, owner), json={"target_name": "From bob", "quick": True}).json()["scan_id"]
+    names = {s["scan_id"]: s["created_by_name"] for s in client.get("/scans", headers=owner["auth"]).json()["scans"]}
+    assert names == {started: bob["name"], scan_id: None}
+    assert client.get(f"/scan/{started}", headers=owner["auth"]).json()["created_by_name"] == bob["name"]
+
+    key = client.get(f"/scan/{scan_id}", headers=in_ws(bob, owner)).json()["results"]["results"][0]["key"]
+    r = client.put(f"/scan/{scan_id}/triage", headers=in_ws(bob, owner), json={"key": key, "status": "accepted_risk"})
+    assert r.status_code == 200
+    assert client.get(f"/scan/{scan_id}", headers=owner["auth"]).json()["triage"][key]["decided_by"] == bob["name"]
+    seen = {}
+    monkeypatch.setattr(evidence, "build", lambda scan, data, **kw: seen.update(kw) or b"%PDF-1.4")
+    assert client.get(f"/download/evidence/{scan_id}", headers=in_ws(bob, owner)).status_code == 200
+    assert seen["prepared_by"].startswith(bob["name"] + " (")
+    assert seen["triaged_results"][0]["triage"]["decided_by"] == bob["name"]
 
 
 def test_browsers_may_send_the_workspace_header():
