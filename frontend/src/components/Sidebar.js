@@ -99,7 +99,7 @@ const PLAN_STYLE = {
 export default function Sidebar({ mobileOpen = false, onClose }) {
   const location  = useLocation();
   const navigate  = useNavigate();
-  const { user, logout, switchWorkspace } = useAuth();
+  const { user, logout, switchWorkspace, canEdit } = useAuth();
   const [collapsed, setCollapsed] = useState(
     () => localStorage.getItem('sidebar_collapsed') === '1'
   );
@@ -139,8 +139,8 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
         </span>
       </Link>
 
-      {/* ── New Scan quick button ─────────── */}
-      <div style={{ padding:'10px 10px 0' }}>
+      {/* ── New Scan quick button (not for viewers: they can't start scans) ── */}
+      {canEdit && <div style={{ padding:'10px 10px 0' }}>
         <button
           onClick={() => navigate('/new-scan')}
           className="sidebar-new-scan"
@@ -160,12 +160,12 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
           <IcoPlus />
           <span className="sidebar-new-scan-text">New Scan</span>
         </button>
-      </div>
+      </div>}
 
       {/* ── Nav ───────────────────────────── */}
       <nav className="sidebar-nav">
         <div className="sidebar-section-label">Menu</div>
-        {NAV_MAIN.map(item => (
+        {NAV_MAIN.filter(item => canEdit || item.path !== '/new-scan').map(item => (
           <Link
             key={item.path}
             to={item.path}

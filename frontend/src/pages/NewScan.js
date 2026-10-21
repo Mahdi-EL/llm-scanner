@@ -38,7 +38,7 @@ function Section({ title, subtitle, children }) {
 export default function NewScan() {
   const navigate = useNavigate();
   const toast    = useToast();
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   const [params] = useSearchParams();
   const [form, setForm]         = useState(EMPTY);
   const [loading, setLoading]   = useState(false);
@@ -151,6 +151,17 @@ export default function NewScan() {
 
   const quota = user?.scan_limit == null ? null : `${user.scans_this_month ?? 0} of ${user.scan_limit} scans used this month`;
   const outOfScans = user?.scan_limit != null && (user.scans_this_month ?? 0) >= user.scan_limit;
+
+  if (!canEdit) return (
+    <div style={{ maxWidth:'560px' }}>
+      <h1 className="page-title">New security scan</h1>
+      <p className="page-subtitle">
+        You’re a viewer in {user?.workspace?.name || 'this workspace'}: you can read its scans and download reports, but not start
+        scans. Ask its owner or an admin to make you a member.
+      </p>
+      <Link to="/reports" className="btn-outline" style={{ display:'inline-flex' }}>See the reports</Link>
+    </div>
+  );
 
   return (
     <div style={{ maxWidth:'720px' }}>

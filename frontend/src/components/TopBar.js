@@ -60,7 +60,7 @@ const TYPE_COLOR = {
 export default function TopBar({ onOpenCmd, onOpenNav }) {
   const location  = useLocation();
   const navigate  = useNavigate();
-  const { user }  = useAuth();
+  const { user, canEdit }  = useAuth();
   const [notifOpen, setNotifOpen] = useState(false);
   const [items,     setItems]     = useState([]);
   const uid = user?.id || 'anon';
@@ -139,13 +139,13 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
           <kbd className="topbar-kbd">⌘K</kbd>
         </button>
 
-        {/* New Scan quick button */}
-        <button className="topbar-new-scan-btn" onClick={() => navigate('/new-scan')}>
+        {/* New Scan quick button (viewers can't start scans) */}
+        {canEdit && <button className="topbar-new-scan-btn" onClick={() => navigate('/new-scan')}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
           New Scan
-        </button>
+        </button>}
 
         {/* Notification bell */}
         <div style={{ position:'relative' }} ref={panelRef}>

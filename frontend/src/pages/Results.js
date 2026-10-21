@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePolling } from '../utils/hooks';
 import { scoreColor, isActive, formatDuration, typeLabel, fmtNum, shortDate } from '../utils/format';
@@ -47,14 +48,20 @@ function ScoreBlock({ summary, triaged, triagedCount }) {
 /* ── Finding card ────────────────────────────────────────── */
 const TRIAGE_LABEL = { false_positive: 'False positive', accepted_risk: 'Accepted risk' };
 
+function TriageMark({ mark }) {
+  return (
+    <span>Marked as <strong>{TRIAGE_LABEL[mark.status].toLowerCase()}</strong>{mark.decided_by ? ` by ${mark.decided_by}` : ''}
+      {mark.note ? `: ${mark.note}` : ''}. It isn’t counted in the score after triage, re-tests or alerts for this target.</span>
+  );
+}
+
 function TriageControls({ item, mark, onTriage }) {
   const [note, setNote] = useState(mark?.note || '');
   const [busy, setBusy] = useState(false);
   const set = async status => { setBusy(true); try { await onTriage(item.key, status, note); } finally { setBusy(false); } };
   if (mark) return (
     <div style={{ fontSize:'13px', display:'flex', gap:'10px', alignItems:'center', flexWrap:'wrap' }}>
-      <span>Marked as <strong>{TRIAGE_LABEL[mark.status].toLowerCase()}</strong>{mark.note ? `: ${mark.note}` : ''}.
-        It isn’t counted in the score after triage, re-tests or alerts for this target.</span>
+      <TriageMark mark={mark} />
       <button className="btn-ghost" style={{ fontSize:'12px' }} disabled={busy} onClick={() => set('open')}>Reopen</button>
     </div>
   );
@@ -95,9 +102,11 @@ function FindingCard({ item, cats, mark, onTriage }) {
             </Field>
           )}
           {item.owasp?.length > 0 && <div style={{ fontSize:'12px', color:'var(--t3)' }}>OWASP LLM Top 10: {item.owasp.join(', ')}</div>}
-          {failed && item.key && onTriage && (
+          {failed && item.key && (onTriage ? (
             <Field label="Triage"><TriageControls item={item} mark={mark} onTriage={onTriage} /></Field>
-          )}
+          ) : mark && (
+            <Field label="Triage"><div style={{ fontSize:'13px' }}><TriageMark mark={mark} /></div></Field>
+          ))}
         </div>
       )}
     </div>
@@ -297,7 +306,7 @@ function RunningState({ scan, cats, onCancel }) {
         </div>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'16px', fontSize:'12px', color:'var(--t3)' }}>
           <span>This page updates by itself. You can leave it; we'll email you when it's done.</span>
-          <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }} onClick={onCancel}>Cancel scan</button>
+          {onCancel && <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }} onClick={onCancel}>Cancel scan</button>}
         </div>
       </div>
     </div>
@@ -349,6 +358,7 @@ export default function Results() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { canEdit } = useAuth();      // viewers read the scan and download reports; they can't change it
   const [scan,      setScan]      = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [notFound,  setNotFound]  = useState(false);
@@ -456,7 +466,7 @@ export default function Results() {
       <button className="btn-primary" onClick={()=> notFound ? navigate('/') : fetchScan()}>{notFound ? 'Back to Dashboard' : 'Retry'}</button>
     </div>
   );
-  if (isActive(scan)) return <RunningState scan={scan} cats={cats} onCancel={cancel} />;
+  if (isActive(scan)) return <RunningState scan={scan} cats={cats} onCancel={canEdit ? cancel : null} />;
   if (scan.status === 'failed' || scan.status === 'cancelled') return (
     <div className="empty-state" style={{ padding:'100px 40px' }}>
       <h3 style={{ color: scan.status === 'failed' ? '#b42318' : 'var(--t1)' }}>
@@ -467,12 +477,14 @@ export default function Results() {
           ? `Stopped after ${fmtNum(scan.completed_attacks || 0)} of ${fmtNum(scan.total_attacks || 0)} attacks. A cancelled scan keeps no findings.`
           : scan.error_message || 'The scan stopped before it finished.'}
       </p>
-      <div style={{ display:'flex', gap:'8px', justifyContent:'center' }}>
-        <button className="btn-primary" onClick={()=>navigate(scan.target_id ? `/new-scan?target=${scan.target_id}` : '/new-scan')}>
-          {scan.target_id ? 'Scan this target again' : 'Start a new scan'}
-        </button>
-        <button className="btn-outline" onClick={remove}>Delete</button>
-      </div>
+      {canEdit && (
+        <div style={{ display:'flex', gap:'8px', justifyContent:'center' }}>
+          <button className="btn-primary" onClick={()=>navigate(scan.target_id ? `/new-scan?target=${scan.target_id}` : '/new-scan')}>
+            {scan.target_id ? 'Scan this target again' : 'Start a new scan'}
+          </button>
+          <button className="btn-outline" onClick={remove}>Delete</button>
+        </div>
+      )}
     </div>
   );
 
@@ -491,6 +503,7 @@ export default function Results() {
             {scan.config?.target_type ? ` · ${typeLabel(scan.config.target_type)}` : ''}
             {scan.config?.model ? ` · ${scan.config.model}` : ''}
             {scan.config?.quick ? ' · quick scan' : ''}
+            {scan.created_by_name ? ` · started by ${scan.created_by_name}` : ''}
           </p>
         </div>
         <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
@@ -502,14 +515,18 @@ export default function Results() {
             title="Testing evidence for audits and security reviews: scope, method, OWASP coverage, triage, re-tests, sign-off">
             {busy==='evidence' ? 'Preparing…' : 'Evidence report'}
           </button>
-          <button className="btn-outline" disabled={!!busy} onClick={share}>{busy==='share' ? 'Creating…' : scan.shared_until ? 'New share link' : 'Share link'}</button>
-          <button className="btn-ghost" onClick={remove}>Delete</button>
+          {canEdit && <>
+            <button className="btn-outline" disabled={!!busy} onClick={share}>{busy==='share' ? 'Creating…' : scan.shared_until ? 'New share link' : 'Share link'}</button>
+            <button className="btn-ghost" onClick={remove}>Delete</button>
+          </>}
           {scan.shared_until && (
             <span style={{ flexBasis:'100%', fontSize:'12px', color:'var(--t3)', textAlign:'right' }}>
-              Shared read-only until {shortDate(scan.shared_until, true)} ·{' '}
-              <button className="btn-ghost" style={{ fontSize:'12px', padding:0 }} disabled={!!busy} onClick={unshare}>
-                {busy==='unshare' ? 'Stopping…' : 'Stop sharing'}
-              </button>
+              Shared read-only until {shortDate(scan.shared_until, true)}
+              {canEdit && <>{' · '}
+                <button className="btn-ghost" style={{ fontSize:'12px', padding:0 }} disabled={!!busy} onClick={unshare}>
+                  {busy==='unshare' ? 'Stopping…' : 'Stop sharing'}
+                </button>
+              </>}
             </span>
           )}
         </div>
@@ -545,7 +562,7 @@ export default function Results() {
       </div>
 
       <Recommendations recs={scan.recommendations} />
-      <FixIt scan={scan} failedCount={counts.FAILED} />
+      {canEdit && <FixIt scan={scan} failedCount={counts.FAILED} />}
 
       {/* ── Findings ─────────────────────────── */}
       <div className="card-glow" style={{ overflow:'hidden', marginTop:'16px' }}>
@@ -571,7 +588,7 @@ export default function Results() {
             </p>
           ) : visible.slice(0, shown).map((item, i) => (
             <FindingCard key={item.key || `${item.category}-${i}-${item.attack.slice(0,20)}`} item={item} cats={cats}
-              mark={item.key ? triage[item.key] : null} onTriage={onTriage} />
+              mark={item.key ? triage[item.key] : null} onTriage={canEdit ? onTriage : null} />
           ))}
           {visible.length > shown && (
             <button className="btn-outline" style={{ width:'100%', marginTop:'12px' }} onClick={()=>setShown(n => n + PAGE)}>

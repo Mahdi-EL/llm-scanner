@@ -68,10 +68,12 @@ export function AuthProvider({ children }) {
     await authAPI.logout();
   };
 
+  // The person's role in the selected workspace (their own: owner). Viewers read; members and up change things.
+  const role = user?.workspace?.role || 'owner';
   return (
     <AuthContext.Provider value={{ user, loading, offline, login, register, logout,
                                    refreshUser: loadUser, setUser, saveTokens, switchWorkspace,
-                                   role: user?.workspace?.role || 'owner' }}>
+                                   role, canEdit: role !== 'viewer', canAdmin: role === 'owner' || role === 'admin' }}>
       {children}
     </AuthContext.Provider>
   );

@@ -53,6 +53,7 @@ function PublicShell({ children }) {
 }
 
 function AppShell({ children }) {
+  const { canEdit } = useAuth();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const { pathname } = useLocation();
@@ -80,7 +81,7 @@ function AppShell({ children }) {
           <Suspense fallback={<Loading />}>{children}</Suspense>
         </main>
       </div>
-      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} canScan={canEdit} />
     </div>
   );
 }

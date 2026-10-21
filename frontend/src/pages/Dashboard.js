@@ -160,15 +160,16 @@ function EmptyHero({ onStart, onLibrary }) {
   return (
     <div style={{ textAlign:'center', padding:'72px 40px', maxWidth:'480px', margin:'0 auto' }}>
       <div style={{ width:'80px', height:'80px', margin:'0 auto 24px', borderRadius:'22px', background:'linear-gradient(135deg,rgba(37,99,235,0.12),rgba(155,110,243,0.12))', border:'1px solid rgba(37,99,235,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'36px', boxShadow:'0 0 50px rgba(37,99,235,0.1), 0 0 0 12px rgba(37,99,235,0.04)' }}>🛡</div>
-      <h2 style={{ fontSize:'22px', fontWeight:'800', letterSpacing:'-0.5px', marginBottom:'10px' }}>Ready to secure your AI?</h2>
+      <h2 style={{ fontSize:'22px', fontWeight:'800', letterSpacing:'-0.5px', marginBottom:'10px' }}>{onStart ? 'Ready to secure your AI?' : 'No scans in this workspace yet'}</h2>
       <p style={{ fontSize:'14px', color:'var(--t2)', lineHeight:'1.7', marginBottom:'28px' }}>
-        Launch your first adversarial scan: over 1,000 attack prompts across 22 categories. No API key required in Simulation mode.
+        {onStart ? 'Launch your first adversarial scan: over 1,000 attack prompts across 22 categories. No API key required in Simulation mode.'
+                 : 'You can read this workspace’s scans and reports. When a member runs a scan, it shows up here.'}
       </p>
       <div style={{ display:'flex', gap:'10px', justifyContent:'center', flexWrap:'wrap' }}>
-        <button className="btn-primary" onClick={onStart} style={{ padding:'11px 24px', fontSize:'14px' }}>
+        {onStart && <button className="btn-primary" onClick={onStart} style={{ padding:'11px 24px', fontSize:'14px' }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           Launch First Scan
-        </button>
+        </button>}
         <button className="btn-outline" onClick={onLibrary} style={{ padding:'11px 20px', fontSize:'14px' }}>
           View Attack Library
         </button>
@@ -196,7 +197,7 @@ export default function Dashboard() {
   const [filter,  setFilter]  = useState('ALL');
   const [page,    setPage]    = useState(1);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   const toast    = useToast();
 
   // Newest first, as the API returns them.
@@ -333,10 +334,10 @@ export default function Dashboard() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export CSV
           </button>
-          <button className="btn-primary" onClick={()=>navigate('/new-scan')}>
+          {canEdit && <button className="btn-primary" onClick={()=>navigate('/new-scan')}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New Scan
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -371,7 +372,7 @@ export default function Dashboard() {
       {/* ── Empty state ──────────────────────── */}
       {!loading && !loadError && total===0 && (
         <div className="card-glow" style={{ overflow:'hidden' }}>
-          <EmptyHero onStart={()=>navigate('/new-scan')} onLibrary={()=>navigate('/threat-intel')} />
+          <EmptyHero onStart={canEdit ? ()=>navigate('/new-scan') : null} onLibrary={()=>navigate('/threat-intel')} />
         </div>
       )}
 

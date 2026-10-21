@@ -68,7 +68,7 @@ export default function TeamPanel() {
             <div style={{ fontSize:'13px', fontWeight:600 }}>{m.username}{m.user_id === user.id ? ' (you)' : ''}</div>
             <div style={{ fontSize:'12px', color:'var(--t3)', overflow:'hidden', textOverflow:'ellipsis' }}>{m.email}</div>
           </div>
-          {m.role === 'owner' || !admin ? (
+          {m.role === 'owner' || !admin || m.user_id === user.id ? (
             <span style={{ fontSize:'12px', color:'var(--t2)', textTransform:'capitalize' }}>{m.role}</span>
           ) : (
             <select aria-label={`Role of ${m.username}`} value={m.role} disabled={!!busy}
