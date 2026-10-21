@@ -54,3 +54,8 @@ request, with a full scan before a release.
 
 Exit codes: `0` passed, `1` a finding at or above `--fail-on` (or a score below `--min-score`), `2` error.
 In GitHub Actions the result is also written to the job summary.
+
+Findings your team marked as a false positive or an accepted risk (in the web app, or with
+`client.triage(scan_id, finding.key, "accepted_risk", note=...)`) don't fail the build, and
+`--min-score` compares the score after triage. In Python, `report.open_findings` lists what still needs
+fixing, and `has_findings_at_or_above("high", include_triaged=True)` counts everything.

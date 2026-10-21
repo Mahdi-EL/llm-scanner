@@ -116,6 +116,12 @@ class Client:
         """Score change plus failures introduced and fixed between two finished scans."""
         return self._json("GET", f"/scan/compare/{base_scan_id}/{head_scan_id}")
 
+    def triage(self, scan_id: str, key: str, status: str, note: Optional[str] = None) -> dict:
+        """Marks a failed finding (Finding.key) as "false_positive" or "accepted_risk", or "open" to clear
+        the mark. It applies to that attack in every scan of the target, and --fail-on stops counting it."""
+        body = {"key": key, "status": status, **({"note": note} if note else {})}
+        return self._json("PUT", f"/scan/{scan_id}/triage", json=body)
+
     def cancel(self, scan_id: str) -> dict:
         return self._json("POST", f"/scan/{scan_id}/cancel")
 

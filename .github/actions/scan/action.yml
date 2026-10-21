@@ -50,10 +50,10 @@ inputs:
     description: "true runs about 5 attacks per category (~110) instead of all ~1,090: faster and cheaper, for pull requests."
     default: "false"
   fail-on:
-    description: Fail when any finding is at or above this severity (low, medium, high, critical). Empty disables.
+    description: Fail when any finding is at or above this severity (low, medium, high, critical); findings marked as false positives or accepted risks don't count. Empty disables.
     default: high
   min-score:
-    description: Fail when the score is below this value. Empty disables.
+    description: Fail when the score after triage is below this value. Empty disables.
     required: false
   report-format:
     description: Report to upload as an artifact (pdf, html, md or json). Empty disables.
@@ -69,6 +69,9 @@ outputs:
   score:
     description: Security score from 0 to 100.
     value: ${{ steps.scan.outputs.score }}
+  score-after-triage:
+    description: The score with findings marked as false positives or accepted risks counted as safe (what min-score checks).
+    value: ${{ steps.scan.outputs.score-after-triage }}
   grade:
     description: Letter grade (A to F).
     value: ${{ steps.scan.outputs.grade }}
