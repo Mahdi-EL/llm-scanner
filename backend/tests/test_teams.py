@@ -289,6 +289,24 @@ def test_an_invite_needs_a_free_seat_when_it_is_accepted(client):
     assert teams.role_of(owner["id"], bob["id"]) is None
 
 
+def test_a_members_scan_emails_them_with_a_link_into_the_workspace(client, monkeypatch):
+    import email_service
+    import notifications
+    sent, hooks = [], []
+    monkeypatch.setattr(email_service, "send_scan_complete", lambda to, *a, **k: sent.append((to, k.get("workspace"))))
+    monkeypatch.setattr(notifications, "send_webhook", lambda user, event, payload, **k: hooks.append(payload["report_url"]))
+    owner, bob = person(client, "pro"), person(client)
+    join(client, owner, bob)
+    scan_id = seed_scan(owner["id"])
+    scan_db.update_scan(scan_id, created_by=bob["id"])
+    notifications.scan_finished(scan_id)
+    assert sent == [(bob["email"], owner["id"])]                  # bob started it, so bob hears about it
+    assert hooks[0].endswith(f"/results/{scan_id}?workspace={owner['id']}")
+    client.delete(f"/api/team/members/{bob['id']}", headers=owner["auth"])
+    notifications.scan_finished(scan_id)
+    assert sent[-1] == (owner["email"], owner["id"])             # once he has left, the owner does
+
+
 def test_browsers_may_send_the_workspace_header():
     """Without this in the CORS preflight, the web app can't make a single request inside a workspace."""
     with TestClient(api.app) as c:

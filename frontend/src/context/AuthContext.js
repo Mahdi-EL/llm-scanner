@@ -11,9 +11,23 @@ function withWorkspace(me) {
 
 const AuthContext = createContext(null);
 
+// Links in emails and webhooks name the workspace their scan belongs to (?workspace=<account id>): remember it
+// so the scan opens there, also after signing in, and drop it from the address. /auth/me forgets it if it isn't
+// theirs. Runs on the provider's first render, before the router inside it reads the address.
+function takeWorkspaceFromLink() {
+  const params = new URLSearchParams(window.location.search);
+  const linked = params.get('workspace');
+  if (!linked) return;
+  localStorage.setItem(WORKSPACE_KEY, linked);
+  params.delete('workspace');
+  const rest = params.toString();
+  window.history.replaceState(window.history.state, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+}
+
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 export function AuthProvider({ children }) {
+  useState(takeWorkspaceFromLink);            // once, before the first render of the routes
   const [user,    setUser]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
@@ -45,7 +59,9 @@ export function AuthProvider({ children }) {
   const login = async (username, password) => {
     const { data } = await authAPI.login(username, password);
     saveTokens(data);
-    setUser(data.user || { username });
+    // a workspace picked up from a link: load it, so its plan and the person's role there apply
+    if (localStorage.getItem(WORKSPACE_KEY)) await loadUser();
+    else setUser(data.user || { username });
     return data;
   };
 

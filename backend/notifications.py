@@ -13,10 +13,10 @@ import os
 import time
 
 import analysis
-import config
 import email_service
 import netguard
 import scan_db
+import teams
 from auth_db import get_user_by_id
 
 log = logging.getLogger("llmscanner.notify")
@@ -87,13 +87,20 @@ def _payload(scan: dict) -> dict:
         "errors"        : scan.get("error_count") or 0,
         "created_at"    : scan.get("created_at"),
         "completed_at"  : scan.get("completed_at"),
-        "report_url"    : f"{config.APP_URL}/results/{scan['scan_id']}",
+        "report_url"    : email_service.scan_link(scan["scan_id"], scan.get("user_id")),
     }
 
 
 def _can_email(user: dict) -> bool:
     """Only email confirmed addresses, so nobody can sign up with someone else's to spam them."""
     return bool(user.get("email") and user.get("email_verified"))
+
+
+def _starter(scan: dict, account: dict) -> dict:
+    """Who to email about a scan: the team member who started it while they're still in the workspace
+    (they're the one waiting for it), else the account owner."""
+    member = get_user_by_id(scan.get("created_by")) if scan.get("created_by") else None
+    return member if member and teams.role_of(account["id"], member["id"]) else account
 
 
 def scan_finished(scan_id: str, alert_drop: int = None) -> None:
@@ -103,19 +110,20 @@ def scan_finished(scan_id: str, alert_drop: int = None) -> None:
         user = get_user_by_id(scan.get("user_id")) if scan else None
         if not user:
             return
+        to = _starter(scan, user)
         if scan["status"] == "complete":
-            if _can_email(user):
+            if _can_email(to):
                 email_service.send_scan_complete(
-                    user["email"], scan["target_name"], scan.get("security_score") or 0, scan_id,
+                    to["email"], scan["target_name"], scan.get("security_score") or 0, scan_id,
                     grade=scan.get("grade"), critical=scan.get("critical_count") or 0,
-                    high=scan.get("high_count") or 0)
+                    high=scan.get("high_count") or 0, workspace=user["id"])
             send_webhook(user, "scan.completed", _payload(scan))
             if alert_drop is not None:
                 _regression_alert(user, scan, alert_drop)
         elif scan["status"] == "failed":
             if _can_email(user) and scan.get("schedule_id"):
                 email_service.send_scan_failed(user["email"], scan["target_name"], scan_id,
-                                               scan.get("error_message") or "Unknown error")
+                                               scan.get("error_message") or "Unknown error", workspace=user["id"])
             send_webhook(user, "scan.failed", {**_payload(scan), "error": scan.get("error_message")})
     except Exception:
         log.warning("Notifications for scan %s failed", scan_id, exc_info=True)
@@ -147,6 +155,6 @@ def _regression_alert(user: dict, scan: dict, alert_drop: int) -> None:
     if dropped or new_critical:
         if _can_email(user):
             email_service.send_score_drop(user["email"], scan["target_name"], old, new,
-                                          scan["scan_id"], new_critical)
+                                          scan["scan_id"], new_critical, workspace=user["id"])
         send_webhook(user, "scan.regression", {**_payload(scan), "previous_scan_id": previous["scan_id"],
                                                "previous_score": old, "new_critical": new_critical})

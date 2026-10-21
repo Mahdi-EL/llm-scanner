@@ -55,8 +55,14 @@ def send_waitlist_welcome(email: str) -> bool:
                  _layout("You're on the waitlist", body, "Visit LLM Scanner", config.APP_URL))
 
 
+def scan_link(scan_id: str, workspace: str = None) -> str:
+    """The scan's page in the app; with workspace (the account the scan belongs to) the app opens it there,
+    so a team member doesn't land in their own workspace and get "not found"."""
+    return f"{config.APP_URL}/results/{scan_id}" + (f"?workspace={workspace}" if workspace else "")
+
+
 def send_scan_complete(email: str, target_name: str, score: int, scan_id: str,
-                       grade: str = None, critical: int = 0, high: int = 0) -> bool:
+                       grade: str = None, critical: int = 0, high: int = 0, workspace: str = None) -> bool:
     import scoring
     e = html.escape
     grade = grade or scoring.grade(score)
@@ -65,19 +71,19 @@ def send_scan_complete(email: str, target_name: str, score: int, scan_id: str,
             f'<span style="font-size:22px">grade {e(grade)}</span></p>'
             f"<p>{int(critical)} critical and {int(high)} high-severity findings.</p>")
     return _send(email, f"Scan complete: {target_name[:60]} scored {int(score)}/100",
-                 _layout("Scan complete", body, "View the report", f"{config.APP_URL}/results/{scan_id}"))
+                 _layout("Scan complete", body, "View the report", scan_link(scan_id, workspace)))
 
 
-def send_scan_failed(email: str, target_name: str, scan_id: str, reason: str) -> bool:
+def send_scan_failed(email: str, target_name: str, scan_id: str, reason: str, workspace: str = None) -> bool:
     e = html.escape
     body = (f"<p>Your scan of <strong>{e(target_name)}</strong> stopped before it finished.</p>"
             f"<p style=\"color:#6b665e\">{e(reason[:300])}</p>")
     return _send(email, f"Scan failed: {target_name[:60]}",
-                 _layout("Scan failed", body, "Open the scan", f"{config.APP_URL}/results/{scan_id}"))
+                 _layout("Scan failed", body, "Open the scan", scan_link(scan_id, workspace)))
 
 
 def send_score_drop(email: str, target_name: str, old_score: int, new_score: int, scan_id: str,
-                    new_critical: int = 0) -> bool:
+                    new_critical: int = 0, workspace: str = None) -> bool:
     e = html.escape
     dropped = new_score < old_score
     body = (f"<p>The latest scheduled scan of <strong>{e(target_name)}</strong> scored "
@@ -91,7 +97,7 @@ def send_score_drop(email: str, target_name: str, old_score: int, new_score: int
                f"on {target_name[:60]}")
     return _send(email, subject,
                  _layout("Security score dropped" if dropped else "New critical findings", body, "See what changed",
-                         f"{config.APP_URL}/results/{scan_id}"))
+                         scan_link(scan_id, workspace)))
 
 
 def send_password_reset(email: str, reset_token: str) -> bool:

@@ -14,7 +14,7 @@ const SCAN_ATTACKS = [
 
 const TRUST = [
   { value:'1,000+', label:'Attack prompts' },
-  { value:'21',    label:'Vuln categories' },
+  { value:'22',    label:'Attack categories' },
   { value:'OWASP', label:'LLM Top 10 mapped' },
 ];
 
