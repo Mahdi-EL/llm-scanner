@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { targetsAPI, schedulesAPI, scansAPI, gatewayAPI, API_URL, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { relTime, shortDate, TARGET_TYPES } from '../utils/format';
 import FirewallPanel from '../components/FirewallPanel';
 
@@ -198,6 +199,7 @@ function Snippet({ title, code }) {
 export default function Targets() {
   const { user, canEdit } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [targets, setTargets]     = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -226,7 +228,8 @@ export default function Targets() {
   };
 
   const remove = async target => {
-    if (!window.confirm(`Delete "${target.name}"? Its schedule is removed too; past scans stay.`)) return;
+    if (!(await confirm({ title: `Delete “${target.name}”?`, confirmLabel: 'Delete target',
+      body: 'Its schedule is removed too; past scans stay.' }))) return;
     try { await targetsAPI.remove(target.id); load(); }
     catch (e) { toast(errorMessage(e), 'error'); }
   };

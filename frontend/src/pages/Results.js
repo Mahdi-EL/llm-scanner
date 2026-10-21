@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { usePolling } from '../utils/hooks';
 import { scoreColor, isActive, formatDuration, typeLabel, fmtNum, shortDate } from '../utils/format';
 
@@ -359,6 +360,7 @@ export default function Results() {
   const navigate = useNavigate();
   const toast = useToast();
   const { canEdit } = useAuth();      // viewers read the scan and download reports; they can't change it
+  const confirm = useConfirm();
   const [scan,      setScan]      = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [notFound,  setNotFound]  = useState(false);
@@ -448,7 +450,8 @@ export default function Results() {
   };
 
   const remove = async () => {
-    if (!window.confirm('Delete this scan and its reports? This can’t be undone.')) return;
+    if (!(await confirm({ title: 'Delete this scan?', confirmLabel: 'Delete scan',
+      body: 'Its findings and reports are deleted too. This can’t be undone.' }))) return;
     try { await scansAPI.delete(id); toast('Scan deleted.', 'success'); navigate('/'); }
     catch (e) { toast(errorMessage(e), 'error'); }
   };

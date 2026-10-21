@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 import Navbar          from './components/Navbar';
 import Sidebar         from './components/Sidebar';
 import TopBar          from './components/TopBar';
@@ -188,9 +189,11 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <ToastProvider>
-          <Router>
-            <AppRoutes />
-          </Router>
+          <ConfirmProvider>
+            <Router>
+              <AppRoutes />
+            </Router>
+          </ConfirmProvider>
         </ToastProvider>
       </AuthProvider>
     </ErrorBoundary>
