@@ -32,6 +32,12 @@ def _bool(name: str, default: bool = False) -> bool:
 ENV     = os.getenv("ENV", "development").lower()
 IS_PROD = ENV in ("prod", "production") or bool(os.getenv("RAILWAY_ENVIRONMENT"))
 
+# Proxies between the internet and the API (Railway's edge, Heroku's or Render's router: 1). Rate limits key
+# on the address that many entries from the right of X-Forwarded-For: each proxy appends what it saw, so
+# anything further left was written by the client. 0 = use the connection's own address (no proxy).
+_PAAS = any(os.getenv(v) for v in ("RAILWAY_ENVIRONMENT", "DYNO", "RENDER", "FLY_APP_NAME"))
+TRUSTED_PROXY_HOPS = _int("TRUSTED_PROXY_HOPS", 1 if _PAAS else 0)
+
 # ── Secrets ───────────────────────────────────────────────────
 # Values that appear in docs/examples and must never sign real tokens.
 _PLACEHOLDER_SECRETS = {
