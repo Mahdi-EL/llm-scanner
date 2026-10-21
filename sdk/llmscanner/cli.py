@@ -35,6 +35,7 @@ def _github_outputs(report):
         return
     with open(path, "a", encoding="utf-8") as f:
         f.write(f"scan-id={report.scan_id}\nscore={report.security_score}\n"
+                f"score-after-triage={report.score_after_triage}\n"
                 f"grade={report.grade}\nworst-severity={report.worst_severity()}\n")
 
 
@@ -49,6 +50,8 @@ def _step_summary(report, fail_on):
         "",
         f"**Score {s.security_score}/100, grade {s.grade}**" + (f" · failing on {fail_on}" if fail_on else ""),
         "",
+        *([f"{len(report.triaged_findings)} finding(s) marked as a false positive or an accepted risk aren't "
+           f"counted: score after triage {report.score_after_triage}.", ""] if report.triaged_findings else []),
         "| Critical | High | Medium | Low | Safe | Errors |",
         "|---|---|---|---|---|---|",
         f"| {s.critical} | {s.high} | {s.medium} | {s.low} | {s.safe} | {s.errors} |",
@@ -86,11 +89,14 @@ def cmd_scan(args) -> int:
         print(f"Report saved to {client.download(scan.scan_id, args.download, args.out)}")
     _step_summary(report, args.fail_on)
 
+    if report.triaged_findings:
+        print(f"{len(report.triaged_findings)} finding(s) marked as a false positive or an accepted risk "
+              f"aren't counted (score after triage: {report.score_after_triage})")
     if args.fail_on and report.has_findings_at_or_above(args.fail_on):
         print(f"FAILED: findings at or above {args.fail_on.upper()} (worst: {report.worst_severity()})")
         return 1
-    if args.min_score is not None and report.security_score < args.min_score:
-        print(f"FAILED: score {report.security_score} is below --min-score {args.min_score}")
+    if args.min_score is not None and report.score_after_triage < args.min_score:
+        print(f"FAILED: score {report.score_after_triage} is below --min-score {args.min_score}")
         return 1
     print("PASSED")
     return 0

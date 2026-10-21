@@ -113,6 +113,23 @@ def test_cli_status_and_fail_on(base_url, account, monkeypatch, capsys):
     assert cli_main(["--api-key", "llmsk_bad", "--api-url", base_url, "status", done]) == 2
 
 
+def test_findings_marked_as_accepted_risks_dont_fail_the_build(base_url, account, monkeypatch, capsys):
+    done = _seed(account["user_id"], severity="CRITICAL")
+    client = Client(api_key=account["key"], base_url=base_url)
+    args = ["--api-key", account["key"], "--api-url", base_url]
+    monkeypatch.setattr(Client, "scan", lambda self, *a, **k: sdk.Scan(scan_id=done, target_name="x", status="pending"))
+    gate = args + ["scan", "--name", "x", "--wait", "--fail-on", "high", "--min-score", "90", "--poll", "0"]
+    assert cli_main(gate) == 1
+
+    client.triage(done, client.results(done).failed_findings[0].key, "accepted_risk", note="internal tool only")
+    report = client.results(done)
+    assert report.failed_findings[0].triaged and report.open_findings == []
+    assert report.score_after_triage == 100 and report.security_score == 69
+    assert not report.has_findings_at_or_above("high") and report.has_findings_at_or_above("high", include_triaged=True)
+    assert cli_main(gate) == 0
+    assert "aren't counted" in capsys.readouterr().out
+
+
 def test_cli_reads_the_target_key_from_the_environment(monkeypatch):
     """The GitHub Action passes the target key by env, so it never shows up in argv."""
     from llmscanner import cli
