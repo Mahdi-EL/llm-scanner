@@ -179,7 +179,11 @@ def _switch_subscription(stripe, user: dict, plan: str, price_id: str) -> dict:
         raise
     if sub.get("status") not in _LIVE_STATUSES:
         return {}
-    item = ((sub.get("items") or {}).get("data") or [None])[0]
+    # the item that pays for the plan: a subscription can carry others (an add-on set up in the
+    # Stripe dashboard, say), and swapping one of those for the plan's price would bill twice
+    items = (sub.get("items") or {}).get("data") or []
+    plan_prices = set().union(*(_price_ids(p) for p in PLANS.values()))
+    item = next((i for i in items if (i.get("price") or {}).get("id") in plan_prices), items[0] if items else None)
     if not item:
         return {}
     if (item.get("price") or {}).get("id") == price_id:
