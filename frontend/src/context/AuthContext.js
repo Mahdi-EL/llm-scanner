@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authAPI, clearAuth, saveTokens, WORKSPACE_KEY } from '../services/api';
 
 // In a team workspace, plan, quota and workspace settings come from it; identity stays the person's.
@@ -31,26 +31,36 @@ export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
+  const shown = useRef(false);        // a profile is on screen, so a reload happens behind it
 
   // Loads the profile. Only a real 401 signs the user out; network errors and
   // 5xx (e.g. the backend waking up) are retried, then shown as "offline".
+  // Only the first load shows the loading screen: a refresh after saving a setting or confirming the
+  // email keeps the page mounted, or the page would lose what it shows (a webhook secret shown once,
+  // say) and run its effects again.
   const loadUser = useCallback(async () => {
-    if (!localStorage.getItem('access_token')) { setUser(null); setLoading(false); return; }
-    setLoading(true);
+    if (!localStorage.getItem('access_token')) { shown.current = false; setUser(null); setLoading(false); return; }
+    const background = shown.current;
+    if (!background) setLoading(true);
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const { data } = await authAPI.me();
         const chosen = localStorage.getItem(WORKSPACE_KEY);
         if (chosen && !data.workspace) localStorage.removeItem(WORKSPACE_KEY);   // left it, or was removed
         const merged = withWorkspace(data);
+        shown.current = true;
         setUser(merged); setOffline(false); setLoading(false);
         return merged;
       } catch (err) {
-        if (err.response?.status === 401) { clearAuth(); setUser(null); setLoading(false); return null; }
+        if (err.response?.status === 401) {
+          shown.current = false; clearAuth(); setUser(null); setLoading(false);
+          return null;
+        }
         await wait(1500 * (attempt + 1));
       }
     }
-    setOffline(true); setLoading(false);
+    if (!background) setOffline(true);    // a failed refresh keeps what's on screen
+    setLoading(false);
     return null;
   }, []);
 
@@ -61,13 +71,14 @@ export function AuthProvider({ children }) {
     saveTokens(data);
     // a workspace picked up from a link: load it, so its plan and the person's role there apply
     if (localStorage.getItem(WORKSPACE_KEY)) await loadUser();
-    else setUser(data.user || { username });
+    else { shown.current = true; setUser(data.user || { username }); }
     return data;
   };
 
   const register = async (username, email, password) => {
     const { data } = await authAPI.register(username, email, password);
     saveTokens(data);
+    shown.current = true;
     setUser(data.user);
     return data;
   };
@@ -80,6 +91,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    shown.current = false;
     setUser(null);
     await authAPI.logout();
   };

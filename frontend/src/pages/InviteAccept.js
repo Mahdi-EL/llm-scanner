@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { authAPI, teamAPI, errorMessage, WORKSPACE_KEY } from '../services/api';
+import { authAPI, teamAPI, errorMessage, WORKSPACE_KEY, PENDING_INVITE_KEY } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import CenterCard from '../components/CenterCard';
 
@@ -12,6 +12,10 @@ export default function InviteAccept() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  // someone who must confirm their address first: the confirmation page links back to this invite
+  useEffect(() => {
+    if (token && user && !user.email_verified) localStorage.setItem(PENDING_INVITE_KEY, token);
+  }, [token, user]);
   const here = `/invite?token=${encodeURIComponent(token)}`;
 
   if (!token) return <CenterCard title="This invite link is incomplete" subtitle="Ask whoever invited you for a new link." />;
@@ -47,6 +51,7 @@ export default function InviteAccept() {
     setBusy(true); setError('');
     try {
       const { data } = await teamAPI.accept(token);
+      localStorage.removeItem(PENDING_INVITE_KEY);
       localStorage.setItem(WORKSPACE_KEY, data.workspace.id);
       window.location.assign('/');
     } catch (e) {
