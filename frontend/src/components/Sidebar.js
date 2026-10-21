@@ -236,7 +236,9 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
             <select value={user.workspace?.id || user.id} onChange={e => switchWorkspace(e.target.value)}
               style={{ display:'block', width:'100%', marginTop:'4px', fontSize:'12px' }}>
               {user.workspaces.map(w => (
-                <option key={w.id} value={w.id}>{w.name}{w.role !== 'owner' ? ` (${w.role})` : ''}</option>
+                <option key={w.id} value={w.id} disabled={w.active === false}>
+                  {w.name}{w.active === false ? ' (paused: no seat)' : w.role !== 'owner' ? ` (${w.role})` : ''}
+                </option>
               ))}
             </select>
           </label>

@@ -59,14 +59,35 @@ def members(account_id: str) -> list:
                    "since": r["created_at"]} for r in rows]
 
 
+def seated(account_id: str, plan: str) -> Optional[set]:
+    """Who has a seat when a workspace has more people than its plan allows (after a downgrade): the owner,
+    then members in the order they joined. None when everyone has one."""
+    limit = seat_limit(plan)
+    if limit is None:
+        return None
+    with transaction() as conn:
+        rows = conn.execute("SELECT user_id FROM memberships WHERE account_id = ? ORDER BY created_at, user_id",
+                            (account_id,)).fetchall()
+    if len(rows) < limit:
+        return None
+    return {account_id} | {r["user_id"] for r in rows[:max(0, limit - 1)]}
+
+
+def has_seat(account: dict, user_id: str) -> bool:
+    seats = seated(account["id"], account.get("plan"))
+    return seats is None or user_id in seats
+
+
 def workspaces_of(user_id: str) -> list:
-    """Workspaces a person can act in: their own first, then the ones they were invited to."""
+    """Workspaces a person can act in: their own first, then the ones they were invited to ("active" is
+    False while the workspace's plan has no seat for them)."""
     with transaction() as conn:
         rows = conn.execute(
             "SELECT u.id, u.username, u.plan, m.role FROM memberships m JOIN users u ON u.id = m.account_id "
             "WHERE m.user_id = ? ORDER BY u.username", (user_id,)).fetchall()
-    return [{"id": user_id, "name": "Personal", "role": "owner"}] + \
-           [{"id": r["id"], "name": r["username"], "role": r["role"], "plan": r["plan"] or "free"} for r in rows]
+    return [{"id": user_id, "name": "Personal", "role": "owner", "active": True}] + \
+           [{"id": r["id"], "name": r["username"], "role": r["role"], "plan": r["plan"] or "free",
+             "active": has_seat({"id": r["id"], "plan": r["plan"]}, user_id)} for r in rows]
 
 
 def pending_invites(account_id: str) -> list:
@@ -126,6 +147,13 @@ def accept_invite(token: str, person: dict) -> str:
                             403)
         if row["account_id"] == person["id"]:
             raise TeamError("You can't join your own workspace", 409)
+        account = conn.execute("SELECT plan FROM users WHERE id = ?", (row["account_id"],)).fetchone()
+        limit = seat_limit(account["plan"] if account else "free")
+        taken = 1 + conn.execute("SELECT COUNT(*) FROM memberships WHERE account_id = ? AND user_id != ?",
+                                 (row["account_id"], person["id"])).fetchone()[0]
+        if limit is not None and taken >= limit:      # the plan changed since the invite was sent
+            raise TeamError("This workspace has no free seat right now. Ask whoever invited you to upgrade "
+                            "its plan or free a seat.", 402)
         conn.execute("INSERT INTO memberships (account_id, user_id, role, created_at) VALUES (?, ?, ?, ?) "
                      "ON CONFLICT(account_id, user_id) DO UPDATE SET role = excluded.role",
                      (row["account_id"], person["id"], row["role"], utcnow()))

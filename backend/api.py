@@ -272,6 +272,9 @@ def _workspace_user(request: Request) -> Optional[dict]:
     account = auth_db.get_user_by_id(workspace) if role else None
     if not account:
         raise HTTPException(status_code=403, detail="You're not a member of this workspace")
+    if not teams.has_seat(account, person["id"]):
+        raise HTTPException(status_code=403, detail="This workspace's plan has fewer seats than people, so your "
+                                                    "access is paused. Ask its owner to upgrade or free a seat.")
     return {**account, "_role": role, "_actor": person}
 
 
@@ -1260,8 +1263,10 @@ def _team_error(e: "teams.TeamError"):
 def get_team(user: dict = Depends(require_user)):
     """The workspace's people and seats; owners and admins also see pending invites."""
     admin = teams.RANK[user["_role"]] >= teams.RANK["admin"]
+    seats = teams.seated(user["id"], user.get("plan"))
     return {"workspace": {"id": user["id"], "name": user["username"], "plan": user.get("plan", "free")},
-            "role": user["_role"], "members": teams.members(user["id"]),
+            "role": user["_role"],
+            "members": [{**m, "seat": seats is None or m["user_id"] in seats} for m in teams.members(user["id"])],
             "invites": teams.pending_invites(user["id"]) if admin else [],
             "seats": {"used": teams.seats_used(user["id"]), "limit": teams.seat_limit(user.get("plan"))}}
 
@@ -1298,19 +1303,24 @@ def change_member_role(member_id: str, body: RoleRequest, user: dict = Depends(r
 
 
 @app.delete("/api/team/members/{member_id}")
-def remove_member(member_id: str, user: dict = Depends(require_user)):
-    """Removes someone from the workspace (owner and admins), or leaves it (anyone, for themselves)."""
-    actor = user["_actor"]
-    leaving = member_id == actor["id"]
-    if not leaving:
-        _forbid_api_keys(user)
-        if teams.RANK[user["_role"]] < teams.RANK["admin"]:
-            raise HTTPException(status_code=403, detail="Only the workspace's owner and admins can remove people.")
+def remove_member(request: Request, member_id: str):
+    """Removes someone from the workspace (owner and admins), or leaves it (anyone, for themselves, even
+    while the workspace's plan has no seat for them)."""
+    person = require_person(request)
+    workspace = (request.headers.get(WORKSPACE_HEADER) or "").strip()[:64]
+    if member_id == person["id"] and workspace and workspace != person["id"] and not person.get("_via_api_key"):
+        if not teams.remove_member(workspace, person["id"]):
+            raise HTTPException(status_code=404, detail="Member not found")
+        return {"message": "Left the workspace"}
+    user = require_user(request)
+    _forbid_api_keys(user)
+    if teams.RANK[user["_role"]] < teams.RANK["admin"]:
+        raise HTTPException(status_code=403, detail="Only the workspace's owner and admins can remove people.")
     if member_id == user["id"]:
         raise HTTPException(status_code=400, detail="The owner can't be removed; delete the account instead.")
     if not teams.remove_member(user["id"], member_id[:64]):
         raise HTTPException(status_code=404, detail="Member not found")
-    return {"message": "Left the workspace" if leaving else "Member removed"}
+    return {"message": "Member removed"}
 
 
 @app.post("/api/team/accept")

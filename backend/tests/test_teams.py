@@ -256,6 +256,39 @@ def test_scans_triage_and_evidence_name_the_person_not_the_workspace(client, mon
     assert seen["triaged_results"][0]["triage"]["decided_by"] == bob["name"]
 
 
+def test_a_downgrade_pauses_members_beyond_the_seats_until_an_upgrade(client, monkeypatch):
+    """Otherwise a team could pay for one month of Pro, invite everyone, and keep working on Free."""
+    owner, bob, carol = person(client, "pro"), person(client), person(client)
+    join(client, owner, bob)
+    join(client, owner, carol)
+    with auth_db.transaction() as conn:              # bob joined first
+        conn.execute("UPDATE memberships SET created_at = '2026-01-01T00:00:01+00:00' WHERE user_id = ?", (bob["id"],))
+        conn.execute("UPDATE memberships SET created_at = '2026-01-01T00:00:02+00:00' WHERE user_id = ?", (carol["id"],))
+        conn.execute("UPDATE users SET plan = 'free' WHERE id = ?", (owner["id"],))
+    r = client.get("/scans", headers=in_ws(bob, owner))
+    assert r.status_code == 403 and "paused" in r.json()["detail"]
+    assert [w["active"] for w in client.get("/auth/me", headers=bob["auth"]).json()["workspaces"]] == [True, False]
+    seats = {m["user_id"]: m["seat"] for m in client.get("/api/team", headers=owner["auth"]).json()["members"]}
+    assert seats == {owner["id"]: True, bob["id"]: False, carol["id"]: False}
+
+    monkeypatch.setattr(config, "PRO_SEATS", 2)       # back on Pro, with room for the owner and one member
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET plan = 'pro' WHERE id = ?", (owner["id"],))
+    assert client.get("/scans", headers=in_ws(bob, owner)).status_code == 200
+    assert client.get("/scans", headers=in_ws(carol, owner)).status_code == 403
+    assert client.delete(f"/api/team/members/{carol['id']}", headers=in_ws(carol, owner)).status_code == 200
+    assert teams.role_of(owner["id"], carol["id"]) is None          # a paused member can still leave
+
+
+def test_an_invite_needs_a_free_seat_when_it_is_accepted(client):
+    owner, bob = person(client, "pro"), person(client)
+    token = client.post("/api/team/invites", headers=owner["auth"], json={"email": bob["email"]}).json()["link"].split("token=")[1]
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET plan = 'free' WHERE id = ?", (owner["id"],))
+    assert client.post("/api/team/accept", headers=bob["auth"], json={"token": token}).status_code == 402
+    assert teams.role_of(owner["id"], bob["id"]) is None
+
+
 def test_browsers_may_send_the_workspace_header():
     """Without this in the CORS preflight, the web app can't make a single request inside a workspace."""
     with TestClient(api.app) as c:
