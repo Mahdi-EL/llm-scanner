@@ -9,11 +9,14 @@ const REFRESH_KEY = 'refresh_token';
 // like sidebar state, etc.)
 // The team workspace the app acts in (absent = the person's own account)
 export const WORKSPACE_KEY = 'workspace_id';
+// An invite waiting for its invitee to confirm their email address (see InviteAccept and VerifyEmail)
+export const PENDING_INVITE_KEY = 'pending_invite';
 
 export function clearAuth() {
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(WORKSPACE_KEY);
+  localStorage.removeItem(PENDING_INVITE_KEY);
 }
 
 export function saveTokens(data) {
