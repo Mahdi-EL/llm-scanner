@@ -13,7 +13,7 @@ const ROLES = [
 
 /* The people in the current workspace: invite, change roles, remove, or leave. */
 export default function TeamPanel() {
-  const { user, role, switchWorkspace } = useAuth();
+  const { user, role, switchWorkspace, refreshUser } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [team, setTeam] = useState(null);
@@ -51,21 +51,40 @@ export default function TeamPanel() {
     await teamAPI.remove(user.id);
     switchWorkspace(user.id);
   });
+  const leaveOther = w => run(`leave-${w.id}`, async () => {
+    if (!window.confirm(`Leave ${w.name}? You will need a new invite to come back.`)) return;
+    await teamAPI.leave(w.id, user.id);
+    await refreshUser();
+    toast(`You left ${w.name}.`, 'success');
+  });
+  const others = (user?.workspaces || []).filter(w => w.id !== user.id);
 
   if (failed) return <div style={{ padding:'16px 20px', fontSize:'13px', color:'#b42318' }} role="alert">Couldn’t load the team. <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={load}>Retry</button></div>;
   if (!team) return <div style={{ padding:'16px 20px', fontSize:'13px', color:'var(--t3)' }}>Loading…</div>;
   const { seats } = team;
   const full = seats.limit != null && seats.used >= seats.limit;
+  const unseated = team.members.filter(m => m.seat === false).length;
   return (
     <div>
       <div style={{ padding:'14px 20px 4px', fontSize:'12px', color:'var(--t3)' }}>
-        {seats.limit == null ? `${seats.used} people · no seat limit` : `${seats.used} of ${seats.limit} seat${seats.limit !== 1 ? 's' : ''} used`}
+        {seats.limit == null ? `${seats.used} people · no seat limit`
+          : seats.used > seats.limit ? `${seats.used} people, ${seats.limit} seat${seats.limit !== 1 ? 's' : ''}`
+          : `${seats.used} of ${seats.limit} seat${seats.limit !== 1 ? 's' : ''} used`}
         {team.role !== 'owner' && <> · you are {team.role === 'admin' ? 'an' : 'a'} {team.role}</>}
       </div>
+      {unseated > 0 && (
+        <div role="status" style={{ margin:'8px 20px', padding:'10px 12px', border:'1px solid rgba(161,92,7,0.35)', borderRadius:'8px', fontSize:'12px', color:'#a15c07' }}>
+          The plan has fewer seats than people, so {unseated} {unseated === 1 ? 'person' : 'people'} can’t open this workspace
+          (the latest to join). Upgrade the plan or remove someone to give them a seat.
+        </div>
+      )}
       {team.members.map(m => (
         <div key={m.user_id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 20px', borderBottom:'1px solid var(--b1)', flexWrap:'wrap' }}>
           <div style={{ flex:'1 1 200px', minWidth:0 }}>
-            <div style={{ fontSize:'13px', fontWeight:600 }}>{m.username}{m.user_id === user.id ? ' (you)' : ''}</div>
+            <div style={{ fontSize:'13px', fontWeight:600 }}>
+              {m.username}{m.user_id === user.id ? ' (you)' : ''}
+              {m.seat === false && <span style={{ marginLeft:'8px', fontSize:'11px', fontWeight:600, color:'#a15c07' }}>no seat</span>}
+            </div>
             <div style={{ fontSize:'12px', color:'var(--t3)', overflow:'hidden', textOverflow:'ellipsis' }}>{m.email}</div>
           </div>
           {m.role === 'owner' || !admin || m.user_id === user.id ? (
@@ -111,6 +130,21 @@ export default function TeamPanel() {
           {full && <span style={{ fontSize:'12px', color:'var(--t3)', flexBasis:'100%' }}>Every seat is taken: remove someone or upgrade the plan.</span>}
         </form>
       ))}
+      {team.role === 'owner' && others.length > 0 && (
+        <div style={{ padding:'6px 20px 16px', borderTop:'1px solid var(--b1)' }}>
+          <div style={{ fontSize:'12px', fontWeight:600, color:'var(--t2)', margin:'10px 0 6px' }}>Other workspaces you’re in</div>
+          {others.map(w => (
+            <div key={w.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'6px 0', flexWrap:'wrap', fontSize:'13px' }}>
+              <span style={{ flex:'1 1 200px', minWidth:0 }}>
+                {w.name} <span style={{ color:'var(--t3)', fontSize:'12px' }}>
+                  {w.active === false ? 'paused: its plan has no seat for you' : w.role}</span>
+              </span>
+              {w.active !== false && <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => switchWorkspace(w.id)}>Open</button>}
+              <button className="btn-ghost" style={{ fontSize:'12px', color:'#b42318' }} disabled={!!busy} onClick={() => leaveOther(w)}>Leave</button>
+            </div>
+          ))}
+        </div>
+      )}
       {team.role !== 'owner' && (
         <div style={{ padding:'0 20px 16px' }}>
           <button className="btn-ghost" style={{ fontSize:'12px', color:'#b42318' }} disabled={!!busy} onClick={leave}>Leave this workspace</button>

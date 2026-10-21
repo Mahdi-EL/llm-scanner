@@ -28,7 +28,7 @@ api.interceptors.request.use(cfg => {
   const token = localStorage.getItem(ACCESS_KEY);
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
   const workspace = localStorage.getItem(WORKSPACE_KEY);
-  if (workspace) cfg.headers['X-Workspace'] = workspace;
+  if (workspace && !cfg.headers['X-Workspace']) cfg.headers['X-Workspace'] = workspace;
   return cfg;
 });
 
@@ -194,6 +194,8 @@ export const teamAPI = {
   revokeInvite: id            => api.delete(`/api/team/invites/${id}`),
   setRole     : (id, role)    => api.put(`/api/team/members/${id}`, { role }),
   remove      : id            => api.delete(`/api/team/members/${id}`),
+  /** Leaves another workspace without switching to it (works while it has no seat for you). */
+  leave       : (workspaceId, myId) => api.delete(`/api/team/members/${myId}`, { headers: { 'X-Workspace': workspaceId } }),
   accept      : token         => api.post('/api/team/accept', { token }),
 };
 
