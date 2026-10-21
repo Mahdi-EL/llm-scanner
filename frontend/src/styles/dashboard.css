@@ -998,6 +998,16 @@
   display    : flex;
   align-items: center;
   gap        : 10px;
+  min-width  : 0;             /* lets the workspace name shorten instead of widening the page */
+}
+.topbar-right { flex-shrink:0; }
+.topbar-workspace {
+  font-size    : 12px;
+  color        : var(--t3);
+  white-space  : nowrap;
+  overflow     : hidden;
+  text-overflow: ellipsis;
+  min-width    : 0;
 }
 .topbar-page-icon {
   font-size  : 14px;
