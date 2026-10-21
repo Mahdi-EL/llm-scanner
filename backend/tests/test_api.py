@@ -741,6 +741,41 @@ def test_rate_limit_answer_is_readable(client):
     assert last.json()["detail"].startswith("Too many requests") and last.headers["Retry-After"] == "60"
 
 
+def test_rate_limits_key_on_the_address_the_proxy_added(monkeypatch):
+    from starlette.requests import Request
+
+    import config
+
+    def request(forwarded):
+        headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded else []
+        return Request({"type": "http", "headers": headers, "client": ("10.0.0.5", 1234)})
+    monkeypatch.setattr(config, "TRUSTED_PROXY_HOPS", 1)
+    assert api.client_ip(request("6.6.6.6, 203.0.113.9")) == "203.0.113.9"     # the client wrote 6.6.6.6
+    assert api.client_ip(request("203.0.113.9")) == "203.0.113.9"
+    assert api.client_ip(request("")) == "10.0.0.5"
+    monkeypatch.setattr(config, "TRUSTED_PROXY_HOPS", 0)
+    assert api.client_ip(request("6.6.6.6, 203.0.113.9")) == "10.0.0.5"
+
+
+def test_a_made_up_forwarded_address_doesnt_reset_the_limit(client, monkeypatch):
+    """Deployed as on Railway (uvicorn --proxy-headers --forwarded-allow-ips=*): the edge appends the real
+    address to whatever X-Forwarded-For the client sent."""
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    import config
+    monkeypatch.setattr(config, "TRUSTED_PROXY_HOPS", 1)
+    api.limiter.reset()
+    api.limiter.enabled = True
+    try:
+        behind_proxy = TestClient(ProxyHeadersMiddleware(api.app, trusted_hosts="*"))
+        codes = [behind_proxy.post("/auth/login", json={"username": "nobody_xff", "password": "wrongpass1"},
+                                   headers={"X-Forwarded-For": f"10.9.{i}.1, 198.51.100.7"}).status_code
+                 for i in range(11)]
+    finally:
+        api.limiter.enabled = False
+    assert codes[:10] == [401] * 10 and codes[10] == 429
+
+
 def test_bad_username_gets_a_readable_message(client):
     r = client.post("/auth/register", json={"username": "a b", "email": "ab@example.com", "password": "password123"})
     assert r.status_code == 422

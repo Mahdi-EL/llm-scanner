@@ -75,7 +75,19 @@ if config.SENTRY_DSN:
     except ImportError:
         log.warning("SENTRY_DSN is set but sentry-sdk isn't installed")
 
-limiter = Limiter(key_func=get_remote_address)
+def client_ip(request: Request) -> str:
+    """The caller's address, for rate limits. Behind TRUSTED_PROXY_HOPS proxies it's that many entries from
+    the right of X-Forwarded-For: the leftmost entry (what uvicorn's --forwarded-allow-ips=* picks) can be
+    written by the client, so a new fake address per request would get past every limit."""
+    hops = config.TRUSTED_PROXY_HOPS
+    if hops > 0:
+        chain = [h.strip() for h in (request.headers.get("x-forwarded-for") or "").split(",") if h.strip()]
+        if len(chain) >= hops:
+            return chain[-hops]
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=client_ip)
 
 
 # ── Startup ───────────────────────────────────────────────────
