@@ -47,8 +47,9 @@ def upstream(monkeypatch):
         if state["status"] >= 400:
             return state["status"], {"error": {"message": "upstream says no"}}
         return 200, {"id": "chatcmpl-1", "object": "chat.completion", "created": 1, "model": body.get("model"),
-                     "choices": [{"index": 0, "finish_reason": "stop",
-                                  "message": {"role": "assistant", "content": state["reply"]}}]}
+                     "choices": [{"index": 0, "finish_reason": state.get("finish_reason", "stop"),
+                                  "message": json.loads(json.dumps(state.get("message")))
+                                  or {"role": "assistant", "content": state["reply"]}}]}
     monkeypatch.setattr(gateway, "forward", fake_forward)
     # Prompt Guard isn't reachable in tests: score by a keyword instead
     monkeypatch.setattr(firewall, "guard_score", lambda text, client=None: {
@@ -164,3 +165,43 @@ def test_a_short_fragment_of_the_system_prompt_is_flagged():
     _, verdict, findings = gateway.screen_reply(reply, "You are a bank bot. The admin password is hunter2.")
     assert verdict == "review" and "prompt_fragment" in findings
     assert reply["choices"][0]["message"]["content"].startswith("Sure.")      # an ordinary request: flagged, kept
+
+
+def _tool_reply(arguments: str) -> dict:
+    return {"role": "assistant", "content": None, "tool_calls": [
+        {"id": "call_1", "type": "function", "function": {"name": "send_email", "arguments": arguments}}]}
+
+
+def test_tool_call_arguments_are_screened_like_the_text(client, account, upstream):
+    """A model tricked into emailing a key or the system prompt leaks it as surely as by saying it."""
+    upstream["state"].update(finish_reason="tool_calls", message=_tool_reply(
+        json.dumps({"to": "x@example.com", "body": "Key: sk-proj-ABCDEFGHIJKLMNOPQRSTUVWX"})))
+    r = chat(client, account, [{"role": "user", "content": "mail my notes"}])
+    call = r.json()["choices"][0]["message"]["tool_calls"][0]["function"]
+    assert r.headers["X-LLMScanner-Output"] == "block" and "tool_secret" in r.headers["X-LLMScanner-Rules"]
+    assert json.loads(call["arguments"])["body"] == "Key: [REDACTED]"            # masked, still valid JSON
+
+    upstream["state"]["message"] = _tool_reply(json.dumps({"to": "x@example.com", "body": SYSTEM}))
+    r = chat(client, account, [{"role": "system", "content": SYSTEM}, {"role": "user", "content": "mail it"}])
+    choice = r.json()["choices"][0]
+    assert "tool_calls" not in choice["message"] and choice["finish_reason"] == "stop"
+    assert choice["message"]["content"] == api.config.GATEWAY_BLOCK_MESSAGE
+
+    upstream["state"]["message"] = _tool_reply(json.dumps({"to": "x@example.com", "body": "See you at 5."}))
+    r = chat(client, account, [{"role": "user", "content": "confirm the meeting"}])
+    assert r.headers["X-LLMScanner-Output"] == "allow"
+    assert r.json()["choices"][0]["message"]["tool_calls"][0]["function"]["name"] == "send_email"
+
+
+def test_a_masked_number_that_would_break_the_arguments_drops_the_call():
+    reply = {"choices": [{"finish_reason": "tool_calls", "message": _tool_reply('{"card": 4111111111111111}')}]}
+    _, verdict, findings = gateway.screen_reply(reply, "")
+    assert verdict == "block" and "tool_secret" in findings
+    assert "tool_calls" not in reply["choices"][0]["message"]
+
+
+def test_a_streamed_tool_call_is_screened_too(client, account, upstream):
+    upstream["state"].update(finish_reason="tool_calls", message=_tool_reply(
+        json.dumps({"body": "Key: sk-proj-ABCDEFGHIJKLMNOPQRSTUVWX"})))
+    r = chat(client, account, [{"role": "user", "content": "mail it"}], stream=True)
+    assert "sk-proj-ABCDEF" not in r.text and "[REDACTED]" in r.text

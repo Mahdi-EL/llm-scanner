@@ -12,7 +12,8 @@ LLM Scanner API key as its api_key. For each chat completion:
    X-Upstream-Authorization. Streaming requests are answered as a stream, but the reply is
    fetched whole first so it can be checked.
 3. The reply is screened with firewall.check_output against the request's system prompt: leaked
-   secrets are masked, and a reply that leaks the system prompt is replaced with the refusal.
+   secrets are masked, and a reply that leaks the system prompt is replaced with the refusal. Tool
+   call arguments are screened too.
 
 Only verdicts, rule names, status codes and timings are recorded, never the messages.
 """
@@ -97,33 +98,86 @@ def refusal(model: str) -> dict:
 FRAGMENT_WORDS = 5     # a run this long copied from the system prompt is worth flagging in a reply
 
 
+def _screen(text: str, system_prompt: str, input_flagged: bool) -> tuple:
+    """(verdict, finding types, firewall check) for one piece of model output."""
+    check = firewall.check_output(text, system_prompt or None)
+    found = list(check["findings"])
+    verdict = check["verdict"]
+    if system_prompt and "prompt_overlap" not in found \
+            and detectors.prompt_overlap(text, system_prompt, n=FRAGMENT_WORDS) > 0:
+        found.append("prompt_fragment")
+        verdict = max(verdict, "review", key=_VERDICT_RANK.get)
+    if input_flagged and found:
+        verdict = "block"
+    return verdict, found, check
+
+
+def _tool_calls(message: dict) -> list:
+    """The function calls ({"name", "arguments"}) a reply asks the app to run, the older single
+    function_call included."""
+    calls = [c.get("function") for c in message.get("tool_calls") or [] if isinstance(c, dict)]
+    calls.append(message.get("function_call"))
+    return [c for c in calls if isinstance(c, dict) and isinstance(c.get("arguments"), str) and c["arguments"]]
+
+
+def _still_json(original: str, masked: str) -> bool:
+    """Masking a secret inside a JSON string keeps the arguments valid; masking a number field
+    (a card number, say) wouldn't, and the app's tool would fail to parse them."""
+    try:
+        json.loads(original)
+    except ValueError:
+        return True                    # they weren't JSON to begin with
+    try:
+        json.loads(masked)
+        return True
+    except ValueError:
+        return False
+
+
 def screen_reply(completion: dict, system_prompt: str, input_flagged: bool = False) -> tuple:
     """(completion with leaks masked or replaced, worst verdict, finding types).
 
     A reply that leaks a secret after an ordinary request has the secret masked. After a request
     the firewall flagged, any finding means the attack worked, so the whole reply is replaced: the
     rules only catch some of what leaked (a password quoted from the prompt, say, isn't a key format).
+
+    Tool calls are checked the same way: their arguments reach an email, a URL or a database, so a
+    leak there gets out as surely as one in the text (findings are named tool_<type>). A secret is
+    masked inside the arguments; when masking isn't enough, the calls are dropped and the reply
+    becomes the refusal.
     """
     worst, findings = "allow", []
+
+    def note(verdict, found):
+        nonlocal worst
+        findings.extend(f for f in found if f not in findings)
+        worst = max(worst, verdict, key=_VERDICT_RANK.get)
+
     for choice in completion.get("choices") or []:
         message = choice.get("message") or {}
         content = message.get("content")
-        if not isinstance(content, str) or not content:
-            continue
-        check = firewall.check_output(content, system_prompt or None)
-        found = list(check["findings"])
-        verdict = check["verdict"]
-        if system_prompt and "prompt_overlap" not in found \
-                and detectors.prompt_overlap(content, system_prompt, n=FRAGMENT_WORDS) > 0:
-            found.append("prompt_fragment")
-            verdict = max(verdict, "review", key=_VERDICT_RANK.get)
-        if input_flagged and found:
-            verdict = "block"
-        findings += [f for f in found if f not in findings]
-        worst = max(worst, verdict, key=_VERDICT_RANK.get)
-        if verdict == "block":
-            replace = input_flagged or "prompt_overlap" in found or not check["masked"]
-            message["content"] = config.GATEWAY_BLOCK_MESSAGE if replace else check["redacted"]
+        if isinstance(content, str) and content:
+            verdict, found, check = _screen(content, system_prompt, input_flagged)
+            note(verdict, found)
+            if verdict == "block":
+                replace = input_flagged or "prompt_overlap" in found or not check["masked"]
+                message["content"] = config.GATEWAY_BLOCK_MESSAGE if replace else check["redacted"]
+        drop_calls = False
+        for call in _tool_calls(message):
+            verdict, found, check = _screen(call["arguments"], system_prompt, input_flagged)
+            note(verdict, [f"tool_{f}" for f in found])
+            if verdict != "block":
+                continue
+            if input_flagged or "prompt_overlap" in found or not check["masked"] \
+                    or not _still_json(call["arguments"], check["redacted"]):
+                drop_calls = True
+            else:
+                call["arguments"] = check["redacted"]
+        if drop_calls:
+            message.pop("tool_calls", None)
+            message.pop("function_call", None)
+            message["content"] = config.GATEWAY_BLOCK_MESSAGE
+            choice["finish_reason"] = "stop"
     return completion, worst, findings
 
 

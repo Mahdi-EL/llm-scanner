@@ -165,7 +165,8 @@ const client = new OpenAI({
       <p style={{ fontSize:'13px', color:'var(--t2)', lineHeight:1.6, margin:'12px 0' }}>
         Send this app's chat requests through the AI firewall: change only the base URL and the API key of your
         OpenAI client. Injections are blocked before they reach the model (the caller gets a refusal), and leaked
-        secrets or system-prompt text are removed from replies. Each request uses your daily firewall checks;
+        secrets or system-prompt text are removed from replies and from the arguments of tool calls. Each request
+        uses your daily firewall checks;
         the <code>X-LLMScanner-Input</code> and <code>X-LLMScanner-Output</code> response headers say what happened.
       </p>
       <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'12px' }}>
