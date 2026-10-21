@@ -47,8 +47,7 @@ function SecretBox({ value, onDone, note }) {
 }
 
 export default function Settings() {
-  const { user, logout, refreshUser, saveTokens, role } = useAuth();
-  const canAdmin = role === 'owner' || role === 'admin';
+  const { user, logout, refreshUser, saveTokens, role, canAdmin } = useAuth();
   const navigate = useNavigate();
   const toast    = useToast();
   const [params, setParams] = useSearchParams();
@@ -68,7 +67,7 @@ export default function Settings() {
     .then(r => { setKeys(r.data.keys); setKeysError(false); })
     .catch(() => setKeysError(true)), []);
 
-  useEffect(() => { loadKeys(); }, [loadKeys]);
+  useEffect(() => { if (canAdmin) loadKeys(); }, [loadKeys, canAdmin]);
   useEffect(() => { setWebhookUrl(user?.webhook_url || ''); }, [user?.webhook_url]);
   useEffect(() => {
     const payment = params.get('payment');
@@ -191,12 +190,16 @@ export default function Settings() {
 
       <Section title="Plan and usage">
         <Row label={`${(user?.plan || 'free').replace(/^./, c => c.toUpperCase())} plan`} desc={usage} last>
-          <div style={{ display:'flex', gap:'8px' }}>
-            {user?.has_billing && role === 'owner' && <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy==='portal'} onClick={openPortal}>Manage billing</button>}
-            <button className="btn-primary" style={{ fontSize:'12px' }} onClick={() => navigate('/pricing')}>
-              {user?.plan === 'free' ? 'Upgrade' : 'Change plan'}
-            </button>
-          </div>
+          {role === 'owner' ? (
+            <div style={{ display:'flex', gap:'8px' }}>
+              {user?.has_billing && <button className="btn-outline" style={{ fontSize:'12px' }} disabled={busy==='portal'} onClick={openPortal}>Manage billing</button>}
+              <button className="btn-primary" style={{ fontSize:'12px' }} onClick={() => navigate('/pricing')}>
+                {user?.plan === 'free' ? 'Upgrade' : 'Change plan'}
+              </button>
+            </div>
+          ) : (
+            <span style={{ fontSize:'12px', color:'var(--t3)' }}>The workspace’s owner manages its plan and billing.</span>
+          )}
         </Row>
       </Section>
 
@@ -246,7 +249,7 @@ export default function Settings() {
           <div style={{ padding:'16px 20px', fontSize:'13px', color:'var(--t3)' }}>No keys yet.</div>
         ) : keys.map((k, i) => (
           <Row key={k.id} last={i === keys.length - 1} label={k.name}
-            desc={`${k.prefix}… · created ${relTime(k.created_at)}${k.last_used_at ? ` · last used ${relTime(k.last_used_at)}` : ' · never used'}`}>
+            desc={`${k.prefix}… · created ${relTime(k.created_at)}${k.created_by_name && k.created_by !== user?.id ? ` by ${k.created_by_name}` : ''}${k.last_used_at ? ` · last used ${relTime(k.last_used_at)}` : ' · never used'}`}>
             {k.revoked ? <span style={{ fontSize:'12px', color:'var(--t3)' }}>Revoked</span>
               : <button className="btn-ghost" style={{ fontSize:'12px', color:'#b42318' }} onClick={() => revokeKey(k.id)}>Revoke</button>}
           </Row>

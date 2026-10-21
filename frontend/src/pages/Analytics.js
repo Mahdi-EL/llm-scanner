@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import LoadError from '../components/LoadError';
 import { useNavigate } from 'react-router-dom';
 import { scansAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { scoreColor } from '../utils/format';
 
 /* ── SVG Area chart ──────────────────────────────────────────── */
@@ -162,6 +163,7 @@ export default function Analytics() {
   const [catStats, setCatStats] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { canEdit } = useAuth();
 
   const [loadError, setLoadError] = useState(false);
   const load = useCallback(async () => {
@@ -245,10 +247,10 @@ export default function Analytics() {
           <h1 className="page-title">Analytics</h1>
           <p className="page-subtitle" style={{ marginBottom:0 }}>Security trends, vulnerability patterns, and scan activity</p>
         </div>
-        <button className="btn-primary" onClick={() => navigate('/new-scan')} style={{ marginTop:'4px' }}>
+        {canEdit && <button className="btn-primary" onClick={() => navigate('/new-scan')} style={{ marginTop:'4px' }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Scan
-        </button>
+        </button>}
       </div>
 
       {/* KPI row */}
@@ -285,7 +287,7 @@ export default function Analytics() {
             )}
           </div>
           <AreaChart data={trendData} />
-          {trendData.length < 2 && (
+          {trendData.length < 2 && canEdit && (
             <div style={{ marginTop:'16px', textAlign:'center' }}>
               <button className="btn-primary" onClick={() => navigate('/new-scan')} style={{ fontSize:'12px', padding:'7px 16px' }}>
                 {trendData.length === 0 ? 'Run your first scan →' : 'Run another scan →'}
@@ -400,8 +402,8 @@ export default function Analytics() {
           {shine}
           <div style={{ fontSize:'40px', marginBottom:'16px' }}>📊</div>
           <h3 style={{ fontSize:'18px', fontWeight:'700', marginBottom:'8px' }}>No data yet</h3>
-          <p style={{ color:'var(--t3)', fontSize:'14px', marginBottom:'24px' }}>Run your first scan to start seeing analytics.</p>
-          <button className="btn-primary" onClick={() => navigate('/new-scan')}>Launch First Scan →</button>
+          <p style={{ color:'var(--t3)', fontSize:'14px', marginBottom:'24px' }}>{canEdit ? 'Run your first scan to start seeing analytics.' : 'Analytics appear once this workspace has finished scans.'}</p>
+          {canEdit && <button className="btn-primary" onClick={() => navigate('/new-scan')}>Launch First Scan →</button>}
         </div>
       )}
     </div>

@@ -40,7 +40,7 @@ function FAQ({ q, a }) {
 }
 
 export default function Pricing() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -70,6 +70,7 @@ export default function Pricing() {
     if (key === 'free') return user ? null : { label:'Start free', onClick: () => navigate('/register') };
     if (!plan.purchasable) return { label:'Not available yet', disabled:true };
     if (!user) return { label:`Start with ${plan.name}`, onClick: () => choose(key) };
+    if (role !== 'owner') return { label:'Only the workspace’s owner can change the plan', disabled:true };
     // A paying customer moves their subscription to the other plan (prorated) rather than buying a second one
     const up = (RANK[key] ?? 0) > (RANK[user.plan] ?? 0);
     return { label: `${up ? 'Upgrade' : 'Switch'} to ${plan.name}`, onClick: () => choose(key) };
@@ -90,7 +91,7 @@ export default function Pricing() {
           {hasYearly ? 'Simple pricing' : 'Simple, monthly pricing'}
         </h1>
         <p style={{ fontSize:'16px', color:'var(--t2)', maxWidth:'520px', margin:'0 auto', lineHeight:1.6 }}>
-          Every plan runs the full attack library and produces the same reports. Plans differ in how many scans you can run, scheduled scans, and the AI firewall allowance.
+          Every plan tests all 22 attack categories and produces PDF, HTML and Markdown reports. Paid plans add more scans, team seats, scheduled scans, evidence reports, your brand on reports and the AI firewall.
         </p>
         {hasYearly && (
           <div role="group" aria-label="Billing period" style={{ display:'inline-flex', marginTop:'24px', border:'1px solid var(--b1)', borderRadius:'8px', padding:'3px' }}>

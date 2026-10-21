@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import LoadError from '../components/LoadError';
 import { useNavigate } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { riskLabel, fmtNum } from '../utils/format';
 
@@ -73,6 +74,7 @@ export default function Reports() {
   const [sortDir, setSortDir] = useState('desc');
   const navigate = useNavigate();
   const toast    = useToast();
+  const { canEdit } = useAuth();
 
   const [loadError, setLoadError] = useState(false);
   const load = useCallback(async () => {
@@ -93,7 +95,7 @@ export default function Reports() {
   const stats = useMemo(() => {
     const totalCritical = completed.reduce((a,s) => a + (s.summary?.critical || 0), 0);
     const totalHigh     = completed.reduce((a,s) => a + (s.summary?.high || 0), 0);
-    const scores        = completed.map(s => s.summary?.security_score).filter(Boolean);
+    const scores        = completed.map(s => s.summary?.security_score).filter(v => v != null);
     const avgScore      = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : null;
     const lowRisk       = completed.filter(s => (s.summary?.security_score||0) >= 80).length;
     const highRisk      = completed.filter(s => (s.summary?.security_score||0) < 50).length;
@@ -153,10 +155,10 @@ export default function Reports() {
           <h1 className="page-title">Reports</h1>
           <p className="page-subtitle" style={{ marginBottom:0 }}>All completed scan reports — view findings or download PDF</p>
         </div>
-        <button className="btn-primary" onClick={() => navigate('/new-scan')} style={{ marginTop:'4px', flexShrink:0 }}>
+        {canEdit && <button className="btn-primary" onClick={() => navigate('/new-scan')} style={{ marginTop:'4px', flexShrink:0 }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           New Scan
-        </button>
+        </button>}
       </div>
 
       {/* Stats row */}
@@ -253,7 +255,7 @@ export default function Reports() {
             <div className="empty-state-icon">{search ? '🔍' : '📄'}</div>
             <h3>{search ? 'No results match your search' : 'No reports yet'}</h3>
             <p>{search ? `Nothing found for "${search}"` : 'Complete a scan to generate your first security report.'}</p>
-            {!search && <button className="btn-primary" onClick={() => navigate('/new-scan')}>Launch First Scan</button>}
+            {!search && canEdit && <button className="btn-primary" onClick={() => navigate('/new-scan')}>Launch First Scan</button>}
           </div>
         ) : (
           <div className="table-scroll"><div style={{ minWidth:'900px' }}>
@@ -289,7 +291,10 @@ export default function Reports() {
                     <LetterAvatar name={scan.target_name} />
                     <div style={{ minWidth:0 }}>
                       <div style={{ fontWeight:'600', fontSize:'14px', color:'var(--t1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{scan.target_name}</div>
-                      <div style={{ fontSize:'11px', color:'var(--t3)', marginTop:'2px', fontFamily:'monospace' }}>{scan.scan_id?.slice(0,8)}…</div>
+                      <div style={{ fontSize:'11px', color:'var(--t3)', marginTop:'2px' }}>
+                        <span style={{ fontFamily:'monospace' }}>{scan.scan_id?.slice(0,8)}…</span>
+                        {scan.created_by_name && <span> · by {scan.created_by_name}</span>}
+                      </div>
                     </div>
                   </div>
                   <div><RiskBadge score={score} /></div>

@@ -97,9 +97,13 @@ function TargetForm({ onSaved, onCancel }) {
   );
 }
 
-function ScheduleControl({ target, schedule, paid, onChange }) {
+function ScheduleControl({ target, schedule, paid, onChange, readOnly }) {
   const toast = useToast();
   const navigate = useNavigate();
+  if (readOnly) {
+    return schedule ? <span style={{ fontSize:'12px', color:'var(--t3)' }}>
+      {schedule.enabled ? `Scanned ${schedule.frequency}, next ${shortDate(schedule.next_run_at)}` : 'Schedule paused'}</span> : null;
+  }
   if (!paid) {
     return <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => navigate('/pricing')}>Schedules: Pro plan</button>;
   }
@@ -191,7 +195,7 @@ function Snippet({ title, code }) {
 }
 
 export default function Targets() {
-  const { user } = useAuth();
+  const { user, canEdit } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const [targets, setTargets]     = useState([]);
@@ -268,7 +272,7 @@ jobs:
           <h1 className="page-title">Targets and CI</h1>
           <p className="page-subtitle" style={{ marginBottom:0 }}>Save the AI apps you test, re-scan them in one click, schedule scans, and run them from CI.</p>
         </div>
-        {!adding && <button className="btn-primary" onClick={() => setAdding(true)}>Add target</button>}
+        {!adding && canEdit && <button className="btn-primary" onClick={() => setAdding(true)}>Add target</button>}
       </div>
 
       <div style={{ background:'var(--s1)', border:'1px solid var(--b1)', borderRadius:'10px', overflow:'hidden', marginBottom:'28px' }}>
@@ -276,7 +280,7 @@ jobs:
         {loading ? (
           <div style={{ padding:'20px', fontSize:'13px', color:'var(--t3)' }}>Loading…</div>
         ) : targets.length === 0 && !adding ? (
-          <div style={{ padding:'28px 20px', fontSize:'13px', color:'var(--t3)' }}>No saved targets yet. Add one, or tick “Save this target” when you start a scan.</div>
+          <div style={{ padding:'28px 20px', fontSize:'13px', color:'var(--t3)' }}>{canEdit ? 'No saved targets yet. Add one, or tick “Save this target” when you start a scan.' : 'This workspace has no saved targets yet.'}</div>
         ) : targets.map(t => {
           const schedule = schedules.find(s => s.target_id === t.id);
           const gatewayable = GATEWAY_TYPES.includes(t.config.target_type);
@@ -293,13 +297,13 @@ jobs:
                 </div>
               </div>
               <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
-                <ScheduleControl target={t} schedule={schedule} paid={paid} onChange={load} />
-                <button className="btn-outline" style={{ fontSize:'12px' }} onClick={() => scanNow(t)}>Scan now</button>
+                <ScheduleControl target={t} schedule={schedule} paid={paid} onChange={load} readOnly={!canEdit} />
+                {canEdit && <button className="btn-outline" style={{ fontSize:'12px' }} onClick={() => scanNow(t)}>Scan now</button>}
                 {gatewayable && (
                   <button className="btn-outline" style={{ fontSize:'12px' }} aria-expanded={gatewayOpen === t.id}
                     onClick={() => setGatewayOpen(open => (open === t.id ? null : t.id))}>Gateway</button>
                 )}
-                <button className="btn-ghost" style={{ fontSize:'12px', color:'#b42318' }} onClick={() => remove(t)}>Delete</button>
+                {canEdit && <button className="btn-ghost" style={{ fontSize:'12px', color:'#b42318' }} onClick={() => remove(t)}>Delete</button>}
               </div>
             </div>
             {gatewayOpen === t.id && <GatewayPanel target={t} />}

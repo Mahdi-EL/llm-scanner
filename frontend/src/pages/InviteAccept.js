@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { teamAPI, errorMessage, WORKSPACE_KEY } from '../services/api';
+import { authAPI, teamAPI, errorMessage, WORKSPACE_KEY } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import CenterCard from '../components/CenterCard';
 
@@ -11,6 +11,7 @@ export default function InviteAccept() {
   const { user, loading } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
   const here = `/invite?token=${encodeURIComponent(token)}`;
 
   if (!token) return <CenterCard title="This invite link is incomplete" subtitle="Ask whoever invited you for a new link." />;
@@ -24,6 +25,23 @@ export default function InviteAccept() {
       </div>
     </CenterCard>
   );
+
+  // An invite proves nothing about an address nobody has confirmed, so the API asks for that first
+  if (!user.email_verified) {
+    const resend = async () => {
+      setBusy(true); setError('');
+      try { await authAPI.resendVerification(); setSent(true); }
+      catch (e) { setError(errorMessage(e, 'Couldn’t send the email.')); }
+      finally { setBusy(false); }
+    };
+    return (
+      <CenterCard title="Confirm your email address first"
+        subtitle={`Open the confirmation link we sent to ${user.email}, then open this invite link again to join.`}>
+        <button className="btn-primary" onClick={resend} disabled={busy || sent}>{sent ? 'Sent: check your inbox' : busy ? 'Sending…' : 'Send the link again'}</button>
+        {error && <div className="alert-error" role="alert" style={{ marginTop:'14px' }}>{error}</div>}
+      </CenterCard>
+    );
+  }
 
   const join = async () => {
     setBusy(true); setError('');

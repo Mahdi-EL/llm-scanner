@@ -13,7 +13,7 @@ const NAV_COMMANDS = [
   { id:'nav-pricing',      icon:'💎', label:'Pricing Plans',      sub:'Upgrade plan',           path:'/pricing' },
 ];
 
-export default function CommandPalette({ open, onClose, recentScans = [] }) {
+export default function CommandPalette({ open, onClose, recentScans = [], canScan = true }) {
   const [query,    setQuery]    = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef  = useRef(null);
@@ -31,8 +31,8 @@ export default function CommandPalette({ open, onClose, recentScans = [] }) {
   const q = query.toLowerCase();
 
   const { groups, totalItems } = useMemo(() => {
-    const filteredNav = NAV_COMMANDS.filter(c =>
-      !q || c.label.toLowerCase().includes(q) || c.sub.toLowerCase().includes(q)
+    const filteredNav = NAV_COMMANDS.filter(c => (canScan || c.path !== '/new-scan') &&
+      (!q || c.label.toLowerCase().includes(q) || c.sub.toLowerCase().includes(q))
     );
     const filteredScans = recentScans
       .filter(s => s.status === 'complete' && (!q || s.target_name.toLowerCase().includes(q)))
@@ -49,7 +49,7 @@ export default function CommandPalette({ open, onClose, recentScans = [] }) {
     if (filteredNav.length)   { g.push({ label:'Navigate',     items:filteredNav,   offset:off }); off += filteredNav.length; }
     if (filteredScans.length) { g.push({ label:'Recent Scans', items:filteredScans, offset:off }); off += filteredScans.length; }
     return { groups:g, totalItems:off };
-  }, [q, recentScans]);
+  }, [q, recentScans, canScan]);
 
   const handleSelect = useCallback((item) => {
     onClose();

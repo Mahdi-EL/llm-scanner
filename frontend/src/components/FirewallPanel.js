@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { firewallAPI, API_URL, errorMessage } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { fmtNum } from '../utils/format';
 
 const VERDICT = {
@@ -11,6 +12,7 @@ const VERDICT = {
 
 /* Runtime AI firewall: screen messages before they reach your model, and replies before they reach users. */
 export default function FirewallPanel({ Snippet }) {
+  const { canEdit } = useAuth();      // a check counts against the workspace's allowance: members and up
   const [usage, setUsage]   = useState(null);
   const [text, setText]     = useState('');
   const [result, setResult] = useState(null);
@@ -56,7 +58,7 @@ export default function FirewallPanel({ Snippet }) {
         <div className="card-glow" style={{ padding:'16px 20px', fontSize:'13px', color:'var(--t2)', marginBottom:'14px' }}>
           The firewall isn’t included in your plan. <Link to="/pricing">See plans</Link>.
         </div>
-      ) : (
+      ) : canEdit && (
         <div className="card-glow" style={{ padding:'16px 20px', marginBottom:'14px' }}>
           <label htmlFor="fw-try" style={{ fontSize:'12px', fontWeight:'600', display:'block', marginBottom:'6px' }}>Try a message</label>
           <textarea id="fw-try" value={text} onChange={e => setText(e.target.value)} maxLength={20000}
