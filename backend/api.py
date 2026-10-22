@@ -423,6 +423,11 @@ FieldName = Annotated[str, BeforeValidator(_strip), _must_match(
     FIELD_PATTERN, "Field names use letters, numbers, dots, dashes or underscores (up to 64 characters)")]
 Slug = Annotated[str, BeforeValidator(_slugify), _must_match(
     SLUG_PATTERN, "Categories use letters, numbers, dashes or underscores (up to 40 characters)")]
+# On an update, "" removes the setting
+ClearableModelName = Annotated[str, BeforeValidator(_strip), _must_match(
+    f"(?:{MODEL_PATTERN[1:-1]})?", "Model names use letters, numbers and . _ : / @ + - (up to 100 characters)")]
+ClearableFieldName = Annotated[str, BeforeValidator(_strip), _must_match(
+    f"(?:{FIELD_PATTERN[1:-1]})?", "Field names use letters, numbers, dots, dashes or underscores (up to 64 characters)")]
 
 
 def _some_categories(value):
@@ -545,10 +550,14 @@ class TargetUpdate(BaseModel):
     api_url          : Optional[str] = Field(None, max_length=2048)
     api_key          : Optional[str] = Field(None, max_length=1000)
     clear_api_key    : bool = False
-    model            : Optional[ModelName] = None
+    model            : Optional[ClearableModelName] = None
     baseline_question: Optional[str] = Field(None, max_length=1000)
-    input_field      : Optional[FieldName] = None
-    output_field     : Optional[FieldName] = None
+    input_field      : Optional[ClearableFieldName] = None
+    output_field     : Optional[ClearableFieldName] = None
+
+
+class TargetTest(TargetConfig):
+    target_id: Optional[str] = Field(None, max_length=64)    # a saved target: its key, if the address is the same
 
 
 class ScheduleCreate(BaseModel):
@@ -1419,17 +1428,23 @@ def gateway_stats(target_id: Optional[str] = Query(None, max_length=64), days: i
 # ── Target connection test ────────────────────────────────────
 @app.post("/targets/test")
 @limiter.limit("10/minute")
-def test_target(request: Request, body: TargetConfig, user: dict = Depends(require_member)):
-    """Sends one harmless question to a target and reports what happened."""
-    if body.target_type in ("openai_compatible", "custom_rest") and not body.api_url:
+def test_target(request: Request, body: TargetTest, user: dict = Depends(require_member)):
+    """Sends one harmless question to a target and reports what happened. With target_id and no api_key,
+    the saved target's key is used if the address hasn't changed."""
+    if body.target_type in URL_TARGET_TYPES and not body.api_url:
         raise HTTPException(status_code=400, detail="This target type needs an API URL")
     if body.api_url:
         try:
             netguard.check_url(body.api_url)
         except netguard.UnsafeURLError as e:
             raise HTTPException(status_code=400, detail=f"Target URL rejected: {e}")
+    api_key = body.api_key
+    if not api_key and body.target_id:
+        saved = store.get_target(user["id"], body.target_id, with_key=True)
+        if saved and _key_may_follow(saved["config"], body.target_type, body.api_url):
+            api_key = saved.get("api_key")
     cfg = body.target_config()
-    target = Target(body.target_type, api_key=body.api_key, **{k: v for k, v in cfg.items() if k != "target_type"})
+    target = Target(body.target_type, api_key=api_key, **{k: v for k, v in cfg.items() if k != "target_type"})
     start = time.time()
     try:
         reply = target.get_baseline(body.baseline_question or DEFAULT_BASELINE_QUESTION)
@@ -1439,6 +1454,23 @@ def test_target(request: Request, body: TargetConfig, user: dict = Depends(requi
 
 
 # ── Saved targets ─────────────────────────────────────────────
+URL_TARGET_TYPES = ("openai_compatible", "custom_rest")
+
+
+def _same_url(a: Optional[str], b: Optional[str]) -> bool:
+    return (a or "").strip().rstrip("/") == (b or "").strip().rstrip("/")
+
+
+def _key_may_follow(saved_cfg: dict, target_type: str, api_url: Optional[str]) -> bool:
+    """Whether a saved key may be sent with these settings: to the same address it was saved for (for a
+    Groq target, Groq itself). Anyone who can edit or test a target could otherwise send it elsewhere."""
+    if target_type == "simulation":
+        return True                 # runs on this server's model: the key isn't sent anywhere
+    saved_type = saved_cfg.get("target_type") or "simulation"
+    same_kind = target_type == saved_type or (target_type in URL_TARGET_TYPES and saved_type in URL_TARGET_TYPES)
+    return same_kind and _same_url(saved_cfg.get("api_url"), api_url)
+
+
 def _check_target_url(url: Optional[str]) -> None:
     if url:
         try:
@@ -1456,6 +1488,8 @@ def list_targets(user: dict = Depends(require_user)):
 @app.post("/api/targets")
 def create_target(body: TargetCreate, user: dict = Depends(require_member)):
     """Saves a target; its API key is stored encrypted."""
+    if body.target_type in URL_TARGET_TYPES and not (body.api_url or "").strip():
+        raise HTTPException(status_code=400, detail="This target type needs an API URL")
     _check_target_url(body.api_url)
     if len(store.list_targets(user["id"])) >= 50:
         raise HTTPException(status_code=400, detail="You can save up to 50 targets")
@@ -1469,17 +1503,18 @@ def update_target(target_id: str, body: TargetUpdate, user: dict = Depends(requi
     if not current:
         raise HTTPException(status_code=404, detail="Saved target not found")
     _check_target_url(body.api_url)
-    old_url = (current["config"].get("api_url") or "").strip().rstrip("/")
-    new_url = (body.api_url or "").strip().rstrip("/")
-    if body.api_url is not None and new_url != old_url and current.get("has_key") \
-            and not body.api_key and not body.clear_api_key:
+    if current.get("has_key") and not body.api_key and not body.clear_api_key and not _key_may_follow(
+            current["config"], body.target_type or current["config"].get("target_type") or "simulation",
+            current["config"].get("api_url") if body.api_url is None else body.api_url):
         # Scans and the gateway send the stored key to this URL: whoever can edit the target (any team
         # member) could otherwise point it at their own server and collect the key.
-        raise HTTPException(status_code=400, detail="Enter the target's API key again when you change its URL "
-                                                    "(or send clear_api_key): a saved key only goes to the "
+        raise HTTPException(status_code=400, detail="Enter the target's API key again when you change its URL or "
+                                                    "type (or send clear_api_key): a saved key only goes to the "
                                                     "address it was saved for.")
     changes = body.model_dump(exclude={"name", "api_key", "clear_api_key"}, exclude_none=True)
     cfg = {**current["config"], **changes} if changes else None
+    if cfg and cfg.get("target_type") in URL_TARGET_TYPES and not (cfg.get("api_url") or "").strip():
+        raise HTTPException(status_code=400, detail="This target type needs an API URL")
     api_key = "" if body.clear_api_key else body.api_key
     return store.update_target(user["id"], target_id, name=body.name, cfg=cfg, api_key=api_key)
 

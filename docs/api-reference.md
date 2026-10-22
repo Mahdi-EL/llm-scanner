@@ -85,4 +85,4 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | GET | `/scans` | yes | Your scans, newest first (summary only; findings come from /scan/{id}). |
 | GET | `/scans/stats` | yes | Totals over all your finished scans: count, average score, critical findings, clean scans. |
 | GET | `/shared/{token}` |  | A shared report: findings and summary only, never the target's configuration. |
-| POST | `/targets/test` | yes | Sends one harmless question to a target and reports what happened. |
+| POST | `/targets/test` | yes | Sends one harmless question to a target and reports what happened. With target_id and no api_key, the saved target's key is used if the address hasn't changed. |

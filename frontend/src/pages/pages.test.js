@@ -12,7 +12,9 @@ vi.mock('../services/api', async () => {
       get: vi.fn(), list: vi.fn(), compare: vi.fn(), categories: vi.fn(), cancel: vi.fn(),
       share: vi.fn(), delete: vi.fn(), shared: vi.fn(), models: vi.fn(), start: vi.fn(), testTarget: vi.fn(), listAll: vi.fn(),
     },
-    targetsAPI: { list: vi.fn(), create: vi.fn() },
+    targetsAPI: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+    schedulesAPI: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+    firewallAPI: { usage: vi.fn(() => Promise.resolve({ data: { used: 0, limit: 0 } })), check: vi.fn() },
     publicAPI: { leakCheck: vi.fn() },
     promptsAPI: { list: vi.fn() },
     downloadReport: vi.fn(),
@@ -33,6 +35,7 @@ const { default: SharedReport } = await import('./SharedReport');
 const { default: NewScan } = await import('./NewScan');
 const { default: Reports } = await import('./Reports');
 const { default: LeakCheck } = await import('./LeakCheck');
+const { default: Targets } = await import('./Targets');
 
 beforeEach(() => { auth.value = OWNER; });
 
@@ -222,4 +225,27 @@ test('Pricing: only the workspace owner can change the plan', async () => {
   } } });
   renderAt('/pricing', <Pricing />, '/pricing');
   expect(await screen.findByText('Only the workspace’s owner can change the plan')).toBeDisabled();
+});
+
+test('Editing a saved target sends only what changed, and a new URL needs the key again', async () => {
+  const saved = { id: 't1', name: 'Prod bot', has_key: true, created_at: '', updated_at: '2026-10-22T10:00:00+00:00',
+    config: { target_type: 'openai_compatible', api_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' } };
+  api.targetsAPI.list.mockResolvedValue({ data: { targets: [saved] } });
+  api.schedulesAPI.list.mockResolvedValue({ data: { schedules: [] } });
+  api.targetsAPI.update.mockResolvedValue({ data: saved });
+  renderAt('/targets', <Targets />, '/targets');
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+  fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'gpt-4o' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(api.targetsAPI.update).toHaveBeenCalledWith('t1', { model: 'gpt-4o' }));
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+  fireEvent.change(screen.getByLabelText(/API URL/), { target: { value: 'https://elsewhere.example.com/v1' } });
+  expect(screen.getByText(/Enter the key again/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-new' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(api.targetsAPI.update).toHaveBeenLastCalledWith('t1',
+    { api_url: 'https://elsewhere.example.com/v1', api_key: 'sk-new' }));
 });
