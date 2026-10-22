@@ -124,13 +124,16 @@ function Field({ label, children }) {
 }
 
 /* ── Recommendations (built by the backend from the failed categories) ── */
-function Recommendations({ recs }) {
+function Recommendations({ recs, triaged }) {
   if (!recs) return null;
   return (
     <div className="card-glow" style={{ padding:'22px 24px', marginTop:'16px' }}>
       <h2 style={{ fontSize:'15px', fontWeight:'700', marginBottom:'4px' }}>What to fix first</h2>
       {recs.length === 0 ? (
-        <p style={{ fontSize:'13px', color:'var(--t3)' }}>No attack succeeded. Re-scan after every change to the system prompt or model.</p>
+        <p style={{ fontSize:'13px', color:'var(--t3)' }}>
+          {triaged ? 'Nothing left to fix: the attacks that succeeded are marked as false positives or accepted risks.'
+            : 'No attack succeeded. Re-scan after every change to the system prompt or model.'}
+        </p>
       ) : recs.map(r => (
         <div key={r.category} style={{ borderTop:'1px solid var(--b1)', padding:'14px 0' }}>
           <div style={{ display:'flex', gap:'10px', alignItems:'baseline', flexWrap:'wrap' }}>
@@ -564,7 +567,7 @@ export default function Results() {
         </div>
       </div>
 
-      <Recommendations recs={scan.recommendations} />
+      <Recommendations recs={scan.recommendations} triaged={Object.keys(scan.triage || {}).length > 0} />
       {canEdit && <FixIt scan={scan} failedCount={counts.FAILED} />}
 
       {/* ── Findings ─────────────────────────── */}

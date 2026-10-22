@@ -1328,6 +1328,7 @@ def test_triage_marks_carry_over_and_change_what_counts(client):
     scan = client.get(f"/scan/{first}", headers=headers).json()
     assert scan["triage"][key]["status"] == "false_positive"
     assert scan["triaged_summary"]["critical"] == 0 and scan["triaged_summary"]["security_score"] == 100
+    assert scan["recommendations"] == []          # nothing left to fix once the only failure is a false positive
 
     second = _seed_complete_scan(user_id, results, score=49, target="Bot")       # the next scan of the same target
     assert key in client.get(f"/scan/{second}", headers=headers).json()["triage"]

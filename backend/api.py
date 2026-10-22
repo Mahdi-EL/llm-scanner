@@ -922,7 +922,10 @@ def get_scan_status(scan_id: str, user: dict = Depends(require_user)):
         out["target_id"] = None        # the saved target was deleted: nothing to re-scan or take a key from
     out["shared_until"] = store.share_expiry(user["id"], scan_id) if scan["status"] == "complete" else None
     if scan["status"] == "complete" and scan.get("results"):
-        out["recommendations"] = report.recommendations(scan["results"].get("results", []))
+        # what to fix: findings marked false positive or accepted risk aren't part of it
+        raw = scan["results"].get("results", [])
+        out["recommendations"] = report.recommendations(
+            store.apply_triage(user["id"], scan["target_name"], raw) if out.get("triage") else raw)
     return out
 
 
