@@ -91,6 +91,7 @@ button { cursor:pointer; }
 .btn-primary {
   display      : inline-flex;
   align-items  : center;
+  justify-content: center;
   gap          : 6px;
   background   : var(--blue);
   color        : #fff;
@@ -116,6 +117,7 @@ button { cursor:pointer; }
 .btn-outline {
   display      : inline-flex;
   align-items  : center;
+  justify-content: center;
   gap          : 6px;
   background   : transparent;
   color        : var(--t2);

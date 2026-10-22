@@ -538,7 +538,7 @@ export default function Results() {
       <PreviousComparison scan={scan} />
 
       {/* ── Summary ──────────────────────────── */}
-      <div className="results-hero" style={{ marginBottom:'16px', padding:'28px 32px', display:'grid', gridTemplateColumns:'minmax(260px, 1fr) 2fr', gap:'32px' }}>
+      <div className="results-hero results-summary">
         <div>
           <ScoreBlock summary={summary} triaged={scan.triaged_summary} triagedCount={Object.keys(scan.triage || {}).length} />
           <div style={{ display:'flex', gap:'18px', marginTop:'22px', flexWrap:'wrap' }}>
