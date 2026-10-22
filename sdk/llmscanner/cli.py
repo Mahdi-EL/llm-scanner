@@ -81,13 +81,20 @@ def cmd_scan(args) -> int:
     print(str(report.summary))
     for rec in report.recommendations[:5]:
         print(f"  {rec['priority']} {rec['title']}: {rec['failed']} failed")
-    if args.json:
-        with open(args.json, "w", encoding="utf-8") as f:
-            json.dump(client.get(scan.scan_id).get("results"), f, indent=2)
-        print(f"Results written to {args.json}")
-    if args.download:
-        print(f"Report saved to {client.download(scan.scan_id, args.download, args.out)}")
     _step_summary(report, args.fail_on)
+    # The verdict below doesn't depend on these files: one that can't be fetched is a warning, not an error
+    if args.json:
+        try:
+            with open(args.json, "w", encoding="utf-8") as f:
+                json.dump(client.get(scan.scan_id).get("results"), f, indent=2)
+            print(f"Results written to {args.json}")
+        except LLMScannerError as e:
+            print(f"Warning: couldn't write the results file: {e}", file=sys.stderr)
+    if args.download:
+        try:
+            print(f"Report saved to {client.download(scan.scan_id, args.download, args.out)}")
+        except LLMScannerError as e:
+            print(f"Warning: couldn't download the {args.download} report: {e}", file=sys.stderr)
 
     if report.triaged_findings:
         print(f"{len(report.triaged_findings)} finding(s) marked as a false positive or an accepted risk "
