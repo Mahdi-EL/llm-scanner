@@ -128,7 +128,8 @@ export default function TeamPanel() {
         <form onSubmit={invite} style={{ display:'flex', gap:'8px', padding:'14px 20px', flexWrap:'wrap' }}>
           <input type="email" aria-label="Email to invite" value={email} onChange={e => setEmail(e.target.value)} required
             placeholder="colleague@company.com" disabled={full} style={{ flex:'1 1 220px', minWidth:0 }} />
-          <select aria-label="Role for the invite" value={inviteRole} onChange={e => setInviteRole(e.target.value)} disabled={full} style={{ fontSize:'12px' }}>
+          <select aria-label="Role for the invite" value={inviteRole} onChange={e => setInviteRole(e.target.value)} disabled={full}
+            style={{ fontSize:'12px', flex:'0 1 auto', minWidth:0, maxWidth:'100%' }}>
             {ROLES.map(([r, label]) => <option key={r} value={r}>{label}</option>)}
           </select>
           <button type="submit" className="btn-primary" style={{ fontSize:'12px' }} disabled={full || busy === 'invite'}>Invite</button>

@@ -1535,6 +1535,21 @@ button:focus:not(:focus-visible) { outline: none; }
   .an-row-wide-left, .an-row-wide-right { grid-template-columns:1fr; }
 }
 
+/* Results: the score beside the failed attacks by category, stacked below tablet width */
+.results-summary { display:grid; grid-template-columns:minmax(260px, 1fr) minmax(0, 2fr); gap:32px; margin-bottom:16px; padding:28px 32px; }
+.results-summary > * { min-width:0; }
+@media (max-width:900px) {
+  .results-summary { grid-template-columns:1fr; gap:24px; padding:22px 20px; }
+}
+
+/* Attack library: the summary numbers wrap on phones */
+@media (max-width:640px) {
+  .ti-summary-strip { grid-template-columns:repeat(6, 1fr); }
+  .ti-stat { padding:14px 8px; grid-column:span 2; }
+  .ti-stat:nth-child(n+4) { grid-column:span 3; }       /* three on the first row, two filling the second */
+  .ti-stat-val { font-size:22px; }
+}
+
 /* Attack library: custom prompt form, stacked on phones */
 .custom-prompt-form { display:grid; grid-template-columns:180px minmax(0,1fr) auto; gap:8px; align-items:start; }
 @media (max-width:640px) {
