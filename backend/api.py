@@ -930,12 +930,32 @@ def get_scan_status(scan_id: str, user: dict = Depends(require_user)):
     if out.get("target_id") and not store.get_target(user["id"], out["target_id"]):
         out["target_id"] = None        # the saved target was deleted: nothing to re-scan or take a key from
     out["shared_until"] = store.share_expiry(user["id"], scan_id) if scan["status"] == "complete" else None
+    if scan["status"] in ("failed", "cancelled"):
+        out["partial"] = _partial_findings(scan)
     if scan["status"] == "complete" and scan.get("results"):
         # what to fix: findings marked false positive or accepted risk aren't part of it
         raw = scan["results"].get("results", [])
         out["recommendations"] = report.recommendations(
             store.apply_triage(user["id"], scan["target_name"], raw) if out.get("triage") else raw)
     return out
+
+
+_SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+
+def _partial_findings(scan: dict, limit: int = 200) -> Optional[dict]:
+    """What a scan that stopped early had graded (its last checkpoint): no score, but the attacks that
+    succeeded before it stopped, worst first. None when nothing was graded."""
+    try:
+        done = json.loads(scan.get("checkpoint_json") or "[]")
+    except ValueError:
+        return None
+    graded = [r for r in done if isinstance(r, dict) and r.get("severity") in scoring.SEVERITIES]
+    if not graded:
+        return None
+    failed = sorted((r for r in graded if r["severity"] != "SAFE"),
+                    key=lambda r: (_SEVERITY_ORDER.get(r["severity"], 9), -(r.get("score") or 0)))
+    return {"graded": len(graded), "failed_count": len(failed), "failed": failed[:limit]}
 
 
 def _results_after_triage(scan: dict, user: dict) -> list:
