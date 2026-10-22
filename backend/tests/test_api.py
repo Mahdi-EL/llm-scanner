@@ -388,6 +388,28 @@ def test_saved_targets_hide_keys_and_check_urls(client):
     assert client.delete(f"/api/targets/{target['id']}", headers=headers).status_code == 200
 
 
+def test_a_saved_key_doesnt_follow_a_new_target_url(client, monkeypatch):
+    """Anyone who can edit a target must not be able to redirect its stored key to their own server."""
+    import netguard
+    monkeypatch.setattr(netguard.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    _, headers = _register(client)
+    target = client.post("/api/targets", headers=headers, json={
+        "name": "Prod bot", "target_type": "openai_compatible", "api_url": "https://api.openai.com/v1",
+        "api_key": "sk-owner-secret", "model": "gpt-4o-mini"}).json()
+    url = f"/api/targets/{target['id']}"
+    r = client.put(url, headers=headers, json={"api_url": "https://collector.example.com/v1"})
+    assert r.status_code == 400 and "API key again" in r.json()["detail"]
+    assert client.get("/api/targets", headers=headers).json()["targets"][0]["config"]["api_url"] == \
+        "https://api.openai.com/v1"
+    # the same address (give or take a trailing slash), other fields, a new key, or dropping the key: fine
+    assert client.put(url, headers=headers, json={"api_url": "https://api.openai.com/v1/", "model": "gpt-4o"}).status_code == 200
+    moved = client.put(url, headers=headers, json={"api_url": "https://eu.example.com/v1", "api_key": "sk-new"})
+    assert moved.status_code == 200 and moved.json()["has_key"]
+    cleared = client.put(url, headers=headers, json={"api_url": "https://other.example.com/v1", "clear_api_key": True})
+    assert cleared.status_code == 200 and not cleared.json()["has_key"]
+    assert client.put(url, headers=headers, json={"api_url": "https://third.example.com/v1"}).status_code == 200
+
+
 def test_schedules_need_a_paid_plan(client):
     user_id, headers = _register(client)
     target = client.post("/api/targets", headers=headers, json={"name": "Bot"}).json()
