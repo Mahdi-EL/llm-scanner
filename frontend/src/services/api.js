@@ -60,6 +60,12 @@ api.interceptors.response.use(
         original.headers.Authorization = `Bearer ${newToken}`;
         return api(original);
       } catch {
+        // Another tab may have spent the same refresh token a moment earlier (it rotates on use): carry on
+        // with the tokens it saved instead of signing every tab out.
+        if (localStorage.getItem(REFRESH_KEY) && localStorage.getItem(REFRESH_KEY) !== refresh) {
+          original.headers.Authorization = `Bearer ${localStorage.getItem(ACCESS_KEY)}`;
+          return api(original);
+        }
         clearAuth();
         const here = window.location.pathname + window.location.search;
         window.location.href = here.startsWith('/login') ? '/login' : `/login?next=${encodeURIComponent(here)}`;
