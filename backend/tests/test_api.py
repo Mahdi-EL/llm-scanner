@@ -1210,6 +1210,19 @@ def test_simulation_scans_count_target_tokens_as_ours():
     assert runner._server_tokens(usage, "groq") == {"tokens_in": 100, "tokens_out": 10, "graded_by_rules": 2}
 
 
+def test_multi_turn_only_scan_of_a_rest_target_is_refused_with_the_reason(client, monkeypatch):
+    import netguard
+    monkeypatch.setattr(netguard.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    _, headers = _register(client)
+    cats = {c["id"]: c for c in client.get("/categories").json()["categories"]}
+    assert cats["multi_turn"]["attacks_without_history"] == 0 and cats["multi_turn"]["attacks"] > 0
+    assert cats["extraction"]["attacks_without_history"] == cats["extraction"]["attacks"]
+    r = client.post("/scan", headers=headers, json={"target_name": "REST", "target_type": "custom_rest",
+                                                     "api_url": "https://bot.example.com/chat", "categories": ["multi_turn"],
+                                                     "include_custom_prompts": False})
+    assert r.status_code == 400 and "keeps the conversation" in r.json()["detail"]
+
+
 def test_quick_scans_sample_every_category_and_can_be_required_on_free(client, monkeypatch):
     import config
     from scanner import spread
