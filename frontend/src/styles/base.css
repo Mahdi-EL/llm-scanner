@@ -557,9 +557,9 @@ button { cursor:pointer; }
 .theme-toggle { display:none; }
 
 
-/* Default look for any input in the app that isn't inside a .form-group.
+/* Default look for any input in the app (and on public pages) that isn't inside a .form-group.
    :where() keeps specificity at zero, so .form-group rules and inline styles still win. */
-:where(.main-content) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea) {
+:where(.main-content, #main) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea) {
   padding      : 10px 12px;
   background   : var(--s2);
   border       : 1px solid var(--b1);
@@ -570,11 +570,11 @@ button { cursor:pointer; }
   outline      : none;
   transition   : border-color 0.15s, box-shadow 0.15s;
 }
-:where(.main-content) :where(input, select, textarea):focus-visible {
+:where(.main-content, #main) :where(input, select, textarea):focus-visible {
   border-color: var(--blue);
   box-shadow  : 0 0 0 3px var(--blue-soft);
 }
-:where(.main-content) :where(input, textarea)::placeholder { color: var(--t3); }
+:where(.main-content, #main) :where(input, textarea)::placeholder { color: var(--t3); }
 
 /* Keyboard users can jump past the navigation */
 .skip-link {
