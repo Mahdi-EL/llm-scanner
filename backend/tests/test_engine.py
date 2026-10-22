@@ -365,6 +365,31 @@ def test_a_shutting_down_process_hands_its_scan_back(few_attacks, monkeypatch):
     assert sent == [] and scan_id in runner.stale_scan_ids()     # no "failed" email; the next process resumes it
 
 
+def test_cancelling_a_scan_another_process_runs(monkeypatch):
+    import database
+    import runner
+    import scan_db
+    database.init_db()
+    scan_id = scan_db.create_scan("Elsewhere", "groq", user_id="u-else", config={"target_type": "groq"})
+    scan_db.update_scan(scan_id, status="running")
+    runner.cancel(scan_id)                     # not running in this process: the stored status says so
+    assert scan_db.status_of(scan_id) == "cancelled"
+    runner._cancel.discard(scan_id)
+
+    # and the process that does run a scan notices a cancel (or a delete) made elsewhere
+    other = scan_db.create_scan("Here", "groq", user_id="u-here", config={"target_type": "groq"})
+    scan_db.update_scan(other, status="running")
+    monkeypatch.setattr(runner, "STATUS_CHECK_SECONDS", 0)
+    should_stop = runner._stop_check(other)
+    assert should_stop() is False
+    scan_db.update_scan(other, status="cancelled")
+    assert should_stop() is True
+    runner._cancel.discard(other)
+    gone = runner._stop_check("no-such-scan")
+    assert gone() is True
+    runner._cancel.discard("no-such-scan")
+
+
 def test_runner_marks_unusable_scans_failed(monkeypatch):
     import database
     import runner

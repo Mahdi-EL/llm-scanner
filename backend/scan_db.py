@@ -63,6 +63,13 @@ def update_scan(scan_id: str, **fields):
         conn.execute(f"UPDATE scans SET {set_clause} WHERE scan_id = ?", [*fields.values(), scan_id])
 
 
+def status_of(scan_id: str) -> Optional[str]:
+    """Just the status (None if the scan is gone): cheap enough to ask while a scan runs."""
+    with transaction() as conn:
+        row = conn.execute("SELECT status FROM scans WHERE scan_id = ?", (scan_id,)).fetchone()
+    return row["status"] if row else None
+
+
 def get_scan(scan_id: str) -> Optional[dict]:
     """Full internal row, with results parsed. Never return this to a client as-is."""
     with transaction() as conn:
