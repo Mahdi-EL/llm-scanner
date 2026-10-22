@@ -33,7 +33,7 @@ function ScoreBar({ score }) {
 function RiskBadge({ score }) {
   if (score == null) return null;
   const label = riskLabel(score);
-  const color = score >= 80 ? '#16a34a' : score >= 50 ? '#b45309' : '#dc2626';
+  const color = score >= 80 ? '#15803d' : score >= 50 ? '#b45309' : '#b91c1c';    // -700 shades: 4.5:1 on the tint
   const bg    = score >= 80 ? 'rgba(74,222,128,0.1)' : score >= 50 ? 'rgba(250,204,21,0.1)' : 'rgba(248,113,113,0.1)';
   return (
     <span style={{ background:bg, color, border:`1px solid ${color}30`, borderRadius:'20px', padding:'2px 9px', fontSize:'11px', fontWeight:'700', letterSpacing:'0.3px', whiteSpace:'nowrap' }}>
