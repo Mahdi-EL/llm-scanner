@@ -334,6 +334,24 @@ def test_quota_enforced(client):
     assert r.status_code == 402, r.text
 
 
+def test_deleting_scans_doesnt_give_the_quota_back(client):
+    u_id, headers = _register(client)
+    used = [_seed_complete_scan(u_id), _seed_complete_scan(u_id)]       # FREE_SCAN_LIMIT is 2
+    for scan_id in used:
+        assert client.delete(f"/scan/{scan_id}", headers=headers).status_code == 200
+    assert client.get("/auth/me", headers=headers).json()["scans_this_month"] == 2
+    r = client.post("/scan", headers=headers, json={"target_name": "after deleting"})
+    assert r.status_code == 402, r.text
+
+
+def test_deleting_a_scan_that_never_ran_frees_its_quota(client):
+    u_id, headers = _register(client)
+    _seed_complete_scan(u_id)
+    queued = client.post("/scan", headers=headers, json={"target_name": "queued", "quick": True}).json()["scan_id"]
+    assert client.delete(f"/scan/{queued}", headers=headers).status_code == 200     # no attack had run
+    assert client.get("/auth/me", headers=headers).json()["scans_this_month"] == 1
+
+
 # ── Downloads rebuild missing files ───────────────────────────
 @pytest.mark.parametrize("path,kind", [("/download/{}", "pdf"), ("/download/html/{}", "html"),
                                        ("/download/md/{}", "markdown"), ("/download/json/{}", "json")])

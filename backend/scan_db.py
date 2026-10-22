@@ -153,14 +153,17 @@ def user_scan_stats(user_id: str) -> dict:
 
 
 def count_scans_this_month(user_id: str) -> int:
-    """Scans created since the start of the current month (UTC) that count toward the quota.
-    A scan that failed or was cancelled before its first attack doesn't count."""
+    """Scans created since the start of the current month (UTC) that count toward the quota, deleted
+    ones included. A scan that failed or was cancelled before its first attack doesn't count."""
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     with transaction() as conn:
-        return conn.execute(
+        live = conn.execute(
             "SELECT COUNT(*) FROM scans WHERE user_id = ? AND created_at >= ? "
             "AND NOT (status IN ('failed', 'cancelled') AND COALESCE(completed_attacks, 0) = 0)",
             (user_id, month_start.isoformat(timespec="seconds"))).fetchone()[0]
+        deleted = conn.execute("SELECT count FROM deleted_scan_usage WHERE user_id = ? AND month = ?",
+                               (user_id, month_start.strftime("%Y-%m"))).fetchone()
+    return live + (deleted[0] if deleted else 0)
 
 
 def count_scans() -> int:
@@ -199,6 +202,13 @@ def fail_interrupted_scans() -> int:
 
 def delete_scan(scan_id: str):
     with transaction() as conn:
+        row = conn.execute("SELECT user_id, created_at, status, completed_attacks FROM scans WHERE scan_id = ?",
+                           (scan_id,)).fetchone()
+        if row and row["user_id"] and (row["status"] == "complete" or (row["completed_attacks"] or 0) > 0):
+            # it used the month's quota: deleting it mustn't give the scan back
+            conn.execute("INSERT INTO deleted_scan_usage (user_id, month, count) VALUES (?, ?, 1) "
+                         "ON CONFLICT(user_id, month) DO UPDATE SET count = count + 1",
+                         (row["user_id"], (row["created_at"] or "")[:7]))
         conn.execute("DELETE FROM findings WHERE scan_id = ?", (scan_id,))
         conn.execute("DELETE FROM share_links WHERE scan_id = ?", (scan_id,))
         conn.execute("DELETE FROM scans WHERE scan_id = ?", (scan_id,))
