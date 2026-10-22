@@ -20,6 +20,9 @@ const TARGET_TYPES = [
     defaultModel:'' },
 ];
 
+// Target types that keep the conversation; the others skip multi-turn attacks
+const HISTORY_TYPES = ['simulation', 'groq', 'openai_compatible'];
+
 const EMPTY = {
   target_name:'', target_type:'simulation', system_prompt:'', api_url:'', api_key:'',
   model:'', baseline_question:'', input_field:'', output_field:'',
@@ -78,13 +81,18 @@ export default function NewScan() {
     if (savedTarget && !form.target_name) setForm(f => ({ ...f, target_name: savedTarget.name }));
   }, [savedTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // what a category sends to this target: multi-turn attacks need one that keeps the conversation
+  const history = HISTORY_TYPES.includes(savedTarget ? savedTarget.config.target_type : form.target_type);
+  const countOf = (c, isQuick) => isQuick
+    ? (history ? c.quick_attacks : c.quick_attacks_without_history) ?? c.quick_attacks ?? c.attacks
+    : (history ? c.attacks : c.attacks_without_history) ?? c.attacks;
+  const usable = c => countOf(c, false) > 0;
   const attackCount = useMemo(() => {
     const pool = chosen ? categories.filter(c => chosen.includes(c.id)) : categories;
-    return pool.reduce((n, c) => n + (quick ? (c.quick_attacks ?? c.attacks) : c.attacks), 0)
-      + (includeCustom ? customCount : 0);
-  }, [categories, chosen, includeCustom, customCount, quick]);
-  const quickTotal = categories.reduce((n, c) => n + (c.quick_attacks ?? 0), 0);
-  const fullTotal  = categories.reduce((n, c) => n + c.attacks, 0);
+    return pool.reduce((n, c) => n + countOf(c, quick), 0) + (includeCustom ? customCount : 0);
+  }, [categories, chosen, includeCustom, customCount, quick, history]); // eslint-disable-line react-hooks/exhaustive-deps
+  const quickTotal = categories.reduce((n, c) => n + countOf(c, true), 0);
+  const fullTotal  = categories.reduce((n, c) => n + countOf(c, false), 0);
 
   const payload = () => {
     const out = { target_type: form.target_type };
@@ -96,6 +104,7 @@ export default function NewScan() {
   const validate = () => {
     if (!form.target_name.trim()) return 'Give the target a name.';
     if (chosen && chosen.length === 0) return 'Pick at least one attack category.';
+    if (attackCount === 0) return 'Multi-turn attacks need a target that keeps the conversation (simulation, Groq or OpenAI-compatible). Pick other categories.';
     if (savedTarget) return null;
     if (needsURL && !form.api_url.trim()) return 'Enter the API URL.';
     if (needsURL && !/^https?:\/\//i.test(form.api_url.trim())) return 'The URL must start with http:// or https://';
@@ -322,13 +331,18 @@ export default function NewScan() {
         )}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(210px, 1fr))', gap:'6px' }}>
           {categories.map(c => {
-            const on = !chosen || chosen.includes(c.id);
+            const ok = usable(c);
+            const on = ok && (!chosen || chosen.includes(c.id));
             return (
-              <label key={c.id} title={c.tests} style={{ display:'flex', gap:'8px', alignItems:'flex-start', fontSize:'12px', padding:'7px 9px', border:'1px solid var(--b1)', borderRadius:'6px', cursor:'pointer' }}>
-                <input type="checkbox" checked={on} onChange={() => toggleCategory(c.id)} style={{ marginTop:'2px' }} />
+              <label key={c.id} title={ok ? c.tests : 'Needs a target that keeps the conversation'}
+                style={{ display:'flex', gap:'8px', alignItems:'flex-start', fontSize:'12px', padding:'7px 9px', border:'1px solid var(--b1)', borderRadius:'6px',
+                         cursor: ok ? 'pointer' : 'not-allowed', opacity: ok ? 1 : 0.6 }}>
+                <input type="checkbox" checked={on} disabled={!ok} onChange={() => toggleCategory(c.id)} style={{ marginTop:'2px' }} />
                 <span>
                   <span style={{ display:'block', color:'var(--t1)' }}>{c.title}</span>
-                  <span style={{ color:'var(--t3)' }}>{c.attacks} attacks · {c.owasp[0]?.split(' ')[0]}</span>
+                  <span style={{ color:'var(--t3)' }}>
+                    {ok ? `${fmtNum(countOf(c, quick))} attacks · ${c.owasp[0]?.split(' ')[0] || ''}` : 'Needs a chat target (not REST)'}
+                  </span>
                 </span>
               </label>
             );

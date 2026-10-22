@@ -98,6 +98,11 @@ def queue_scan(user: dict, cfg: dict, api_key: Optional[str] = None, *,
     planned = attacks if attacks else build_attack_list(categories, with_history=target_type in HISTORY_TYPES,
                                                          quick=bool(cfg.get("quick")))
     total = len(planned) + len(cfg.get("custom_prompts") or [])
+    if total == 0:
+        # e.g. only multi-turn attacks, for a target that can't keep a conversation
+        raise ScanRejected(400, "Multi-turn attacks need a target that keeps the conversation (simulation, Groq or "
+                                "OpenAI-compatible). Pick other attack categories for this target."
+                           if categories and target_type not in HISTORY_TYPES else "There are no attacks to run.")
     with _admission:
         check_can_scan(user)
         scan_id = scan_db.create_scan(

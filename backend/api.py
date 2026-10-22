@@ -627,14 +627,20 @@ def health_check():
 
 @app.get("/categories")
 def list_categories():
-    """The built-in attack categories, with what they test and their OWASP mapping."""
+    """The built-in attack categories, with what they test and their OWASP mapping. The *_without_history
+    counts are what runs against a target that doesn't keep the conversation (a custom REST endpoint):
+    multi-turn attacks are left out there."""
+    from attacks.multi_turn import is_multi_turn
     from scanner import spread
-    return {"categories": [
-        {"id": cat, "title": catalog.info(cat)["title"], "tests": catalog.info(cat)["tests"],
-         "owasp": catalog.owasp_labels(cat), "attacks": len(prompts),
-         "quick_attacks": len(spread(prompts, config.QUICK_SCAN_PER_CATEGORY))}
-        for cat, prompts in ATTACK_PROMPTS.items()
-    ], "total_attacks": sum(len(p) for p in ATTACK_PROMPTS.values())}
+    out = []
+    for cat, prompts in ATTACK_PROMPTS.items():
+        single = [p for p in prompts if not is_multi_turn(p)]
+        out.append({"id": cat, "title": catalog.info(cat)["title"], "tests": catalog.info(cat)["tests"],
+                    "owasp": catalog.owasp_labels(cat), "attacks": len(prompts),
+                    "quick_attacks": len(spread(prompts, config.QUICK_SCAN_PER_CATEGORY)),
+                    "attacks_without_history": len(single),
+                    "quick_attacks_without_history": len(spread(single, config.QUICK_SCAN_PER_CATEGORY))})
+    return {"categories": out, "total_attacks": sum(len(p) for p in ATTACK_PROMPTS.values())}
 
 
 def _can_run_full_scans(user: dict) -> bool:
