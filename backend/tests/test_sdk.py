@@ -136,6 +136,13 @@ def test_cli_status_and_fail_on(base_url, account, monkeypatch, capsys):
     assert cli_main(args + ["scan", "--name", "x", "--wait", "--min-score", "10", "--poll", "0"]) == 0
     assert cli_main(["--api-key", "llmsk_bad", "--api-url", base_url, "status", done]) == 2
 
+    # a report that can't be fetched is a warning: the verdict (and the step summary) still stand
+    from llmscanner import ReportError
+    monkeypatch.setattr(Client, "download", lambda self, *a, **k: (_ for _ in ()).throw(ReportError("502", status=502)))
+    capsys.readouterr()
+    assert cli_main(args + ["scan", "--name", "x", "--wait", "--min-score", "10", "--poll", "0", "--download", "html"]) == 0
+    assert "couldn't download the html report" in capsys.readouterr().err
+
 
 def test_findings_marked_as_accepted_risks_dont_fail_the_build(base_url, account, monkeypatch, capsys):
     done = _seed(account["user_id"], severity="CRITICAL")
