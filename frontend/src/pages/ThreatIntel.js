@@ -337,10 +337,10 @@ const CATEGORIES = [
 ];
 
 const SEV_META = {
-  critical: { label:'Critical', bg:'rgba(248,113,113,0.12)', color:'#dc2626', border:'rgba(248,113,113,0.25)' },
-  high    : { label:'High',     bg:'rgba(251,146,60,0.12)',  color:'#ea580c', border:'rgba(251,146,60,0.25)' },
+  critical: { label:'Critical', bg:'rgba(248,113,113,0.12)', color:'#b91c1c', border:'rgba(248,113,113,0.25)' },
+  high    : { label:'High',     bg:'rgba(251,146,60,0.12)',  color:'#c2410c', border:'rgba(251,146,60,0.25)' },
   medium  : { label:'Medium',   bg:'rgba(250,204,21,0.10)',  color:'#b45309', border:'rgba(250,204,21,0.2)' },
-  low     : { label:'Low',      bg:'rgba(74,222,128,0.10)',  color:'#16a34a', border:'rgba(74,222,128,0.2)' },
+  low     : { label:'Low',      bg:'rgba(74,222,128,0.10)',  color:'#15803d', border:'rgba(74,222,128,0.2)' },
 };
 
 function SevBadge({ sev }) {
