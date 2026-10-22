@@ -939,7 +939,10 @@ def test_shared_reports_mask_leaked_secrets_and_show_expiry(client):
     reply = shared["results"][0]["response"]
     assert "sk-proj-ABCDEF" not in reply and "[REDACTED]" in reply and reply.startswith("Sure. My key is")
     assert "sk-proj-ABCDEF" not in shared["results"][0]["reason"]          # the grader quoted it
-    assert shared["expires_at"] and shared["created_at"]
+    assert shared["expires_at"] and shared["created_at"] and shared["brand"] is None
+    auth_db.update_plan(user_id, "pro")
+    auth_db.set_report_brand(user_id, "Acme Security")
+    assert client.get(f"/shared/{token}").json()["brand"] == "Acme Security"       # white-label, like the PDF
     # the owner's own report keeps the full reply
     assert "sk-proj-ABCDEF" in client.get(f"/results/{scan_id}", headers=headers).text
 

@@ -1162,6 +1162,8 @@ def view_shared(request: Request, token: str):
                              "reason": detectors.redact(r.get("reason") or "")[0]}
                             for r in data.get("results", [])],
         "expires_at"     : link["expires_at"],
+        # a paid account's white-label name, as on its PDF and HTML reports
+        "brand"          : _report_brand(auth_db.get_user_by_id(scan["user_id"]) or {}) if scan.get("user_id") else None,
     }
 
 
