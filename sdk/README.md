@@ -53,7 +53,9 @@ llmscanner scan --name "Help desk" --type custom_rest --url https://api.example.
 request, with a full scan before a release.
 
 Exit codes: `0` passed, `1` a finding at or above `--fail-on` (or a score below `--min-score`), `2` error.
-In GitHub Actions the result is also written to the job summary.
+In GitHub Actions the result is also written to the job summary. A report that can't be downloaded is a
+warning, not a failure, and waiting rides out a few failed status checks in a row (the API restarting
+during a deploy): the scan itself resumes from where it was.
 
 Findings your team marked as a false positive or an accepted risk (in the web app, or with
 `client.triage(scan_id, finding.key, "accepted_risk", note=...)`) don't fail the build, and
