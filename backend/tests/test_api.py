@@ -675,6 +675,9 @@ def test_forgot_password_then_reset(client, monkeypatch):
     monkeypatch.setattr(email_service, "send_password_reset", lambda to, token: sent.update(to=to, token=token))
     user_id, _ = _register(client)
     email = auth_db.get_user_by_id(user_id)["email"]
+    from db import transaction
+    with transaction() as conn:
+        conn.execute("UPDATE users SET email_verified = 0 WHERE id = ?", (user_id,))
 
     unknown = client.post("/auth/forgot-password", json={"email": "nobody@example.com"})
     known = client.post("/auth/forgot-password", json={"email": email})
@@ -684,6 +687,7 @@ def test_forgot_password_then_reset(client, monkeypatch):
 
     r = client.post("/auth/reset-password", json={"token": sent["token"], "new_password": "brand-new-pass-1"})
     assert r.status_code == 200
+    assert auth_db.get_user_by_id(user_id)["email_verified"]       # the emailed link proves the address
     again = client.post("/auth/reset-password", json={"token": sent["token"], "new_password": "another-pass-22"})
     assert again.status_code == 400                # tokens are single use
     username = auth_db.get_user_by_id(user_id)["username"]
