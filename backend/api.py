@@ -916,7 +916,7 @@ def compare_scans(base_id: str, head_id: str, user: dict = Depends(require_user)
 
 @app.get("/scan/{scan_id}")
 def get_scan_status(scan_id: str, user: dict = Depends(require_user)):
-    """Status and progress; includes the findings once the scan is complete."""
+    """Status and progress; includes the findings once the scan is complete, or what it had found (partial) if it stopped early."""
     scan = _get_owned_scan(scan_id, user)
     out = _with_creators([scan_db.public_scan(scan, include_results=scan["status"] == "complete")])[0]
     results = (out.get("results") or {}).get("results") if isinstance(out.get("results"), dict) else None
