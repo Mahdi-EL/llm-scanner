@@ -75,7 +75,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/scan` | yes | Queues a scan. Poll GET /scan/{id} for progress. |
 | GET | `/scan/compare/{base_id}/{head_id}` | yes | What got worse or better between two finished scans. |
 | DELETE | `/scan/{scan_id}` | yes | Deletes a scan, its findings and its report files. |
-| GET | `/scan/{scan_id}` | yes | Status and progress; includes the findings once the scan is complete. |
+| GET | `/scan/{scan_id}` | yes | Status and progress; includes the findings once the scan is complete, or what it had found (partial) if it stopped early. |
 | POST | `/scan/{scan_id}/cancel` | yes | Stops a queued or running scan. |
 | POST | `/scan/{scan_id}/remediate` | yes | Suggests a hardened system prompt based on the attacks that succeeded in this scan (10 a day on Free, 100 on Pro). |
 | POST | `/scan/{scan_id}/retest` | yes | Runs only the attacks that failed in this scan again, optionally with a new system prompt. |
