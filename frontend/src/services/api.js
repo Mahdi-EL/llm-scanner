@@ -29,6 +29,8 @@ export function setWorkspace(id) {
 }
 // An invite waiting for its invitee to confirm their email address (see InviteAccept and VerifyEmail)
 export const PENDING_INVITE_KEY = 'pending_invite';
+// The system prompt someone just tried in the free check, for New Scan to start from (sessionStorage)
+export const CHECKED_PROMPT_KEY = 'checked_prompt';
 
 export function clearAuth() {
   localStorage.removeItem(ACCESS_KEY);

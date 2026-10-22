@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { publicAPI, errorMessage } from '../services/api';
+import { publicAPI, errorMessage, CHECKED_PROMPT_KEY } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const MIN = 20, MAX = 4000;
@@ -22,7 +22,9 @@ export default function LeakCheck() {
     finally { setBusy(false); }
   };
 
-  const next = user ? '/new-scan' : '/register';
+  // after signing up, straight to New Scan, which starts from the prompt they just checked
+  const next = user ? '/new-scan' : `/register?next=${encodeURIComponent('/new-scan')}`;
+  const carryPrompt = () => { try { sessionStorage.setItem(CHECKED_PROMPT_KEY, prompt.trim()); } catch { /* storage off */ } };
   return (
     <div style={{ maxWidth:'760px', margin:'0 auto', padding:'56px 20px 72px' }}>
       <div style={{ fontSize:'12px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--t3)' }}>Free check · no account</div>
@@ -71,7 +73,7 @@ export default function LeakCheck() {
             This quick check runs on a demo model and only counts word-for-word leaks. A full scan sends 1,090 attacks
             to your real app, grades every reply (paraphrased leaks too) and writes a hardened prompt for you.
           </p>
-          <Link to={next} className="btn-primary" style={{ display:'inline-flex', marginTop:'8px', padding:'11px 22px' }}>
+          <Link to={next} onClick={carryPrompt} className="btn-primary" style={{ display:'inline-flex', marginTop:'8px', padding:'11px 22px' }}>
             {user ? 'Run a full scan' : 'Run a full scan, free'}
           </Link>
         </section>
