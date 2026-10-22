@@ -768,3 +768,17 @@ def test_a_huge_reply_is_graded_whole_but_stored_cut():
     assert finding["severity"] == "CRITICAL"                                   # the detectors saw it all
     assert len(finding["response"]) < scanner.MAX_STORED_REPLY + 100
     assert finding["response"].endswith("characters in all]")
+
+
+def test_periodic_checkpoints_are_throttled_by_time(monkeypatch):
+    import scanner
+    monkeypatch.setattr(scanner, "ATTACK_PROMPTS", {"extraction": [f"ask {i}" for i in range(30)]})
+
+    def checkpoints(seconds):
+        monkeypatch.setattr(scanner, "CHECKPOINT_SECONDS", seconds)
+        written = []
+        scanner.run_full_scan(FakeTarget(), judge=FakeJudge(), generate_reports=False, concurrency=1,
+                              on_checkpoint=written.append)
+        return [len(c) for c in written]
+    assert checkpoints(0) == [10, 20, 30]          # every 10 attacks when time allows
+    assert checkpoints(3600) == []                  # a fast scan doesn't rewrite its findings every few seconds
