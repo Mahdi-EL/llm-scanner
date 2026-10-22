@@ -159,7 +159,7 @@ export const authAPI = {
   changePassword : (current_password, new_password) => api.put('/auth/password', { current_password, new_password }),
   verifyEmail    : token => api.post('/auth/verify-email', { token }),
   resendVerification: () => api.post('/auth/resend-verification'),
-  exportData     : () => api.get('/auth/me/export'),
+  exportData     : () => api.get('/auth/me/export', { responseType: 'blob' }),
   deleteAccount  : password => api.delete('/auth/me', { data: { password } }),
 };
 

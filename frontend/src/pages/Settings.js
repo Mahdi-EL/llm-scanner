@@ -160,7 +160,7 @@ export default function Settings() {
 
   const exportData = () => run('export', async () => {
     const { data } = await authAPI.exportData();
-    saveBlob(new Blob([JSON.stringify(data, null, 2)], { type:'application/json' }), 'llm-scanner-export.json');
+    saveBlob(data, 'llm-scanner-export.json');
   });
 
   const deleteAccount = () => run('delete', async () => {
