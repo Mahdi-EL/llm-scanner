@@ -84,28 +84,47 @@ async function api(context, method, route, body) {
             body: body ? JSON.stringify(body) : undefined,
         });
     } catch (e) {
-        throw new Error(`Can't reach ${apiUrl} (${e.message}). Check llmscanner.apiUrl.`);
+        throw apiError(`Can't reach ${apiUrl} (${e.message}). Check llmscanner.apiUrl.`, 0);
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        if (response.status === 401) throw new Error('API key rejected. Run "LLM Scanner: Set API Key".');
+        if (response.status === 401) throw apiError('API key rejected. Run "LLM Scanner: Set API Key".', 401);
         const detail = errorDetail(data, response.status);
-        throw new Error(response.status === 402 && /quick scan/i.test(detail)
-            ? `${detail} (turn on the llmscanner.quickScan setting)` : detail);
+        throw apiError(response.status === 402 && /quick scan/i.test(detail)
+            ? `${detail} (turn on the llmscanner.quickScan setting)` : detail, response.status);
     }
     return data;
 }
 
+// status 0: the API couldn't be reached
+function apiError(message, status) {
+    return Object.assign(new Error(message), { status });
+}
+
+// A poll may fail this many times in a row (the API restarting, a 502 from its proxy) before the
+// scan is reported as failed: the scan itself resumes after a restart.
+const POLL_RETRIES = 6;
+const passing = e => e.status === 0 || e.status === 429 || e.status >= 500;
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function waitForScan(context, scanId, progress, token) {
-    let lastPct = 0;
+async function waitForScan(context, scanId, progress, token, delay = 3000) {
+    let lastPct = 0, failures = 0;
     for (;;) {
         if (token.isCancellationRequested) {
             await api(context, 'POST', `/scan/${scanId}/cancel`).catch(() => {});
             throw new Error('Scan cancelled');
         }
-        const scan = await api(context, 'GET', `/scan/${scanId}`);
+        let scan;
+        try {
+            scan = await api(context, 'GET', `/scan/${scanId}`);
+            failures = 0;
+        } catch (e) {
+            if (!passing(e) || ++failures > POLL_RETRIES) throw e;
+            progress.report({ message: 'waiting for the API…' });
+            await sleep(delay * failures);
+            continue;
+        }
         if (scan.status === 'complete') return scan;
         if (scan.status === 'failed' || scan.status === 'cancelled') {
             throw new Error(scan.error_message || `Scan ${scan.status}`);
@@ -116,7 +135,7 @@ async function waitForScan(context, scanId, progress, token) {
             message: scan.status === 'pending' ? 'queued…' : `${scan.completed_attacks}/${scan.total_attacks} attacks`,
         });
         lastPct = pct;
-        await sleep(3000);
+        await sleep(delay);
     }
 }
 
@@ -261,4 +280,4 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, extractSystemPrompts, escapeHtml, errorDetail };
+module.exports = { activate, deactivate, extractSystemPrompts, escapeHtml, errorDetail, waitForScan };

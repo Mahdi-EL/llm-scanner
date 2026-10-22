@@ -83,12 +83,27 @@ class Client:
     def status(self, scan_id: str) -> Scan:
         return Scan.from_dict(self.get(scan_id))
 
+    # Polls that may fail in a row (the API restarting during a deploy, a 502 from its proxy) before wait()
+    # gives up: a scan resumes after a restart, so a long CI scan shouldn't fail on one blip.
+    POLL_RETRIES = 6
+
     def wait(self, scan_id: str, poll_interval: float = 5.0, timeout: Optional[float] = None,
              on_progress: Optional[Callable[[Scan], None]] = None) -> ScanReport:
-        """Polls until the scan finishes. Raises ScanError if it fails or is cancelled."""
-        started = time.monotonic()
+        """Polls until the scan finishes. Raises ScanError if it fails or is cancelled. Unreachable-API,
+        5xx and 429 answers are retried up to POLL_RETRIES times in a row."""
+        started, failures = time.monotonic(), 0
         while True:
-            raw = self.get(scan_id)
+            try:
+                raw = self.get(scan_id)
+            except LLMScannerError as e:
+                passing = e.status is None or e.status >= 500 or e.status == 429
+                failures += 1
+                if not passing or failures > self.POLL_RETRIES or \
+                        (timeout is not None and time.monotonic() - started > timeout):
+                    raise
+                time.sleep(min(poll_interval * failures, 30))
+                continue
+            failures = 0
             scan = Scan.from_dict(raw)
             if on_progress:
                 on_progress(scan)
