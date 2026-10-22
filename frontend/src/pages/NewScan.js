@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { scansAPI, targetsAPI, promptsAPI, errorMessage } from '../services/api';
+import { scansAPI, targetsAPI, promptsAPI, errorMessage, CHECKED_PROMPT_KEY } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { fmtNum, typeLabel } from '../utils/format';
@@ -43,7 +43,12 @@ export default function NewScan() {
   const toast    = useToast();
   const { user, canEdit } = useAuth();
   const [params] = useSearchParams();
-  const [form, setForm]         = useState(EMPTY);
+  // coming from the free leak check: start from the prompt that was just checked
+  const [form, setForm]         = useState(() => {
+    let checked = null;
+    try { checked = sessionStorage.getItem(CHECKED_PROMPT_KEY); sessionStorage.removeItem(CHECKED_PROMPT_KEY); } catch { /* storage off */ }
+    return checked ? { ...EMPTY, target_name: 'My assistant', system_prompt: checked } : EMPTY;
+  });
   const [loading, setLoading]   = useState(false);
   const [testing, setTesting]   = useState(false);
   const [testResult, setTestResult] = useState(null);
