@@ -149,12 +149,34 @@ def submit(scan_id: str) -> None:
 
 
 def cancel(scan_id: str) -> None:
-    """Asks a running scan to stop; a pending one is marked cancelled right away."""
+    """Asks a running scan to stop; a pending one is marked cancelled right away, and so is one this
+    process isn't running (another process sees the status within seconds and stops)."""
     _cancel.add(scan_id)
-    scan = scan_db.get_scan(scan_id)
-    if scan and scan["status"] == "pending":
+    status = scan_db.status_of(scan_id)
+    if status == "pending" or (status == "running" and scan_id not in _active):
         scan_db.update_scan(scan_id, status="cancelled", error_message="Cancelled by user",
                             api_key_enc=None, completed_at=utcnow())
+
+
+STATUS_CHECK_SECONDS = 5
+
+
+def _stop_check(scan_id: str):
+    """should_stop for a running scan: cancelled here, the server stopping, or cancelled or deleted through
+    another process (the stored status is read at most every STATUS_CHECK_SECONDS)."""
+    last = [time.monotonic()]
+
+    def should_stop() -> bool:
+        if scan_id in _cancel or _stopping.is_set():
+            return True
+        now = time.monotonic()
+        if now - last[0] >= STATUS_CHECK_SECONDS:
+            last[0] = now
+            if scan_db.status_of(scan_id) in (None, "cancelled"):
+                _cancel.add(scan_id)
+                return True
+        return False
+    return should_stop
 
 
 def is_active(scan_id: str) -> bool:
@@ -268,7 +290,7 @@ def execute(scan_id: str) -> None:
             on_progress=on_progress,
             on_checkpoint=on_checkpoint,
             resume_results=resume,
-            should_stop=lambda: scan_id in _cancel or _stopping.is_set(),
+            should_stop=_stop_check(scan_id),
             generate_reports=False,
             extra_attacks=extra,
             attacks=cfg.get("attacks"),
