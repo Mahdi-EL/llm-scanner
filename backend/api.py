@@ -20,7 +20,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import AfterValidator, BaseModel, BeforeValidator, EmailStr, Field, field_validator
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
@@ -799,13 +799,9 @@ def resend_verification(request: Request, user: dict = Depends(require_person)):
 @app.get("/auth/me/export")
 @limiter.limit("5/minute")
 def export_account(request: Request, user: dict = Depends(require_session)):
-    """Everything we store about you, as JSON (GDPR data portability)."""
-    scans = []
-    for scan_id in scan_db.user_scan_ids(user["id"]):
-        scan = scan_db.get_scan(scan_id)
-        if scan:
-            scans.append(scan_db.public_scan(scan, include_results=True))
-    return {
+    """Everything we store about you, as JSON (GDPR data portability). Streamed one scan at a time: an
+    account with hundreds of full scans would otherwise be built whole in the server's memory."""
+    head = {
         "exported_at"   : datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "profile"       : _public_user(user),
         "api_keys"      : auth_db.list_api_keys(user["id"]),
@@ -817,8 +813,21 @@ def export_account(request: Request, user: dict = Depends(require_session)):
         "gateway_last_7_days": gateway.stats(user["id"]),
         "triage"        : store.list_triage(user["id"]),
         "workspaces"    : teams.workspaces_of(user["id"]),
-        "scans"         : scans,
     }
+    scan_ids = scan_db.user_scan_ids(user["id"])
+
+    def body():
+        yield json.dumps(jsonable_encoder(head), ensure_ascii=False)[:-1] + ', "scans": ['
+        first = True
+        for scan_id in scan_ids:
+            scan = scan_db.get_scan(scan_id)
+            if scan:
+                yield ("" if first else ", ") + json.dumps(jsonable_encoder(scan_db.public_scan(scan, include_results=True)),
+                                                           ensure_ascii=False)
+                first = False
+        yield "]}"
+    return StreamingResponse(body(), media_type="application/json",
+                             headers={"Content-Disposition": 'attachment; filename="llm-scanner-export.json"'})
 
 
 @app.delete("/auth/me")

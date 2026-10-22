@@ -1495,3 +1495,12 @@ def test_profile_says_whether_scan_emails_will_arrive(client, monkeypatch):
     assert client.get("/auth/me", headers=headers).json()["scan_emails"] is False     # no email provider here
     monkeypatch.setattr(email_service, "enabled", lambda: True)
     assert client.get("/auth/me", headers=headers).json()["scan_emails"] is True      # confirmed address
+
+
+def test_export_streams_valid_json_for_any_number_of_scans(client):
+    user_id, headers = _register(client)
+    empty = client.get("/auth/me/export", headers=headers)
+    assert empty.headers["content-disposition"].startswith("attachment") and empty.json()["scans"] == []
+    ids = {_seed_complete_scan(user_id, RESULTS) for _ in range(3)}
+    export = client.get("/auth/me/export", headers=headers).json()
+    assert {s["scan_id"] for s in export["scans"]} == ids and export["profile"]["id"] == user_id
