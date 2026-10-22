@@ -617,7 +617,9 @@ export default function Results() {
         <div style={{ padding:'4px 20px 14px' }}>
           {visible.length === 0 ? (
             <p style={{ fontSize:'13px', color:'var(--t3)', padding:'18px 0' }}>
-              {sevFilter === 'FAILED' ? 'No attack succeeded against this target.' : 'Nothing to show for this filter.'}
+              {sevFilter !== 'FAILED' ? 'Nothing to show for this filter.'
+                : counts.TRIAGED ? 'Every attack that succeeded is marked as a false positive or an accepted risk: see Triaged.'
+                : 'No attack succeeded against this target.'}
             </p>
           ) : visible.slice(0, shown).map((item, i) => (
             <FindingCard key={item.key || `${item.category}-${i}-${item.attack.slice(0,20)}`} item={item} cats={cats}
