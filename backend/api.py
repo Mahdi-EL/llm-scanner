@@ -54,6 +54,7 @@ from attacks import catalog
 from attacks.prompts import ATTACK_PROMPTS
 from db import parse_ts
 from target import DEFAULT_BASELINE_QUESTION, Target
+from version import VERSION
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -63,7 +64,6 @@ logging.basicConfig(level=config.LOG_LEVEL, format=LOG_FORMAT)
 logsafe.install(LOG_FORMAT)
 log = logging.getLogger("llmscanner.api")
 
-VERSION   = "3.0.0"
 ALGORITHM = "HS256"
 
 if config.SENTRY_DSN:
