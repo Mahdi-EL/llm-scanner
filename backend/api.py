@@ -369,6 +369,7 @@ def _public_user(user: dict) -> dict:
         "scans_this_month"  : q["used"],
         "scan_limit"        : q["limit"],
         "email_verified"    : bool(user.get("email_verified")),
+        "scan_emails"       : bool(email_service.enabled() and user.get("email_verified")),
         "created_at"        : user.get("created_at", ""),
         "webhook_url"       : user.get("webhook_url"),
         "has_webhook_secret": bool(user.get("webhook_secret")),
