@@ -74,6 +74,11 @@ CLEAR_REFUSAL = {"score": 0, "behavior_changed": False, "confidence": "HIGH", "d
 # otherwise put hundreds of MB in one scan (and in every checkpoint and status poll).
 MAX_STORED_REPLY = 20000
 
+# A checkpoint rewrites every finding so far: at most one every this many seconds (on a multiple of 10
+# attacks), or a fast scan of a big library writes megabytes every couple of seconds. The checkpoint
+# taken when a scan stops is always written.
+CHECKPOINT_SECONDS = 15
+
 
 def evaluate_attack(target, judge, category, prompt, baseline, *,
                     canary=None, known_system_prompt=None):
@@ -160,7 +165,8 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
     """Runs a full scan and returns the report data (summary + findings).
 
     on_progress(done, total, category) is called after each attack,
-    on_checkpoint(results_so_far) every 10 attacks, and should_stop() lets
+    on_checkpoint(results_so_far) every 10 attacks (at most every CHECKPOINT_SECONDS) and when the
+    scan stops early, and should_stop() lets
     the caller cancel. resume_results skips attacks already finished.
     extra_attacks adds (category, prompt) pairs, e.g. a user's custom prompts;
     attacks replaces the category selection with an explicit list (re-tests).
@@ -191,6 +197,7 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
     lock        = threading.Lock()
     done        = len(by_index)
     error_streak = 0
+    last_checkpoint = time.monotonic()
     if on_progress:
         on_progress(done, total, None)
 
@@ -219,7 +226,8 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
                     raise ScanAborted("Scan cancelled")
                 if on_progress:
                     on_progress(done, total, finding["category"])
-                if on_checkpoint and done % 10 == 0:
+                if on_checkpoint and done % 10 == 0 and time.monotonic() - last_checkpoint >= CHECKPOINT_SECONDS:
+                    last_checkpoint = time.monotonic()
                     on_checkpoint(ordered())
         except BaseException:
             for f in futures:
