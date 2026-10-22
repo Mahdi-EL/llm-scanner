@@ -81,7 +81,7 @@ export default function SharedReport() {
           <summary style={{ cursor:'pointer', fontSize:'13px' }}>
             <strong style={{ color: SEV_COLORS[r.severity], marginRight:'10px' }}>{r.severity}</strong>{r.attack.slice(0, 120)}
           </summary>
-          <pre className="finding-pre" style={{ marginTop:'8px' }}>{r.response}</pre>
+          <pre className="finding-pre" tabIndex={0} style={{ marginTop:'8px' }}>{r.response}</pre>
           <p style={{ fontSize:'13px', margin:'8px 0 0' }}>{r.reason}</p>
         </details>
       ))}
