@@ -7,10 +7,11 @@ import { useConfirm } from '../context/ConfirmContext';
 import { shortDate } from '../utils/format';
 
 const ROLES = [
-  ['viewer', 'Viewer: reads scans and reports'],
-  ['member', 'Member: also runs and changes scans, targets and schedules'],
-  ['admin',  'Admin: also manages keys, the webhook, branding and the team'],
+  ['viewer', 'Reads scans and reports.'],
+  ['member', 'Also runs and changes scans, targets and schedules.'],
+  ['admin',  'Also manages keys, the webhook, branding and the team.'],
 ];
+const roleName = r => r[0].toUpperCase() + r.slice(1);
 
 /* The people in the current workspace: invite, change roles, remove, or leave. */
 export default function TeamPanel() {
@@ -97,7 +98,7 @@ export default function TeamPanel() {
           ) : (
             <select aria-label={`Role of ${m.username}`} value={m.role} disabled={!!busy}
               onChange={e => changeRole(m.user_id, e.target.value)} style={{ fontSize:'12px' }}>
-              {ROLES.map(([r]) => <option key={r} value={r}>{r[0].toUpperCase() + r.slice(1)}</option>)}
+              {ROLES.map(([r]) => <option key={r} value={r}>{roleName(r)}</option>)}
             </select>
           )}
           {admin && m.role !== 'owner' && m.user_id !== user.id && (
@@ -128,11 +129,14 @@ export default function TeamPanel() {
         <form onSubmit={invite} style={{ display:'flex', gap:'8px', padding:'14px 20px', flexWrap:'wrap' }}>
           <input type="email" aria-label="Email to invite" value={email} onChange={e => setEmail(e.target.value)} required
             placeholder="colleague@company.com" disabled={full} style={{ flex:'1 1 220px', minWidth:0 }} />
-          <select aria-label="Role for the invite" value={inviteRole} onChange={e => setInviteRole(e.target.value)} disabled={full}
-            style={{ fontSize:'12px', flex:'0 1 auto', minWidth:0, maxWidth:'100%' }}>
-            {ROLES.map(([r, label]) => <option key={r} value={r}>{label}</option>)}
+          <select aria-label="Role for the invite" aria-describedby="invite-role-help" value={inviteRole}
+            onChange={e => setInviteRole(e.target.value)} disabled={full} style={{ fontSize:'12px', minWidth:0, maxWidth:'100%' }}>
+            {ROLES.map(([r]) => <option key={r} value={r}>{roleName(r)}</option>)}
           </select>
           <button type="submit" className="btn-primary" style={{ fontSize:'12px' }} disabled={full || busy === 'invite'}>Invite</button>
+          <span id="invite-role-help" style={{ fontSize:'12px', color:'var(--t3)', flexBasis:'100%' }}>
+            {roleName(inviteRole)}: {ROLES.find(([r]) => r === inviteRole)?.[1].replace(/^./, c => c.toLowerCase())}
+          </span>
           {full && <span style={{ fontSize:'12px', color:'var(--t3)', flexBasis:'100%' }}>Every seat is taken: remove someone or upgrade the plan.</span>}
         </form>
       ))}

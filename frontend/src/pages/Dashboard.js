@@ -187,6 +187,9 @@ function EmptyHero({ onStart, onLibrary }) {
 }
 
 /* ── Main ──────────────────────────────────────────────── */
+// Score history bars: tall enough to fill the card beside the posture gauge, and bars rise from a baseline
+const CHART_H = 160;
+
 export default function Dashboard() {
   const [scans,   setScans]   = useState([]);
   const [total,   setTotal]   = useState(0);
@@ -426,10 +429,10 @@ export default function Dashboard() {
                 Complete more scans to see the trend chart
               </div>
             ) : (
-              <div style={{ display:'flex', alignItems:'flex-end', gap:'4px', height:'72px' }}>
+              <div style={{ display:'flex', alignItems:'flex-end', gap:'4px', height:`${CHART_H}px`, borderBottom:'1px solid var(--b1)' }}>
                 {scoreTrend.map((sc,i)=>{
                   const color = sc>=80 ? '#16a34a' : sc>=50 ? '#b45309' : '#dc2626';
-                  const h = Math.max(6, Math.round((sc/100)*72));
+                  const h = Math.max(6, Math.round((sc/100)*CHART_H));
                   const relScan = chronological[i];
                   return (
                     <div key={i} title={`${sc}/100 — click to view`}

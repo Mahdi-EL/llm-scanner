@@ -46,8 +46,8 @@ function AreaChart({ data, color = 'var(--blue)', height = 160 }) {
       {/* Grid lines */}
       {yLines.map(y => (
         <g key={y}>
-          <line x1={pad.l} y1={toY(y)} x2={W-pad.r} y2={toY(y)} stroke="rgba(17,24,39,0.04)" strokeWidth="1" />
-          <text x={pad.l - 6} y={toY(y) + 4} textAnchor="end" fill="rgba(17,24,39,0.2)" fontSize="9" fontFamily="Inter,sans-serif">{y}</text>
+          <line x1={pad.l} y1={toY(y)} x2={W-pad.r} y2={toY(y)} stroke="rgba(17,24,39,0.07)" strokeWidth="1" />
+          <text x={pad.l - 6} y={toY(y) + 4} textAnchor="end" fill="var(--t3)" fontSize="10" fontFamily="Inter,sans-serif">{y}</text>
         </g>
       ))}
 
@@ -62,14 +62,19 @@ function AreaChart({ data, color = 'var(--blue)', height = 160 }) {
       {pts.map((p, i) => {
         const score = data[i].score;
         const dotColor = scoreColor(score);
+        // at most ~6 date labels, so they don't run into each other on long histories
+        const step = Math.ceil(data.length / 6);
+        const labelled = i === data.length - 1 || (i % step === 0 && data.length - 1 - i >= step / 2);
         return (
           <g key={i}>
+            <title>{`${data[i].label}: ${score}/100`}</title>
             <circle cx={p[0]} cy={p[1]} r="5" fill={dotColor} stroke="var(--bg)" strokeWidth="2"
               style={{ filter:`drop-shadow(0 0 4px ${dotColor}90)` }} />
-            {/* X axis label */}
-            <text x={p[0]} y={H - 6} textAnchor="middle" fill="rgba(17,24,39,0.2)" fontSize="8" fontFamily="Inter,sans-serif">
-              {data[i].label}
-            </text>
+            {labelled && (
+              <text x={p[0]} y={H - 6} textAnchor="middle" fill="var(--t3)" fontSize="9" fontFamily="Inter,sans-serif">
+                {data[i].label}
+              </text>
+            )}
           </g>
         );
       })}
@@ -151,7 +156,7 @@ function HeatCell({ label, count, rate }) {
       onMouseLeave={e => e.currentTarget.style.transform='none'}
     >
       <div style={{ fontSize:'15px', marginBottom:'3px' }}>{Math.round(rate * 100)}%</div>
-      <div style={{ fontSize:'10px', lineHeight:'1.3', color:'var(--t2)', overflowWrap:'anywhere', textTransform:'capitalize' }}>{label.replace(/_/g,' ')}</div>
+      <div style={{ fontSize:'10px', lineHeight:'1.3', color:'var(--t2)', overflowWrap:'anywhere' }}>{label}</div>
     </div>
   );
 }
