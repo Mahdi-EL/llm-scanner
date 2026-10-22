@@ -9,6 +9,7 @@ critical finding appeared.
 import logging
 import threading
 
+import email_service
 import services
 import store
 from auth_db import get_user_by_id
@@ -42,7 +43,14 @@ def run_due() -> int:
                                           target_id=target["id"], schedule_id=sched["id"])
             started += 1
         except services.ScanRejected as e:
-            log.warning("Scheduled scan %s skipped: %s", sched["id"], e.message)
+            if e.status == 429:          # the scanner or this account is busy: try again shortly
+                store.retry_schedule_soon(sched["id"])
+                log.info("Scheduled scan %s postponed: %s", sched["id"], e.message)
+            else:                        # e.g. the month's scans are used up: tell the owner it didn't run
+                log.warning("Scheduled scan %s skipped: %s", sched["id"], e.message)
+                if user.get("email") and user.get("email_verified"):
+                    email_service.send_schedule_skipped(user["email"], target["name"], sched["frequency"],
+                                                        e.message)
         except Exception:
             log.exception("Scheduled scan %s failed to start", sched["id"])
         if scan_id:

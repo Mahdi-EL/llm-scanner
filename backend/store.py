@@ -154,6 +154,14 @@ def claim_schedule(schedule: dict) -> bool:
     return claimed == 1
 
 
+def retry_schedule_soon(schedule_id: str, minutes: int = 15):
+    """Runs a claimed schedule again shortly: its scan couldn't start for a passing reason (the scanner
+    was full), and waiting for the next day or week would lose the run."""
+    soon = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat(timespec="seconds")
+    with transaction() as conn:
+        conn.execute("UPDATE schedules SET next_run_at = ? WHERE id = ?", (soon, schedule_id))
+
+
 def record_schedule_scan(schedule_id: str, scan_id: str):
     with transaction() as conn:
         conn.execute("UPDATE schedules SET last_scan_id = ? WHERE id = ?", (scan_id, schedule_id))
