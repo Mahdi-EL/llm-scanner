@@ -94,8 +94,8 @@ function FindingCard({ item, cats, mark, onTriage }) {
       </button>
       {open && (
         <div style={{ padding:'0 4px 14px', display:'grid', gap:'10px' }}>
-          <Field label="Attack"><pre className="finding-pre">{item.attack}</pre></Field>
-          <Field label="Reply"><pre className="finding-pre">{item.response || '(empty reply)'}</pre></Field>
+          <Field label="Attack"><pre className="finding-pre" tabIndex={0}>{item.attack}</pre></Field>
+          <Field label="Reply"><pre className="finding-pre" tabIndex={0}>{item.response || '(empty reply)'}</pre></Field>
           {item.reason && <Field label="Why"><div style={{ fontSize:'13px', color:'var(--t1)', lineHeight:1.6 }}>{item.reason}</div></Field>}
           {item.detectors?.length > 0 && (
             <Field label="Rule-based detection">
