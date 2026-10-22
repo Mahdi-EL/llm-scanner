@@ -226,6 +226,7 @@ def consume_reset_token(token: str, new_password: str) -> bool:
     if not row or _expired(row["reset_token_expires"]):
         return False
     set_password(row["id"], new_password)
+    mark_email_verified(row["id"])      # the link came by email, so the address is theirs
     return True
 
 
