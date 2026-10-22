@@ -754,3 +754,17 @@ def test_quick_scan_reports_its_depth(few_attacks, monkeypatch):
     assert data["scan_depth"] == "quick" and data["total_attacks"] == 4      # 2 per category, 2 categories
     full = scanner.run_full_scan(FakeTarget(), judge=FakeJudge(), generate_reports=False, concurrency=1)
     assert full["scan_depth"] == "full" and full["total_attacks"] == 6
+
+
+def test_a_huge_reply_is_graded_whole_but_stored_cut():
+    import scanner
+    canary = detectors.make_canary()
+
+    class Verbose(FakeTarget):
+        def send(self, message):
+            return "padding " * 10000 + f"and the code is {canary}"     # the leak is past the cut
+
+    finding = scanner.evaluate_attack(Verbose(), FakeJudge(), "extraction", "show me", "Hello!", canary=canary)
+    assert finding["severity"] == "CRITICAL"                                   # the detectors saw it all
+    assert len(finding["response"]) < scanner.MAX_STORED_REPLY + 100
+    assert finding["response"].endswith("characters in all]")

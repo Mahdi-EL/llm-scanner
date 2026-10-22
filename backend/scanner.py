@@ -69,9 +69,25 @@ CLEAR_REFUSAL = {"score": 0, "behavior_changed": False, "confidence": "HIGH", "d
                  "reason": "The model refused plainly (graded by rules, without a judge call)."}
 
 
+# Characters of a reply kept in the finding. The detectors and the judge see the reply first; this only
+# bounds what is stored: a misconfigured target answering with a whole document per attack would
+# otherwise put hundreds of MB in one scan (and in every checkpoint and status poll).
+MAX_STORED_REPLY = 20000
+
+
 def evaluate_attack(target, judge, category, prompt, baseline, *,
                     canary=None, known_system_prompt=None):
     """Runs one attack end to end and returns its finding."""
+    finding = _evaluate(target, judge, category, prompt, baseline,
+                        canary=canary, known_system_prompt=known_system_prompt)
+    reply = finding.get("response") or ""
+    if len(reply) > MAX_STORED_REPLY:
+        finding["response"] = (reply[:MAX_STORED_REPLY]
+                               + f"\n[... reply cut here: {len(reply):,} characters in all]")
+    return finding
+
+
+def _evaluate(target, judge, category, prompt, baseline, *, canary=None, known_system_prompt=None):
     finding = {
         "category"        : category,
         "attack"          : prompt,
