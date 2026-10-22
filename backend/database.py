@@ -188,6 +188,12 @@ CREATE TABLE IF NOT EXISTS remediation_usage (
     count   INTEGER DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
+CREATE TABLE IF NOT EXISTS deleted_scan_usage (
+    user_id TEXT NOT NULL,
+    month   TEXT NOT NULL,          -- YYYY-MM of the deleted scans' created_at
+    count   INTEGER DEFAULT 0,
+    PRIMARY KEY (user_id, month)
+);
 CREATE TABLE IF NOT EXISTS share_links (
     token_hash TEXT PRIMARY KEY,
     scan_id    TEXT NOT NULL,
@@ -308,6 +314,7 @@ def prune() -> dict:
         "stripe_events"    : ("DELETE FROM stripe_events WHERE processed_at < ?", ago(90)),
         "firewall_usage"   : ("DELETE FROM firewall_usage WHERE day < ?", day(35)),
         "remediation_usage": ("DELETE FROM remediation_usage WHERE day < ?", day(35)),
+        "deleted_scan_usage": ("DELETE FROM deleted_scan_usage WHERE month < ?", ago(62)[:7]),
     }
     with transaction() as conn:
         return {table: conn.execute(sql, (cutoff,)).rowcount for table, (sql, cutoff) in steps.items()}
