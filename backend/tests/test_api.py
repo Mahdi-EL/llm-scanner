@@ -428,6 +428,48 @@ def test_a_saved_key_doesnt_follow_a_new_target_url(client, monkeypatch):
     assert client.put(url, headers=headers, json={"api_url": "https://third.example.com/v1"}).status_code == 200
 
 
+def test_editing_a_target_clears_fields_and_keeps_a_url_type_valid(client, monkeypatch):
+    import netguard
+    monkeypatch.setattr(netguard.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    _, headers = _register(client)
+    assert client.post("/api/targets", headers=headers, json={
+        "name": "No URL", "target_type": "custom_rest"}).status_code == 400
+    target = client.post("/api/targets", headers=headers, json={
+        "name": "Bot", "target_type": "openai_compatible", "api_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini", "system_prompt": "You are Acme's bot.", "api_key": "sk-x"}).json()
+    url = f"/api/targets/{target['id']}"
+    r = client.put(url, headers=headers, json={"model": "", "system_prompt": ""})
+    assert r.status_code == 200, r.text
+    assert "model" not in r.json()["config"] and "system_prompt" not in r.json()["config"]
+    assert client.put(url, headers=headers, json={"model": "bad model!"}).status_code == 422
+    assert client.put(url, headers=headers, json={"api_url": "", "api_key": "sk-y"}).status_code == 400
+    # a key saved for one place isn't sent to another kind of target, but a simulation doesn't use it
+    assert client.put(url, headers=headers, json={"target_type": "groq"}).status_code == 400
+    assert client.put(url, headers=headers, json={"target_type": "simulation"}).status_code == 200
+
+
+def test_connection_test_uses_a_saved_key_only_for_its_own_address(client, monkeypatch):
+    import netguard
+    monkeypatch.setattr(netguard.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    sent = []
+
+    class FakeTarget:
+        def __init__(self, target_type, api_key=None, **kw):
+            sent.append((kw.get("api_url"), api_key))
+
+        def get_baseline(self, question):
+            return "Hello"
+    monkeypatch.setattr(api, "Target", FakeTarget)
+    _, headers = _register(client)
+    target = client.post("/api/targets", headers=headers, json={
+        "name": "Bot", "target_type": "openai_compatible", "api_url": "https://api.openai.com/v1",
+        "api_key": "sk-saved"}).json()
+    body = {"target_type": "openai_compatible", "target_id": target["id"]}
+    assert client.post("/targets/test", headers=headers, json={**body, "api_url": "https://api.openai.com/v1/"}).json()["ok"]
+    assert client.post("/targets/test", headers=headers, json={**body, "api_url": "https://collector.example.com"}).json()["ok"]
+    assert sent == [("https://api.openai.com/v1/", "sk-saved"), ("https://collector.example.com", None)]
+
+
 def test_schedules_need_a_paid_plan(client):
     user_id, headers = _register(client)
     target = client.post("/api/targets", headers=headers, json={"name": "Bot"}).json()

@@ -11,34 +11,60 @@ import FirewallPanel from '../components/FirewallPanel';
 const TYPES = TARGET_TYPES;
 
 const EMPTY = { name:'', target_type:'openai_compatible', api_url:'', api_key:'', model:'', system_prompt:'', input_field:'', output_field:'' };
+const EDITABLE = ['name', 'target_type', 'api_url', 'model', 'system_prompt', 'input_field', 'output_field'];
+const URL_TYPES = ['openai_compatible', 'custom_rest'];
+const sameURL = (a, b) => (a || '').trim().replace(/\/+$/, '') === (b || '').trim().replace(/\/+$/, '');
 
-function TargetForm({ onSaved, onCancel }) {
+/* Adds a target, or with `target` changes a saved one (its key is never shown: leave the field empty to keep it). */
+function TargetForm({ target, onSaved, onCancel }) {
   const toast = useToast();
-  const [form, setForm] = useState(EMPTY);
+  const initial = target
+    ? { ...EMPTY, ...Object.fromEntries(EDITABLE.map(k => [k, String((k === 'name' ? target.name : target.config[k]) ?? '')])) }
+    : EMPTY;
+  const [form, setForm] = useState(initial);
+  const [clearKey, setClearKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [test, setTest] = useState(null);
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setTest(null); };
-  const needsURL = form.target_type === 'openai_compatible' || form.target_type === 'custom_rest';
+  const needsURL = URL_TYPES.includes(form.target_type);
   const body = () => Object.fromEntries(Object.entries(form).filter(([, v]) => v && String(v).trim()));
+  // the API sends a saved key only to the address (and kind of target) it was saved for
+  const savedType = target?.config.target_type;
+  const keyFollows = form.target_type === 'simulation' || (sameURL(form.api_url, target?.config.api_url)
+    && (form.target_type === savedType || (URL_TYPES.includes(form.target_type) && URL_TYPES.includes(savedType))));
+  const keyNeeded = !!target?.has_key && !clearKey && !form.api_key.trim() && !keyFollows;
 
   const runTest = async () => {
     setTest({ pending: true });
-    try { const { data } = await scansAPI.testTarget({ ...body(), name: undefined }); setTest(data); }
-    catch (e) { setTest({ ok:false, error: errorMessage(e) }); }
+    try {
+      const { data } = await scansAPI.testTarget({ ...body(), name: undefined, ...(target && !clearKey ? { target_id: target.id } : {}) });
+      setTest(data);
+    } catch (e) { setTest({ ok:false, error: errorMessage(e) }); }
   };
 
   const save = async () => {
     if (!form.name.trim()) { toast('Give the target a name.', 'error'); return; }
     if (needsURL && !form.api_url.trim()) { toast('Enter the API URL.', 'error'); return; }
     setSaving(true);
-    try { const { data } = await targetsAPI.create(body()); onSaved(data); }
+    try {
+      if (target) {
+        const changes = Object.fromEntries(EDITABLE.filter(k => form[k].trim() !== initial[k].trim()).map(k => [k, form[k].trim()]));
+        if (form.api_key.trim()) changes.api_key = form.api_key.trim();
+        if (clearKey) changes.clear_api_key = true;
+        const { data } = Object.keys(changes).length ? await targetsAPI.update(target.id, changes) : { data: target };
+        onSaved(data);
+      } else {
+        const { data } = await targetsAPI.create(body());
+        onSaved(data);
+      }
+    }
     catch (e) { toast(errorMessage(e), 'error'); }
     finally { setSaving(false); }
   };
 
   return (
     <div style={{ padding:'20px', borderBottom:'1px solid var(--b1)', display:'grid', gap:'12px' }}>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+      <div className="tg-form-row">
         <div className="form-group" style={{ marginBottom:0 }}>
           <label htmlFor="tg-name">Name *</label>
           <input id="tg-name" value={form.name} onChange={e => set('name', e.target.value)} maxLength={120} placeholder="Support bot (prod)" />
@@ -56,11 +82,23 @@ function TargetForm({ onSaved, onCancel }) {
           <input id="tg-api-url" value={form.api_url} onChange={e => set('api_url', e.target.value)} placeholder="https://api.openai.com/v1" />
         </div>
       )}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+      <div className="tg-form-row">
         {form.target_type !== 'simulation' && (
           <div className="form-group" style={{ marginBottom:0 }}>
             <label htmlFor="tg-api-key">API key</label>
-            <input id="tg-api-key" type="password" autoComplete="off" value={form.api_key} onChange={e => set('api_key', e.target.value)} placeholder="Stored encrypted" />
+            <input id="tg-api-key" type="password" autoComplete="off" value={form.api_key} onChange={e => set('api_key', e.target.value)}
+              placeholder={target?.has_key && !clearKey ? 'Saved: leave empty to keep it' : 'Stored encrypted'} disabled={clearKey}
+              aria-describedby={keyNeeded ? 'tg-key-needed' : undefined} />
+            {keyNeeded && (
+              <div id="tg-key-needed" style={{ fontSize:'12px', color:'#a15c07', marginTop:'4px' }}>
+                Enter the key again: a saved key only goes to the address it was saved for.
+              </div>
+            )}
+            {target?.has_key && (
+              <label className="check-label">
+                <input type="checkbox" checked={clearKey} onChange={e => { setClearKey(e.target.checked); setTest(null); }} /> Remove the saved key
+              </label>
+            )}
           </div>
         )}
         {form.target_type !== 'custom_rest' ? (
@@ -85,7 +123,9 @@ function TargetForm({ onSaved, onCancel }) {
             : form.target_type === 'openai_compatible' ? 'Sent as the system message with every attack' : 'The prompt to test'} />
       </div>
       <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
-        <button className="btn-primary" style={{ fontSize:'12px' }} disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save target'}</button>
+        <button className="btn-primary" style={{ fontSize:'12px' }} disabled={saving || keyNeeded} onClick={save}>
+          {saving ? 'Saving…' : target ? 'Save changes' : 'Save target'}
+        </button>
         <button className="btn-outline" style={{ fontSize:'12px' }} disabled={test?.pending} onClick={runTest}>{test?.pending ? 'Testing…' : 'Test connection'}</button>
         <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={onCancel}>Cancel</button>
         {test && !test.pending && (
@@ -133,7 +173,7 @@ function ScheduleControl({ target, schedule, paid, onChange, readOnly }) {
     <span style={{ fontSize:'12px', color:'var(--t3)', display:'inline-flex', gap:'8px', alignItems:'center' }}>
       {schedule.enabled ? `${schedule.frequency}, next ${shortDate(schedule.next_run_at)}` : 'paused'}
       <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={toggle}>{schedule.enabled ? 'Pause' : 'Resume'}</button>
-      <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={remove}>Remove</button>
+      <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={remove} aria-label={`Remove the schedule of ${target.name}`}>Unschedule</button>
     </span>
   );
 }
@@ -207,6 +247,7 @@ export default function Targets() {
   const [loading, setLoading]     = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [gatewayOpen, setGatewayOpen] = useState(null);
+  const [editing, setEditing] = useState(null);
   const paid = user?.plan && user.plan !== 'free';
 
   const load = useCallback(async () => {
@@ -303,6 +344,10 @@ jobs:
               <div style={{ display:'flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
                 <ScheduleControl target={t} schedule={schedule} paid={paid} onChange={load} readOnly={!canEdit} />
                 {canEdit && <button className="btn-outline" style={{ fontSize:'12px' }} onClick={() => scanNow(t)}>Scan now</button>}
+                {canEdit && (
+                  <button className="btn-outline" style={{ fontSize:'12px' }} aria-expanded={editing === t.id}
+                    onClick={() => setEditing(open => (open === t.id ? null : t.id))}>Edit</button>
+                )}
                 {gatewayable && (
                   <button className="btn-outline" style={{ fontSize:'12px' }} aria-expanded={gatewayOpen === t.id}
                     onClick={() => setGatewayOpen(open => (open === t.id ? null : t.id))}>Gateway</button>
@@ -310,6 +355,10 @@ jobs:
                 {canEdit && <button className="btn-ghost" style={{ fontSize:'12px', color:'#b42318' }} onClick={() => remove(t)}>Delete</button>}
               </div>
             </div>
+            {editing === t.id && (
+              <TargetForm key={`edit-${t.id}-${t.updated_at}`} target={t} onCancel={() => setEditing(null)}
+                onSaved={() => { setEditing(null); load(); toast('Target updated.', 'success'); }} />
+            )}
             {gatewayOpen === t.id && <GatewayPanel target={t} />}
             </React.Fragment>
           );
