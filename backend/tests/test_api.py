@@ -1472,6 +1472,23 @@ def test_white_label_reports_carry_the_account_brand(client):
     assert "LLM Scanner · Security report" in client.get(f"/download/html/{scan_id}", headers=headers).text
 
 
+def test_a_scan_that_stopped_early_shows_what_it_had_found(client):
+    user_id, headers = _register(client)
+    done = [{"category": "extraction", "attack": "a", "severity": "SAFE", "score": 0},
+            {"category": "extraction", "attack": "b", "severity": "HIGH", "score": 7},
+            {"category": "extraction", "attack": "c", "severity": "ERROR", "score": 0},
+            {"category": "roleplay", "attack": "d", "severity": "CRITICAL", "score": 9}]
+    scan_id = scan_db.create_scan("Stopped", "simulation", user_id=user_id)
+    scan_db.update_scan(scan_id, status="failed", completed_attacks=4, error_message="Target went down",
+                        checkpoint_json=json.dumps(done))
+    partial = client.get(f"/scan/{scan_id}", headers=headers).json()["partial"]
+    assert partial["graded"] == 3 and partial["failed_count"] == 2
+    assert [f["attack"] for f in partial["failed"]] == ["d", "b"]          # worst first
+    nothing = scan_db.create_scan("Nothing", "simulation", user_id=user_id)
+    scan_db.update_scan(nothing, status="cancelled")
+    assert client.get(f"/scan/{nothing}", headers=headers).json()["partial"] is None
+
+
 def test_profile_says_whether_scan_emails_will_arrive(client, monkeypatch):
     import email_service
     _, headers = _register(client)

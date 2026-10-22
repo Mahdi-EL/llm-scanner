@@ -273,7 +273,7 @@ def execute(scan_id: str) -> None:
                                 completed_attacks=done, total_attacks=total, current_category=category)
 
     def on_checkpoint(results):
-        scan_db.update_scan(scan_id, checkpoint_json=json.dumps(results))
+        scan_db.update_scan(scan_id, checkpoint_json=json.dumps(results), completed_attacks=len(results))
 
     try:
         target, canary, known_prompt = build_target(scan)
