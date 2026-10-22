@@ -1460,11 +1460,20 @@ def create_target(body: TargetCreate, user: dict = Depends(require_member)):
 
 @app.put("/api/targets/{target_id}")
 def update_target(target_id: str, body: TargetUpdate, user: dict = Depends(require_member)):
-    """Changes a saved target. Send clear_api_key=true to remove its key."""
+    """Changes a saved target. Send clear_api_key=true to remove its key; a new api_url needs the key again."""
     current = store.get_target(user["id"], target_id)
     if not current:
         raise HTTPException(status_code=404, detail="Saved target not found")
     _check_target_url(body.api_url)
+    old_url = (current["config"].get("api_url") or "").strip().rstrip("/")
+    new_url = (body.api_url or "").strip().rstrip("/")
+    if body.api_url is not None and new_url != old_url and current.get("has_key") \
+            and not body.api_key and not body.clear_api_key:
+        # Scans and the gateway send the stored key to this URL: whoever can edit the target (any team
+        # member) could otherwise point it at their own server and collect the key.
+        raise HTTPException(status_code=400, detail="Enter the target's API key again when you change its URL "
+                                                    "(or send clear_api_key): a saved key only goes to the "
+                                                    "address it was saved for.")
     changes = body.model_dump(exclude={"name", "api_key", "clear_api_key"}, exclude_none=True)
     cfg = {**current["config"], **changes} if changes else None
     api_key = "" if body.clear_api_key else body.api_key

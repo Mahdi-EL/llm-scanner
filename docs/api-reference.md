@@ -36,7 +36,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | GET | `/api/targets` | yes | Your saved targets (their API keys are never returned). |
 | POST | `/api/targets` | yes | Saves a target; its API key is stored encrypted. |
 | DELETE | `/api/targets/{target_id}` | yes | Deletes a saved target and its schedule. |
-| PUT | `/api/targets/{target_id}` | yes | Changes a saved target. Send clear_api_key=true to remove its key. |
+| PUT | `/api/targets/{target_id}` | yes | Changes a saved target. Send clear_api_key=true to remove its key; a new api_url needs the key again. |
 | POST | `/api/waitlist` |  | Adds an email to the waitlist and sends one welcome email. |
 | GET | `/api/team` | yes | The workspace's people and seats; owners and admins also see pending invites. |
 | POST | `/api/team/accept` | yes | Joins the workspace an invite is for. The invite must be for the signed-in person's email, and that address must be confirmed. |
