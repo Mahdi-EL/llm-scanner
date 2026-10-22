@@ -285,7 +285,10 @@ function CategoryTable({ results, cats }) {
 }
 
 /* ── Running / queued ────────────────────────────────────── */
-function RunningState({ scan, cats, onCancel }) {
+// Scan emails go to whoever started the scan (a team member, or the account owner)
+const startedBy = (scan, user) => (scan.created_by ? scan.created_by === user?.id : scan.user_id === user?.id);
+
+function RunningState({ scan, cats, onCancel, emailed }) {
   const queued = scan.status === 'pending';
   const done = scan.completed_attacks || 0;
   const total = scan.total_attacks || 0;
@@ -309,7 +312,7 @@ function RunningState({ scan, cats, onCancel }) {
           <div style={{ height:'100%', width:`${pct}%`, background:'var(--t1)', transition:'width 0.8s ease' }} />
         </div>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'16px', fontSize:'12px', color:'var(--t3)' }}>
-          <span>This page updates by itself. You can leave it; we'll email you when it's done.</span>
+          <span>This page updates by itself. You can leave it{emailed ? '; we’ll email you when it’s done' : ': the report will be in Reports'}.</span>
           {onCancel && <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }} onClick={onCancel}>Cancel scan</button>}
         </div>
       </div>
@@ -362,7 +365,7 @@ export default function Results() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const { canEdit } = useAuth();      // viewers read the scan and download reports; they can't change it
+  const { user, canEdit } = useAuth();      // viewers read the scan and download reports; they can't change it
   const confirm = useConfirm();
   const [scan,      setScan]      = useState(null);
   const [loading,   setLoading]   = useState(true);
@@ -472,7 +475,7 @@ export default function Results() {
       <button className="btn-primary" onClick={()=> notFound ? navigate('/') : fetchScan()}>{notFound ? 'Back to Dashboard' : 'Retry'}</button>
     </div>
   );
-  if (isActive(scan)) return <RunningState scan={scan} cats={cats} onCancel={canEdit ? cancel : null} />;
+  if (isActive(scan)) return <RunningState scan={scan} cats={cats} onCancel={canEdit ? cancel : null} emailed={!!user?.scan_emails && startedBy(scan, user)} />;
   if (scan.status === 'failed' || scan.status === 'cancelled') return (
     <div className="empty-state" style={{ padding:'100px 40px' }}>
       <h3 style={{ color: scan.status === 'failed' ? '#b42318' : 'var(--t1)' }}>

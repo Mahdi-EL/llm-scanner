@@ -1470,3 +1470,11 @@ def test_white_label_reports_carry_the_account_brand(client):
 
     client.put("/api/branding", headers=headers, json={"brand": ""})                  # removed: back to LLM Scanner
     assert "LLM Scanner · Security report" in client.get(f"/download/html/{scan_id}", headers=headers).text
+
+
+def test_profile_says_whether_scan_emails_will_arrive(client, monkeypatch):
+    import email_service
+    _, headers = _register(client)
+    assert client.get("/auth/me", headers=headers).json()["scan_emails"] is False     # no email provider here
+    monkeypatch.setattr(email_service, "enabled", lambda: True)
+    assert client.get("/auth/me", headers=headers).json()["scan_emails"] is True      # confirmed address
