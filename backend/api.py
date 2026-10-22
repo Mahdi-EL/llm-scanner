@@ -1147,7 +1147,10 @@ def view_shared(request: Request, token: str):
         "created_at"     : scan["created_at"],
         "summary"        : scoring.ensure_summary(data),
         "recommendations": report.recommendations(data.get("results", [])),
-        "results"        : [{**{k: r.get(k) for k in keep}, "response": detectors.redact(r.get("response") or "")[0]}
+        "results"        : [{**{k: r.get(k) for k in keep},
+                             # the grader's reason can quote what leaked, so it's masked like the reply
+                             "response": detectors.redact(r.get("response") or "")[0],
+                             "reason": detectors.redact(r.get("reason") or "")[0]}
                             for r in data.get("results", [])],
         "expires_at"     : link["expires_at"],
     }
