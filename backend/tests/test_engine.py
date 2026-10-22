@@ -386,6 +386,49 @@ def test_scheduler_queues_due_scans(monkeypatch):
     assert after["enabled"] and after["next_run_at"] > "2000-01-02"
 
 
+def test_a_busy_scanner_postpones_a_scheduled_scan_and_a_used_up_quota_is_emailed(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    import auth_db
+    import database
+    import scheduler
+    import services
+    import store
+    from db import transaction
+    database.init_db()
+    user_id = auth_db.create_user("busy_" + os.urandom(3).hex(), f"{os.urandom(4).hex()}@example.com",
+                                  "password123", verified=True)["user_id"]
+    auth_db.update_plan(user_id, "pro")
+    target = store.create_target(user_id, "Weekly bot", {"target_type": "simulation"}, None)
+    sched = store.create_schedule(user_id, target["id"], "weekly", None, 5)
+
+    def due():
+        with transaction() as conn:
+            conn.execute("UPDATE schedules SET next_run_at = '2000-01-01T00:00:00+00:00' WHERE id = ?", (sched["id"],))
+
+    def refuse(status, message):
+        def queue_scan(*a, **k):
+            raise services.ScanRejected(status, message)
+        monkeypatch.setattr(services, "queue_scan", queue_scan)
+
+    emails = []
+    monkeypatch.setattr(scheduler.email_service, "send_schedule_skipped", lambda *a: emails.append(a))
+
+    due()
+    refuse(429, "The scanner is at capacity right now.")
+    assert scheduler.run_due() == 0
+    next_run = datetime.fromisoformat(store.get_schedule(user_id, sched["id"])["next_run_at"])
+    assert next_run - datetime.now(timezone.utc) < timedelta(minutes=20)       # retried soon, not next week
+    assert emails == []
+
+    due()
+    refuse(402, "You've used all 200 scans of the Pro plan this month.")
+    assert scheduler.run_due() == 0
+    next_run = datetime.fromisoformat(store.get_schedule(user_id, sched["id"])["next_run_at"])
+    assert next_run - datetime.now(timezone.utc) > timedelta(days=6)           # waits for its next run
+    assert len(emails) == 1 and emails[0][1] == "Weekly bot" and "200 scans" in emails[0][3]
+
+
 # ── Model resolution (Groq retires models) ────────────────────
 class _FakeModels:
     def __init__(self, ids):

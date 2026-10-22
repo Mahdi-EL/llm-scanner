@@ -100,6 +100,15 @@ def send_score_drop(email: str, target_name: str, old_score: int, new_score: int
                          scan_link(scan_id, workspace)))
 
 
+def send_schedule_skipped(email: str, target_name: str, frequency: str, reason: str) -> bool:
+    e = html.escape
+    body = (f"<p>The {e(frequency)} scan of <strong>{e(target_name)}</strong> didn't run.</p>"
+            f"<p style=\"color:#6b665e\">{e(reason[:300])}</p>"
+            "<p>The schedule stays on and tries again at its next run.</p>")
+    return _send(email, f"Scheduled scan skipped: {target_name[:60]}",
+                 _layout("Scheduled scan skipped", body, "See your plan", f"{config.APP_URL}/pricing"))
+
+
 def send_password_reset(email: str, reset_token: str) -> bool:
     body = ("<p>Click the button below to choose a new password. The link expires in one hour.</p>"
             "<p style=\"color:#6b665e;font-size:13px\">If you didn't ask for this, ignore this email.</p>")
