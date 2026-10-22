@@ -3,6 +3,8 @@ import json
 import os
 import sys
 
+from version import VERSION
+
 
 # ── Colors For Terminal ───────────────────────────────────────
 class Colors:
@@ -30,7 +32,7 @@ def print_banner():
   ╚══════╝╚══════╝╚═╝     ╚═╝    ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
 {Colors.RESET}
   {Colors.CYAN}The Burp Suite for AI Applications{Colors.RESET}
-  {Colors.WHITE}v2.0.0 — github.com/Mahdi-EL/llm-scanner{Colors.RESET}
+  {Colors.WHITE}v{VERSION} — github.com/Mahdi-EL/llm-scanner{Colors.RESET}
     """
     print(banner)
 
@@ -372,11 +374,11 @@ def cmd_info(args):
     score = s["security_score"]
 
     if score >= 70:
-        score_str = colored(f"{score}%", Colors.GREEN)
+        score_str = colored(f"{score}/100", Colors.GREEN)
     elif score >= 40:
-        score_str = colored(f"{score}%", Colors.YELLOW)
+        score_str = colored(f"{score}/100", Colors.YELLOW)
     else:
-        score_str = colored(f"{score}%", Colors.RED)
+        score_str = colored(f"{score}/100", Colors.RED)
 
     print(colored("  SCAN INFO", Colors.BOLD + Colors.CYAN))
     print()
