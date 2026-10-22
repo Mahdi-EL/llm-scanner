@@ -1188,6 +1188,7 @@ def remediate_scan(request: Request, scan_id: str, body: RemediateRequest, user:
     try:
         return remediation.suggest(prompt, results)
     except remediation.ProviderError as e:
+        services.refund_remediation(user)        # our provider's failure: it doesn't use the day's allowance
         raise HTTPException(status_code=502, detail=str(e))
     except remediation.RemediationError as e:
         raise HTTPException(status_code=400, detail=str(e))
