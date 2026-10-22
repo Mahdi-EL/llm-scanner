@@ -315,6 +315,56 @@ def test_runner_completes_scan_and_erases_key(few_attacks, monkeypatch):
     assert sent == [scan_id]
 
 
+def test_only_the_lease_holder_runs_a_scan_and_a_quiet_one_is_taken_over(few_attacks, monkeypatch):
+    """A rolling deploy has two processes: the new one mustn't run a scan the old one is still running."""
+    import database
+    import runner
+    import scan_db
+    from db import transaction
+    database.init_db()
+    sent = []
+    monkeypatch.setattr(runner, "Judge", FakeJudge)
+    monkeypatch.setattr(runner.notifications, "scan_finished", lambda scan_id, alert_drop=None: sent.append(scan_id))
+    monkeypatch.setattr(runner, "build_target", lambda scan: (FakeTarget(), None, None))
+    scan_id = scan_db.create_scan("Leased", "groq", user_id="u-lease", config={"target_type": "groq"})
+
+    monkeypatch.setattr(runner, "RUNNER_ID", "old-process")
+    assert runner.claim(scan_id) and scan_id not in runner.stale_scan_ids()
+    monkeypatch.setattr(runner, "RUNNER_ID", "new-process")
+    runner.execute(scan_id)                                      # the old process is alive: leave it alone
+    assert scan_db.get_scan(scan_id)["status"] == "pending" and sent == []
+
+    with transaction() as conn:                                  # the old process went quiet
+        conn.execute("UPDATE scans SET heartbeat_at = '2000-01-01T00:00:00+00:00' WHERE scan_id = ?", (scan_id,))
+    assert scan_id in runner.stale_scan_ids()
+    runner.execute(scan_id)
+    assert scan_db.get_scan(scan_id)["status"] == "complete" and sent == [scan_id]
+
+
+def test_a_shutting_down_process_hands_its_scan_back(few_attacks, monkeypatch):
+    import database
+    import runner
+    import scan_db
+    database.init_db()
+    sent = []
+    monkeypatch.setattr(runner, "Judge", FakeJudge)
+    monkeypatch.setattr(runner.notifications, "scan_finished", lambda scan_id, alert_drop=None: sent.append(scan_id))
+    scan_id = scan_db.create_scan("Deploy", "groq", user_id="u-deploy", config={"target_type": "groq"})
+
+    class StopsTheServer(FakeTarget):
+        def send(self, message):
+            runner._stopping.set()                               # SIGTERM arrives mid-scan
+            return super().send(message)
+    monkeypatch.setattr(runner, "build_target", lambda scan: (StopsTheServer(), None, None))
+    try:
+        runner.execute(scan_id)
+    finally:
+        runner._stopping.clear()
+    scan = scan_db.get_scan(scan_id)
+    assert scan["status"] == "running" and scan["runner_id"] is None and scan["checkpoint_json"]
+    assert sent == [] and scan_id in runner.stale_scan_ids()     # no "failed" email; the next process resumes it
+
+
 def test_runner_marks_unusable_scans_failed(monkeypatch):
     import database
     import runner

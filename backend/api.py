@@ -115,13 +115,15 @@ async def lifespan(app: FastAPI):
     if _storage_state() == "ephemeral":
         log.error("DB_PATH (%s) is not on a mounted volume: all data will be lost on the next deploy. "
                   "Attach a Railway volume at /data and set DB_PATH=/data/llmscanner.db.", config.DB_PATH)
-    if os.getenv("LLMSCANNER_DISABLE_WORKERS") != "1":
+    workers = os.getenv("LLMSCANNER_DISABLE_WORKERS") != "1"
+    if workers:
         runner.start(resume=True)
         scheduler.start()
     log.info("API ready (v%s, %s)", VERSION, config.ENV)
     yield
-    scheduler.stop()
-    runner.shutdown()
+    if workers:
+        scheduler.stop()
+        runner.shutdown()           # running scans stop at a checkpoint for the next process
 
 
 app = FastAPI(

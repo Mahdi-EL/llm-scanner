@@ -226,6 +226,9 @@ SCAN_COLUMNS = {
     "tokens_out"       : "INTEGER DEFAULT 0",
     "graded_by_rules"  : "INTEGER DEFAULT 0",
     "created_by"       : "TEXT",       # the team member who started it, when not the account owner
+    # which API process runs the scan, and when it last said so (a rolling deploy has two for a while)
+    "runner_id"        : "TEXT",
+    "heartbeat_at"     : "TEXT",
 }
 USER_COLUMNS = {
     "webhook_url"           : "TEXT",

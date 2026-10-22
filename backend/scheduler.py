@@ -65,12 +65,19 @@ def _loop(interval: float):
     import time
 
     import database
+    import runner
     last_prune = 0.0
     while not _stop.wait(interval):
         try:
             run_due()
         except Exception:
             log.exception("Scheduler tick failed")
+        try:
+            resumed = runner.resume_stale()       # scans a stopped or crashed process left behind
+            if resumed:
+                log.info("Resumed %d scan(s) no process was running", resumed)
+        except Exception:
+            log.exception("Resuming stale scans failed")
         if time.monotonic() - last_prune >= PRUNE_EVERY:
             last_prune = time.monotonic()
             try:

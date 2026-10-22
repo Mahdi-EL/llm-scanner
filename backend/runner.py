@@ -6,13 +6,19 @@
   interrupted by a deploy picks up where it stopped instead of failing.
 - The target's API key is stored encrypted only while the scan needs it,
   and erased when the scan ends.
+- A process leases each scan it runs (runner_id + heartbeat_at). During a rolling deploy the old
+  and the new process both see the scan: only the lease holder runs it. A process that's shutting
+  down stops its scans at a checkpoint and hands them back; the scheduler's minute tick re-queues
+  scans whose runner went quiet (resume_stale).
 """
 import json
 import logging
 import os
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 import config
 import detectors
@@ -36,6 +42,59 @@ _lock     = threading.Lock()
 _active   = set()
 _cancel   = set()
 
+RUNNER_ID         = uuid.uuid4().hex   # this process
+HEARTBEAT_SECONDS = 20
+LEASE_SECONDS     = 90                 # a runner silent this long is gone: its scans can be taken over
+_stopping  = threading.Event()         # the server is shutting down: hand running scans back
+_heartbeat = None
+
+
+def _stale_before() -> str:
+    return (datetime.now(timezone.utc) - timedelta(seconds=LEASE_SECONDS)).isoformat(timespec="seconds")
+
+
+def claim(scan_id: str) -> bool:
+    """Takes the scan for this process, unless another live process is running it."""
+    with transaction() as conn:
+        return conn.execute(
+            "UPDATE scans SET runner_id = ?, heartbeat_at = ? WHERE scan_id = ? AND status IN ('pending', 'running') "
+            "AND (runner_id IS NULL OR runner_id = ? OR heartbeat_at IS NULL OR heartbeat_at < ?)",
+            (RUNNER_ID, utcnow(), scan_id, RUNNER_ID, _stale_before())).rowcount == 1
+
+
+def release(scan_id: str) -> None:
+    with transaction() as conn:
+        conn.execute("UPDATE scans SET runner_id = NULL WHERE scan_id = ? AND runner_id = ?", (scan_id, RUNNER_ID))
+
+
+def stale_scan_ids() -> list:
+    """Active scans no live process is running: never claimed, handed back, or their runner went quiet."""
+    with transaction() as conn:
+        rows = conn.execute("SELECT scan_id FROM scans WHERE status IN ('pending', 'running') AND "
+                            "(runner_id IS NULL OR heartbeat_at IS NULL OR heartbeat_at < ?) ORDER BY created_at",
+                            (_stale_before(),)).fetchall()
+    return [r["scan_id"] for r in rows]
+
+
+def resume_stale() -> int:
+    """Queues the scans nobody is running (the scheduler calls this every minute). Returns how many."""
+    queued = 0
+    for scan_id in stale_scan_ids():
+        if scan_id not in _active:
+            submit(scan_id)
+            queued += 1
+    return queued
+
+
+def _beat():
+    while not _stopping.wait(HEARTBEAT_SECONDS):
+        try:
+            with transaction() as conn:
+                conn.execute("UPDATE scans SET heartbeat_at = ? WHERE runner_id = ? AND status IN ('pending', 'running')",
+                             (utcnow(), RUNNER_ID))
+        except Exception:
+            log.warning("Scan heartbeat failed", exc_info=True)
+
 
 def _pool() -> ThreadPoolExecutor:
     global _executor
@@ -47,8 +106,14 @@ def _pool() -> ThreadPoolExecutor:
 
 
 def start(resume: bool = True) -> int:
-    """Starts the worker pool and re-queues scans interrupted by a restart."""
+    """Starts the worker pool and re-queues scans interrupted by a restart (a scan another live process
+    still runs is skipped when its turn comes, and picked up by resume_stale once that process stops)."""
+    global _heartbeat
+    _stopping.clear()
     _pool()
+    if _heartbeat is None or not _heartbeat.is_alive():
+        _heartbeat = threading.Thread(target=_beat, name="scan-heartbeat", daemon=True)
+        _heartbeat.start()
     ids = scan_db.active_scan_ids() if resume else []
     for scan_id in ids:
         submit(scan_id)
@@ -58,7 +123,9 @@ def start(resume: bool = True) -> int:
 
 
 def shutdown():
+    """Stops taking scans; running ones stop at their next attack and are handed back for the next process."""
     global _executor
+    _stopping.set()
     with _lock:
         pool, _executor = _executor, None
     if pool:
@@ -160,6 +227,9 @@ def execute(scan_id: str) -> None:
     if scan_id in _cancel:
         scan_db.update_scan(scan_id, status="cancelled", error_message="Cancelled by user", api_key_enc=None)
         return
+    if _stopping.is_set() or not claim(scan_id):
+        log.info("Scan %s is left to %s", scan_id, "the next process" if _stopping.is_set() else "the process running it")
+        return
 
     cfg = _config(scan)
     resume = None
@@ -198,7 +268,7 @@ def execute(scan_id: str) -> None:
             on_progress=on_progress,
             on_checkpoint=on_checkpoint,
             resume_results=resume,
-            should_stop=lambda: scan_id in _cancel,
+            should_stop=lambda: scan_id in _cancel or _stopping.is_set(),
             generate_reports=False,
             extra_attacks=extra,
             attacks=cfg.get("attacks"),
@@ -230,9 +300,17 @@ def execute(scan_id: str) -> None:
         log.info("Scan %s complete: score %s", scan_id, s["security_score"])
     except ScanAborted as e:
         cancelled = scan_id in _cancel
+        if _stopping.is_set() and not cancelled:
+            release(scan_id)          # the checkpoint is saved: the next process carries on from it
+            log.info("Scan %s handed back for the next process", scan_id)
+            return
         scan_db.update_scan(scan_id, status="cancelled" if cancelled else "failed",
                             error_message=str(e), api_key_enc=None, completed_at=utcnow())
     except Exception as e:
+        if _stopping.is_set() and scan_id not in _cancel:
+            release(scan_id)          # e.g. the pool shut down under it: not the scan's fault
+            log.info("Scan %s handed back for the next process (%s)", scan_id, type(e).__name__)
+            return
         log.exception("Scan %s failed", scan_id)
         scan_db.update_scan(scan_id, status="failed",
                             error_message=_friendly(e, cfg.get("target_type") or scan["target_type"]),
