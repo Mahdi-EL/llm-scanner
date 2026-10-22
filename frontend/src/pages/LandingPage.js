@@ -47,7 +47,7 @@ const COMPARE = [
 
 const FAQ = [
   { q:'Do I need an API key to start?', a:'No. Simulation mode tests a system prompt on a hosted model without any key. When you are ready, point the scanner at any OpenAI-compatible API or custom REST endpoint.' },
-  { q:'How long does a scan take?', a:'It depends on how fast your target answers. A full scan sends about 1,090 attacks; you can pick fewer categories for a quicker one, and watch the progress live.' },
+  { q:'How long does a scan take?', a:'It depends on how fast your target answers. A full scan sends about 1,090 attacks; a quick scan (about 110, a few per category) takes a few minutes, and you can also pick fewer categories. You watch the progress live.' },
   { q:'What do I get at the end?', a:'A 0–100 score and a letter grade, every finding with the model’s reply and why it failed, the OWASP LLM Top 10 risk it maps to, and fixes for each failed category.' },
   { q:'What happens to my data?', a:'Your target’s API key is encrypted while a scan runs and deleted when it ends, unless you save the target. Attack replies are kept with your scan so you can read the report. Delete the scan, or your account, to remove them.' },
 ];
