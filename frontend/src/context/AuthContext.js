@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { authAPI, clearAuth, saveTokens, WORKSPACE_KEY } from '../services/api';
+import { authAPI, clearAuth, saveTokens, getWorkspace, setWorkspace } from '../services/api';
 
 // In a team workspace, plan, quota and workspace settings come from it; identity stays the person's.
 const WORKSPACE_FIELDS = ['plan', 'scans_count', 'scans_this_month', 'scan_limit', 'full_scans', 'webhook_url',
@@ -18,7 +18,7 @@ function takeWorkspaceFromLink() {
   const params = new URLSearchParams(window.location.search);
   const linked = params.get('workspace');
   if (!linked) return;
-  localStorage.setItem(WORKSPACE_KEY, linked);
+  setWorkspace(linked);
   params.delete('workspace');
   const rest = params.toString();
   window.history.replaceState(window.history.state, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
@@ -45,8 +45,7 @@ export function AuthProvider({ children }) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const { data } = await authAPI.me();
-        const chosen = localStorage.getItem(WORKSPACE_KEY);
-        if (chosen && !data.workspace) localStorage.removeItem(WORKSPACE_KEY);   // left it, or was removed
+        if (getWorkspace() && !data.workspace) setWorkspace(null);   // left it, or was removed
         const merged = withWorkspace(data);
         shown.current = true;
         setUser(merged); setOffline(false); setLoading(false);
@@ -70,7 +69,7 @@ export function AuthProvider({ children }) {
     const { data } = await authAPI.login(username, password);
     saveTokens(data);
     // a workspace picked up from a link: load it, so its plan and the person's role there apply
-    if (localStorage.getItem(WORKSPACE_KEY)) await loadUser();
+    if (getWorkspace()) await loadUser();
     else { shown.current = true; setUser(data.user || { username }); }
     return data;
   };
@@ -85,8 +84,7 @@ export function AuthProvider({ children }) {
 
   // A full reload, so nothing loaded for the previous workspace stays on screen
   const switchWorkspace = id => {
-    if (!id || id === user?.id) localStorage.removeItem(WORKSPACE_KEY);
-    else localStorage.setItem(WORKSPACE_KEY, id);
+    setWorkspace(!id || id === user?.id ? null : id);
     window.location.assign('/');
   };
 

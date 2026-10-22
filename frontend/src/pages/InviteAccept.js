@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { authAPI, teamAPI, errorMessage, WORKSPACE_KEY, PENDING_INVITE_KEY } from '../services/api';
+import { authAPI, teamAPI, errorMessage, setWorkspace, PENDING_INVITE_KEY } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import CenterCard from '../components/CenterCard';
 
@@ -52,7 +52,7 @@ export default function InviteAccept() {
     try {
       const { data } = await teamAPI.accept(token);
       localStorage.removeItem(PENDING_INVITE_KEY);
-      localStorage.setItem(WORKSPACE_KEY, data.workspace.id);
+      setWorkspace(data.workspace.id);
       window.location.assign('/');
     } catch (e) {
       setError(errorMessage(e, 'Couldn’t join the workspace.'));

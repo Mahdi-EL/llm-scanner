@@ -9,6 +9,24 @@ const REFRESH_KEY = 'refresh_token';
 // like sidebar state, etc.)
 // The team workspace the app acts in (absent = the person's own account)
 export const WORKSPACE_KEY = 'workspace_id';
+
+// Each tab keeps its own workspace (sessionStorage, which survives the reload a switch does): switching in one
+// tab must not send another tab's requests (a scan, a saved target) to a different workspace than it shows.
+// A new tab starts in the last one chosen (localStorage).
+export function getWorkspace() {
+  let id = sessionStorage.getItem(WORKSPACE_KEY);
+  if (id === null) {
+    id = localStorage.getItem(WORKSPACE_KEY) || '';
+    sessionStorage.setItem(WORKSPACE_KEY, id);
+  }
+  return id || null;
+}
+
+export function setWorkspace(id) {
+  sessionStorage.setItem(WORKSPACE_KEY, id || '');
+  if (id) localStorage.setItem(WORKSPACE_KEY, id);
+  else localStorage.removeItem(WORKSPACE_KEY);
+}
 // An invite waiting for its invitee to confirm their email address (see InviteAccept and VerifyEmail)
 export const PENDING_INVITE_KEY = 'pending_invite';
 
@@ -16,6 +34,7 @@ export function clearAuth() {
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(WORKSPACE_KEY);
+  sessionStorage.removeItem(WORKSPACE_KEY);
   localStorage.removeItem(PENDING_INVITE_KEY);
 }
 
@@ -30,7 +49,7 @@ const api = axios.create({ baseURL: API_URL });
 api.interceptors.request.use(cfg => {
   const token = localStorage.getItem(ACCESS_KEY);
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
-  const workspace = localStorage.getItem(WORKSPACE_KEY);
+  const workspace = getWorkspace();
   if (workspace && !cfg.headers['X-Workspace']) cfg.headers['X-Workspace'] = workspace;
   return cfg;
 });
