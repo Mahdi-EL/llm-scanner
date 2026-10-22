@@ -721,6 +721,10 @@ def test_remediate_provider_failure_is_a_clear_502(client, monkeypatch):
     sim = _seed_with_config(user_id, {"target_type": "simulation", "system_prompt": "You are Acme's bot."})
     r = client.post(f"/scan/{sim}/remediate", headers=headers, json={})
     assert r.status_code == 502 and "isn't answering" in r.json()["detail"]
+    from db import transaction
+    with transaction() as conn:
+        row = conn.execute("SELECT count FROM remediation_usage WHERE user_id = ?", (user_id,)).fetchone()
+    assert row is None or row[0] == 0          # the failed attempt didn't use the day's allowance
 
 
 def test_unexpected_errors_are_json_with_cors_headers(client, monkeypatch):

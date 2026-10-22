@@ -149,6 +149,13 @@ def use_remediation(user: dict) -> None:
                                 "It resets at midnight UTC.")
 
 
+def refund_remediation(user: dict) -> None:
+    """Gives back today's last suggestion when the model provider failed to produce it."""
+    with transaction() as conn:
+        conn.execute("UPDATE remediation_usage SET count = count - 1 WHERE user_id = ? AND day = ? AND count > 0",
+                     (user["id"], _today()))
+
+
 def use_firewall(user: dict, checks: int) -> dict:
     """Counts `checks` against today's allowance. Returns {"used", "limit"} or raises FirewallRejected."""
     limit = payment.firewall_limit(user.get("plan", "free"))
