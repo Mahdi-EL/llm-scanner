@@ -32,7 +32,7 @@ function extractSystemPrompts(text) {
     const add = (value, index) => {
         const clean = value.trim();
         if (clean.length > 10 && !found.some(p => p.text === clean)) {
-            found.push({ text: clean.slice(0, 20000), line: text.slice(0, index).split('\n').length - 1 });
+            found.push({ text: clean, line: text.slice(0, index).split('\n').length - 1 });
         }
     };
     const patterns = [
@@ -57,7 +57,19 @@ function settings() {
         apiUrl    : (config.get('apiUrl') || 'http://localhost:8000').replace(/\/+$/, ''),
         appUrl    : (config.get('appUrl') || '').replace(/\/+$/, ''),
         categories: config.get('categories') || [],
+        quickScan : config.get('quickScan') !== false,
     };
+}
+
+const MAX_PROMPT = 20000;   // the API's limit for system_prompt
+
+// FastAPI sends a string for most errors and a list of {loc, msg} for invalid input.
+function errorDetail(data, status) {
+    if (typeof data.detail === 'string') return data.detail;
+    if (Array.isArray(data.detail) && data.detail.length) {
+        return data.detail.map(d => d.msg || String(d)).join('; ');
+    }
+    return `HTTP ${status}`;
 }
 
 async function api(context, method, route, body) {
@@ -76,8 +88,10 @@ async function api(context, method, route, body) {
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-        const detail = typeof data.detail === 'string' ? data.detail : `HTTP ${response.status}`;
-        throw new Error(response.status === 401 ? 'API key rejected. Run "LLM Scanner: Set API Key".' : detail);
+        if (response.status === 401) throw new Error('API key rejected. Run "LLM Scanner: Set API Key".');
+        const detail = errorDetail(data, response.status);
+        throw new Error(response.status === 402 && /quick scan/i.test(detail)
+            ? `${detail} (turn on the llmscanner.quickScan setting)` : detail);
     }
     return data;
 }
@@ -163,12 +177,17 @@ function decorate(editor, prompt, summary) {
 // ── Commands ──────────────────────────────────────────────────
 async function runScan(context, editor, promptText, promptInfo) {
     const name = path.basename(editor.document.fileName);
-    const { categories } = settings();
+    const { categories, quickScan } = settings();
+    if (promptText.length > MAX_PROMPT) {
+        vscode.window.showErrorMessage(`LLM Scanner: this prompt has ${promptText.length.toLocaleString()} characters; ` +
+            `the limit is ${MAX_PROMPT.toLocaleString()}.`);
+        return;
+    }
     await vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification, title: `LLM Scanner: ${name}`, cancellable: true,
+        location: vscode.ProgressLocation.Notification, title: `LLM Scanner: ${name}${quickScan ? ' (quick scan)' : ''}`, cancellable: true,
     }, async (progress, token) => {
         try {
-            const body = { target_name: name, target_type: 'simulation', system_prompt: promptText };
+            const body = { target_name: name, target_type: 'simulation', system_prompt: promptText, quick: quickScan };
             if (categories.length) body.categories = categories;
             const started = await api(context, 'POST', '/scan', body);
             lastScanId = started.scan_id;
@@ -242,4 +261,4 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, extractSystemPrompts, escapeHtml };
+module.exports = { activate, deactivate, extractSystemPrompts, escapeHtml, errorDetail };
