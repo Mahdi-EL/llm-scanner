@@ -116,9 +116,9 @@ export default function Login() {
 
           <form onSubmit={submit} autoComplete="on">
             <div className="pw-field">
-              <label htmlFor="pw-user">Username</label>
+              <label htmlFor="pw-user">Username or email</label>
               <input id="pw-user" name="username" autoComplete="username"
-                value={form.username} onChange={handle} placeholder="Enter your username" />
+                value={form.username} onChange={handle} placeholder="you@company.com or your username" />
             </div>
 
             <div className="pw-field">
@@ -152,7 +152,7 @@ export default function Login() {
 
           <div className="pw-secure">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Encrypted connection · SOC 2-ready
+            Encrypted connection · passwords stored with bcrypt
           </div>
         </div>
       </div>
