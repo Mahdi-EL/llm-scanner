@@ -89,8 +89,15 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
   useEffect(() => {
     if (!notifOpen) return;
     const handler = e => { if (!panelRef.current?.contains(e.target)) setNotifOpen(false); };
+    const onKey = e => {
+      if (e.key === 'Escape' && panelRef.current?.contains(document.activeElement)) {
+        setNotifOpen(false);
+        panelRef.current.querySelector('button')?.focus();
+      }
+    };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('keydown', onKey); };
   }, [notifOpen]);
 
   const markAllRead  = () => {
@@ -151,7 +158,8 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
           <button
             className={`topbar-icon-btn${notifOpen ? ' active' : ''}`}
             onClick={() => { if (!notifOpen) load(); setNotifOpen(o => !o); }}
-            title="Notifications"
+            title="Notifications" aria-expanded={notifOpen} aria-haspopup="true"
+            aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -166,7 +174,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
                 <span className="notif-title">Notifications</span>
                 <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
                   {unread > 0 && (
-                    <span style={{ background:'rgba(37,99,235,0.15)', color:'var(--blue)', border:'1px solid rgba(37,99,235,0.25)', padding:'1px 8px', borderRadius:'10px', fontSize:'10px', fontWeight:'700' }}>
+                    <span style={{ background:'rgba(37,99,235,0.15)', color:'#1d4ed8', border:'1px solid rgba(37,99,235,0.25)', padding:'1px 8px', borderRadius:'10px', fontSize:'10px', fontWeight:'700' }}>
                       {unread} new
                     </span>
                   )}
@@ -188,12 +196,12 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
                 ) : notifs.map(n => (
                   <div key={n.id} className={`notif-item${n.read ? '' : ' unread'}`}>
                     <div className="notif-dot" style={{ background: TYPE_COLOR[n.type] || 'var(--blue)' }} />
-                    <div style={{ flex:1, minWidth:0, cursor:'pointer' }} onClick={() => open(n)}>
-                      <div className="notif-item-title">{n.title}</div>
-                      <div className="notif-item-body">{n.body}</div>
-                      <div className="notif-item-time">{n.time}</div>
-                    </div>
-                    <button className="notif-dismiss" onClick={() => dismiss(n.id)} title="Dismiss">
+                    <button type="button" className="notif-open" onClick={() => open(n)}>
+                      <span className="notif-item-title">{n.title}</span>
+                      <span className="notif-item-body">{n.body}</span>
+                      <span className="notif-item-time">{n.time}</span>
+                    </button>
+                    <button className="notif-dismiss" onClick={() => dismiss(n.id)} title="Dismiss" aria-label={`Dismiss: ${n.title}`}>
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                       </svg>
