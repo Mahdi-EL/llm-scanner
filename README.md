@@ -22,7 +22,8 @@ It comes as a web app, an HTTP API, a Python SDK and CLI, a GitHub Action and a 
    of the score, and a scan where more than half of its attacks errored fails instead of reporting one.
 
 Scans run in a background worker with live progress, retries for rate limits and network errors,
-and checkpoints, so a server restart resumes a scan instead of losing it.
+and checkpoints, so a server restart or a deploy resumes a scan instead of losing it (only one API
+process runs a scan at a time). A scan that is cancelled or stops early still shows what it had found.
 
 ## Features
 
