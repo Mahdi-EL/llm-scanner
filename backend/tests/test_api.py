@@ -1447,8 +1447,17 @@ def test_free_leak_check_says_when_the_model_is_down(client, monkeypatch):
             raise ConnectionError("no model")
     monkeypatch.setattr(target_mod, "Target", DownModel)
     monkeypatch.setattr(config, "LEAK_CHECKS_PER_DAY", 10_000)
+    import leakcheck
+    from db import transaction
+
+    def used():
+        with transaction() as conn:
+            row = conn.execute("SELECT count FROM leak_checks WHERE day = ?", (leakcheck._today(),)).fetchone()
+        return row[0] if row else 0
+    before = used()
     r = client.post("/public/leak-check", json={"system_prompt": "You are a helpful assistant for a bank."})
     assert r.status_code == 503
+    assert used() == before                     # a check the model never answered doesn't use the allowance
 
 
 def test_white_label_reports_carry_the_account_brand(client):

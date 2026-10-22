@@ -40,9 +40,18 @@ def attacks() -> list:
     return out
 
 
+def _today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _give_back_slot() -> None:
+    with transaction() as conn:
+        conn.execute("UPDATE leak_checks SET count = count - 1 WHERE day = ? AND count > 0", (_today(),))
+
+
 def _take_slot() -> None:
     """Counts one check against today's global allowance (LEAK_CHECKS_PER_DAY)."""
-    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    day = _today()
     with transaction() as conn:
         conn.execute("INSERT INTO leak_checks (day, count) VALUES (?, 0) ON CONFLICT(day) DO NOTHING", (day,))
         taken = conn.execute("UPDATE leak_checks SET count = count + 1 WHERE day = ? AND count < ?",
@@ -77,6 +86,7 @@ def run(system_prompt: str, target=None) -> dict:
         graded = list(pool.map(one, sample))
     errors = sum(1 for g in graded if g[2] is None)
     if errors == len(graded):
+        _give_back_slot()        # the model didn't answer: that check shouldn't use up the day's allowance
         raise CheckUnavailable("The free check isn't available right now. Please try again later.", 503)
     leaked = [g for g in graded if g[2] == "CRITICAL"]
     partial = [g for g in graded if g[2] == "HIGH"]
