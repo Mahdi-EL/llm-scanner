@@ -52,6 +52,30 @@ def account(base_url):
     return {"user_id": r.json()["user"]["id"], "key": key}
 
 
+def test_wait_rides_out_a_restarting_api_but_not_a_bad_key(monkeypatch):
+    from llmscanner import LLMScannerError
+    client = Client(api_key="llmsk_x", base_url="http://127.0.0.1:9")
+    answers = [LLMScannerError("Can't reach the API", status=None), LLMScannerError("Bad gateway", status=502),
+               {"scan_id": "s1", "status": "complete", "target_name": "t", "summary": {"security_score": 90},
+                "results": {"results": []}}]
+
+    def get(scan_id):
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+    monkeypatch.setattr(client, "get", get)
+    monkeypatch.setattr("llmscanner.client.time.sleep", lambda s: None)
+    assert client.wait("s1", poll_interval=0.01).scan_id == "s1"
+
+    monkeypatch.setattr(client, "get", lambda scan_id: (_ for _ in ()).throw(APIKeyError("revoked", status=401)))
+    with pytest.raises(APIKeyError):
+        client.wait("s1", poll_interval=0.01)
+    monkeypatch.setattr(client, "get", lambda scan_id: (_ for _ in ()).throw(LLMScannerError("down", status=503)))
+    with pytest.raises(LLMScannerError):                 # a long outage still ends the wait
+        client.wait("s1", poll_interval=0.01)
+
+
 def _seed(user_id, severity="HIGH"):
     scan_id = scan_db.create_scan("SDK target", "simulation", user_id=user_id)
     data = {"scan_date": "2026-10-16 10:00", "total_attacks": 2,
