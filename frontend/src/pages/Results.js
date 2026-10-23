@@ -157,7 +157,9 @@ function FixIt({ scan, failedCount }) {
   // The scanner sends the prompt itself for these (an OpenAI-compatible target gets the stored one as its system message)
   const promptIsOurs = type === 'simulation' || type === 'groq' || (type === 'openai_compatible' && !!scan.config?.has_system_prompt);
   const needsPastedPrompt = !scan.config?.has_system_prompt && type !== 'simulation';
-  const needsKey = (type === 'groq' || type === 'openai_compatible') && !scan.target_id;
+  // The scan's key was erased when it ended: ask again if it had one (older scans don't say)
+  const hadKey = scan.config?.with_key ?? type === 'openai_compatible';
+  const needsKey = (type === 'groq' || (hadKey && type !== 'simulation')) && !scan.target_id;
   const [pasted, setPasted] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [suggestion, setSuggestion] = useState(null);

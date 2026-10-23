@@ -70,6 +70,9 @@ def queue_scan(user: dict, cfg: dict, api_key: Optional[str] = None, *,
     if target_type in ("openai_compatible", "custom_rest"):
         if not cfg.get("api_url"):
             raise ScanRejected(400, "This target type needs an API URL")
+    if target_type == "groq" and not api_key:
+        raise ScanRejected(400, "A Groq target runs on your own Groq API key: enter it. "
+                                "To scan a system prompt on this server's model, use a simulation.")
     if cfg.get("api_url"):
         try:
             netguard.check_url(cfg["api_url"])
@@ -87,6 +90,7 @@ def queue_scan(user: dict, cfg: dict, api_key: Optional[str] = None, *,
             raise ScanRejected(400, f"Unknown attack categories: {', '.join(unknown)}")
 
     cfg = {k: v for k, v in cfg.items() if v not in (None, "", [])}
+    cfg["with_key"] = bool(api_key)       # the key itself is erased after the scan; a re-test needs to know
     if target_type in ("simulation", "groq"):
         cfg["canary"] = detectors.make_canary()
     if include_custom_prompts and not attacks:

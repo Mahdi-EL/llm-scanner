@@ -400,7 +400,12 @@ def test_saved_targets_hide_keys_and_check_urls(client):
     assert target["has_key"] and "api_key" not in target and "gsk_secret_value" not in json.dumps(target)
     assert client.post("/api/targets", headers=headers, json={
         "name": "bad", "target_type": "custom_rest", "api_url": "http://127.0.0.1/"}).status_code == 400
-    updated = client.put(f"/api/targets/{target['id']}", headers=headers, json={"clear_api_key": True}).json()
+    # a Groq target runs on its own key, never on the server's: it can't be saved or left without one
+    assert client.post("/api/targets", headers=headers, json={"name": "No key", "target_type": "groq"}).status_code == 400
+    r = client.put(f"/api/targets/{target['id']}", headers=headers, json={"clear_api_key": True})
+    assert r.status_code == 400 and "own Groq API key" in r.json()["detail"]
+    updated = client.put(f"/api/targets/{target['id']}", headers=headers,
+                         json={"clear_api_key": True, "target_type": "simulation"}).json()
     assert updated["has_key"] is False
     assert len(client.get("/api/targets", headers=headers).json()["targets"]) == 1
     assert client.delete(f"/api/targets/{target['id']}", headers=headers).status_code == 200
@@ -584,6 +589,40 @@ def test_retest_runs_only_the_failed_attacks(client):
     assert "custom_prompts" not in cfg
     groq_scan = _seed_with_config(user_id, {"target_type": "groq"})
     assert client.post(f"/scan/{groq_scan}/retest", headers=headers, json={}).status_code == 400
+
+
+def test_a_retest_asks_for_a_key_only_when_the_scan_had_one(client, monkeypatch):
+    """The key is erased when a scan ends. An endpoint that needs none (a self-hosted model) can be
+    re-tested as it was scanned; one that had a key needs it again."""
+    import netguard
+    monkeypatch.setattr(netguard.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    user_id, headers = _register(client)
+    auth_db.update_plan(user_id, "pro")         # three scans: more than Free's two
+    scans = {}
+    for name, key in (("keyless", None), ("keyed", "sk-target-key")):
+        r = client.post("/scan", headers=headers, json={
+            "target_name": name, "target_type": "openai_compatible", "api_url": "https://llm.example.com/v1",
+            "categories": ["extraction"], "quick": True, **({"api_key": key} if key else {})})
+        assert r.status_code == 200, r.text
+        scans[name] = r.json()["scan_id"]
+        assert client.get(f"/scan/{scans[name]}", headers=headers).json()["config"]["with_key"] is bool(key)
+        scan_db.update_scan(scans[name], status="complete", results_json=json.dumps(
+            {"scan_date": "2026-10-23 10:00", "total_attacks": 2, "summary": {"security_score": 49}, "results": RESULTS}))
+    assert client.post(f"/scan/{scans['keyless']}/retest", headers=headers, json={}).status_code == 200
+    r = client.post(f"/scan/{scans['keyed']}/retest", headers=headers, json={})
+    assert r.status_code == 400 and "API key" in r.json()["detail"]
+    old = _seed_with_config(user_id, {"target_type": "openai_compatible", "api_url": "https://llm.example.com/v1"})
+    assert client.post(f"/scan/{old}/retest", headers=headers, json={}).status_code == 400   # before the flag: asked
+
+
+def test_a_groq_scan_never_runs_on_the_servers_key(client):
+    _, headers = _register(client)
+    r = client.post("/scan", headers=headers, json={"target_name": "Mine", "target_type": "groq",
+                                                     "categories": ["extraction"], "quick": True})
+    assert r.status_code == 400 and "own Groq API key" in r.json()["detail"]
+    from target import Target
+    with pytest.raises(RuntimeError, match="enter your Groq API key"):
+        Target("groq", system_prompt="You are a bot.").send("hi")      # the server's GROQ_API_KEY is set in tests
 
 
 def test_remediation_prompt_fences_untrusted_replies():

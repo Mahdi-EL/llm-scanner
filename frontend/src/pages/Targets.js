@@ -45,6 +45,9 @@ function TargetForm({ target, onSaved, onCancel }) {
   const save = async () => {
     if (!form.name.trim()) { toast('Give the target a name.', 'error'); return; }
     if (needsURL && !form.api_url.trim()) { toast('Enter the API URL.', 'error'); return; }
+    if (form.target_type === 'groq' && !form.api_key.trim() && !(target?.has_key && !clearKey && keyFollows)) {
+      toast('Enter your Groq API key: a Groq target runs on your own key.', 'error'); return;
+    }
     setSaving(true);
     try {
       if (target) {

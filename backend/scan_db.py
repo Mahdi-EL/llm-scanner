@@ -109,6 +109,8 @@ def public_scan(scan: dict, include_results: bool = False) -> dict:
             out["config"]["has_system_prompt"] = bool(cfg.get("system_prompt"))
             out["config"]["retest"] = bool(cfg.get("attacks"))
             out["config"]["quick"] = bool(cfg.get("quick")) and not cfg.get("attacks")
+            if "with_key" in cfg:          # scans from before October 2026 don't say
+                out["config"]["with_key"] = bool(cfg["with_key"])
         except (TypeError, ValueError):
             pass
     if include_results:
