@@ -25,6 +25,7 @@ from .exceptions import (
     ReportError,
     ScanError,
     TargetError,
+    WaitTimeout,
 )
 from .models import Finding, Scan, ScanReport, ScanSummary
 
@@ -40,6 +41,7 @@ __all__ = [
     "QuotaError",
     "RateLimitError",
     "ScanError",
+    "WaitTimeout",
     "TargetError",
     "ReportError",
 ]

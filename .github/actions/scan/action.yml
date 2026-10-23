@@ -134,7 +134,8 @@ runs:
         if [ -n "$IN_FORMAT" ]; then
           args+=(--download "$IN_FORMAT" --out "llm-scanner-report.$IN_FORMAT")
         fi
-        llmscanner "${args[@]}"
+        # exec: a cancelled job's signal reaches the CLI itself, which then cancels the scan
+        exec llmscanner "${args[@]}"
 
     - name: Upload the report
       if: always() && inputs.report-format != ''

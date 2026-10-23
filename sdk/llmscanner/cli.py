@@ -5,15 +5,16 @@
         --url https://api.openai.com/v1 --target-key "$OPENAI_API_KEY" --model gpt-4o-mini \
         --wait --fail-on high
 
-Exit codes: 0 = passed, 1 = findings at or above --fail-on, 2 = error.
+Exit codes: 0 = passed, 1 = findings at or above --fail-on, 2 = error, 130 = interrupted.
 """
 import argparse
 import json
 import os
+import signal
 import sys
 
 from .client import Client
-from .exceptions import LLMScannerError
+from .exceptions import LLMScannerError, WaitTimeout
 from .models import SEVERITY_RANK
 
 
@@ -77,7 +78,13 @@ def cmd_scan(args) -> int:
     if not args.wait:
         return 0
 
-    report = client.wait(scan.scan_id, poll_interval=args.poll, timeout=args.timeout, on_progress=_progress)
+    try:
+        report = client.wait(scan.scan_id, poll_interval=args.poll, timeout=args.timeout, on_progress=_progress)
+    except (WaitTimeout, KeyboardInterrupt):
+        # Nothing waits for the scan any more (--timeout, Ctrl+C, a cancelled CI job): left running, it would
+        # hold one of the account's scan slots until it ends, and the next runs would be turned away.
+        _cancel(client, scan.scan_id)
+        raise
     print(str(report.summary))
     for rec in report.recommendations[:5]:
         print(f"  {rec['priority']} {rec['title']}: {rec['failed']} failed")
@@ -107,6 +114,14 @@ def cmd_scan(args) -> int:
         return 1
     print("PASSED")
     return 0
+
+
+def _cancel(client, scan_id):
+    try:
+        client.cancel(scan_id)
+        print(f"Cancelled scan {scan_id}", file=sys.stderr)
+    except LLMScannerError as e:          # it may have just finished
+        print(f"Warning: couldn't cancel scan {scan_id}: {e}", file=sys.stderr)
 
 
 def cmd_status(args) -> int:
@@ -178,13 +193,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _terminated(signum, frame):
+    raise KeyboardInterrupt           # CI runners stop a job with SIGTERM too: same clean-up as Ctrl+C
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    try:
+        previous, installed = signal.signal(signal.SIGTERM, _terminated), True
+    except ValueError:                # not the main thread: leave signals alone
+        previous, installed = None, False
     try:
         return args.func(args)
     except LLMScannerError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print("Interrupted", file=sys.stderr)
+        return 130
+    finally:
+        if installed:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL if previous is None else previous)
 
 
 if __name__ == "__main__":
