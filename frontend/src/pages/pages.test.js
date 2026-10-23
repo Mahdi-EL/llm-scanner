@@ -100,6 +100,22 @@ test('Results lists every finding with "show more" and downloads with auth', asy
   await waitFor(() => expect(api.downloadReport).toHaveBeenCalledWith('done', 'pdf'));
 });
 
+test('Results says when triage changes how the score moved since the previous scan', async () => {
+  api.scansAPI.categories.mockResolvedValue(CATEGORIES);
+  api.scansAPI.list.mockResolvedValue({ data: { scans: [{ scan_id: 'old', created_at: '2026-10-15T10:00:00+00:00' }] } });
+  api.scansAPI.compare.mockResolvedValue({ data: {
+    score_delta: -31, score_delta_after_triage: 0, same_attacks: true, resolved_count: 0, introduced_count: 0,
+  } });
+  api.scansAPI.get.mockResolvedValue({ data: {
+    scan_id: 'new', target_name: 'Bot', status: 'complete', created_at: '2026-10-16T10:00:00+00:00',
+    summary: { security_score: 69, grade: 'D', critical: 0, high: 1, medium: 0, low: 0, safe: 1, errors: 0 },
+    results: { summary: { security_score: 69, grade: 'D', high: 1, safe: 1, tested: 2, errors: 0 }, results: [] },
+  } });
+  renderAt('/results/new', <Results />, '/results/:id');
+  expect(await screen.findByText(/−31 points/)).toBeInTheDocument();
+  expect(screen.getByText(/unchanged after triage/)).toBeInTheDocument();
+});
+
 test('SharedReport shows when the link expires', async () => {
   api.scansAPI.shared.mockResolvedValue({ data: {
     target_name: 'Bot', scan_date: '2026-10-16', expires_at: '2026-10-23T10:00:00+00:00',

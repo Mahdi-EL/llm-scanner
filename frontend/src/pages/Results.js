@@ -345,13 +345,20 @@ function PreviousComparison({ scan }) {
   }, [scan.scan_id, scan.target_name, scan.created_at]);
   if (!diff) return null;
   const delta = diff.score_delta;
+  const triagedDelta = diff.score_delta_after_triage;      // null when nothing on these targets is triaged
   const comparable = diff.same_attacks !== false;
+  const points = d => `${d > 0 ? '+' : '−'}${Math.abs(d)} point${Math.abs(d) !== 1 ? 's' : ''}`;
   return (
     <div className="card-glow" style={{ padding:'14px 18px', marginBottom:'16px', display:'flex', gap:'18px', alignItems:'center', flexWrap:'wrap', fontSize:'13px' }}>
       <span style={{ fontWeight:700 }}>Since the previous scan</span>
       {comparable ? (
         <span style={{ color: delta > 0 ? '#15803d' : delta < 0 ? '#b42318' : 'var(--t3)', fontWeight:700 }}>
-          {delta === 0 ? 'Score unchanged' : `${delta > 0 ? '+' : '−'}${Math.abs(delta)} point${Math.abs(delta) !== 1 ? 's' : ''}`}
+          {delta === 0 ? 'Score unchanged' : points(delta)}
+          {triagedDelta != null && triagedDelta !== delta && (
+            <span style={{ color:'var(--t3)', fontWeight:400 }}>
+              {' '}({triagedDelta === 0 ? 'unchanged' : points(triagedDelta)} after triage)
+            </span>
+          )}
         </span>
       ) : (
         <span style={{ color:'var(--t3)' }} title="The score depends on which attacks ran, so it's only compared between scans of the same attacks.">
