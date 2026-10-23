@@ -905,13 +905,18 @@ def compare_scans(base_id: str, head_id: str, user: dict = Depends(require_user)
     """What got worse or better between two finished scans."""
     base = _get_complete_scan(base_id, user)
     head = _get_complete_scan(head_id, user)
-    diff = analysis.diff_findings(_results_after_triage(base, user), _results_after_triage(head, user))
+    base_results, head_results = _results_after_triage(base, user), _results_after_triage(head, user)
+    diff = analysis.diff_findings(base_results, head_results)
+    # the findings above leave out what was marked false positive or accepted risk; so does this delta
+    triaged = any(store.triage_for(user["id"], s["target_name"]) for s in (base, head))
     return {
         "base": {"scan_id": base_id, "security_score": base.get("security_score", 0),
                  "grade": base.get("grade"), "created_at": base.get("created_at")},
         "head": {"scan_id": head_id, "security_score": head.get("security_score", 0),
                  "grade": head.get("grade"), "created_at": head.get("created_at")},
         "score_delta"        : (head.get("security_score") or 0) - (base.get("security_score") or 0),
+        "score_delta_after_triage": (scoring.summarize(head_results)["security_score"]
+                                     - scoring.summarize(base_results)["security_score"]) if triaged else None,
         "same_attacks"       : diff["same_attacks"],
         "base_tested"        : diff["base_tested"],
         "head_tested"        : diff["head_tested"],

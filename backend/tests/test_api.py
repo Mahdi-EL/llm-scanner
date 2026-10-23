@@ -986,6 +986,20 @@ def test_shared_reports_mask_leaked_secrets_and_show_expiry(client):
     assert "sk-proj-ABCDEF" in client.get(f"/results/{scan_id}", headers=headers).text
 
 
+def test_compare_gives_the_score_change_after_triage(client):
+    import store
+    user_id, headers = _register(client)
+    high = [{"category": "c", "attack": a, "severity": s, "score": 7 if s == "HIGH" else 0}
+            for a, s in (("A", "SAFE"), ("B", "HIGH"))]
+    base = _seed_complete_scan(user_id, [dict(r, severity="SAFE", score=0) for r in high], score=100, target="Bot")
+    head = _seed_complete_scan(user_id, high, score=69, target="Bot")
+    d = client.get(f"/scan/compare/{base}/{head}", headers=headers).json()
+    assert d["score_delta"] == -31 and d["score_delta_after_triage"] is None and d["introduced_count"] == 1
+    store.set_triage(user_id, "Bot", store.finding_key("c", "B"), "accepted_risk", None, decided_by="ann")
+    d = client.get(f"/scan/compare/{base}/{head}", headers=headers).json()
+    assert d["score_delta"] == -31 and d["score_delta_after_triage"] == 0 and d["introduced_count"] == 0
+
+
 def test_regression_alerts_compare_runs_of_the_same_schedule(client, monkeypatch):
     import notifications
     sent = []
