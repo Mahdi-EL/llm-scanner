@@ -18,7 +18,7 @@ import sys
 import threading
 import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 import config
 import detectors
@@ -29,7 +29,7 @@ from attacks import catalog
 from attacks.multi_turn import is_multi_turn, turns as split_turns
 from attacks.prompts import ATTACK_PROMPTS
 from judge import Judge
-from retry import call_with_retry
+from retry import Cancelled, call_with_retry, stop_when
 from target import Target
 
 log = logging.getLogger("llmscanner.scan")
@@ -113,6 +113,8 @@ def _evaluate(target, judge, category, prompt, baseline, *, canary=None, known_s
             reply = "\n\n".join(f"User: {u}\nAssistant: {a}" for u, a in zip(user_turns, replies, strict=False))
         else:
             reply = call_with_retry(target.send, prompt)
+    except Cancelled:
+        raise                                              # the scan stopped: not the target's failure
     except Exception as exc:
         server_side = getattr(target, "target_type", None) == "simulation"
         finding["reason"] = f"Target call failed: {errors.explain(exc, server_side=server_side)}"
@@ -131,6 +133,8 @@ def _evaluate(target, judge, category, prompt, baseline, *, canary=None, known_s
     else:
         try:
             verdict = judge.evaluate(prompt, reply, baseline)
+        except Cancelled:
+            raise
         except Exception as exc:
             if not hits:
                 finding["reason"] = f"Grading failed: {errors.explain(exc, server_side=True)}"
@@ -191,8 +195,21 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
     pending  = [i for i in range(total) if i not in by_index]
     log.info("Scan %s: %d attacks (%d already done)", target_name, total, len(by_index))
 
+    # Once the scan stops, it stays stopped: attacks still in flight give up their retries and skip
+    # their next call (a rate-limited target could otherwise hold a cancel for minutes).
+    stopped = threading.Event()
+
+    def stopping() -> bool:
+        if not stopped.is_set() and should_stop and should_stop():
+            stopped.set()
+        return stopped.is_set()
+
     # Fail fast: if the baseline doesn't work, no attack will.
-    baseline = call_with_retry(target.get_baseline, baseline_question)
+    try:
+        with stop_when(stopping):
+            baseline = call_with_retry(target.get_baseline, baseline_question)
+    except Cancelled:
+        raise ScanAborted("Scan cancelled") from None
 
     lock        = threading.Lock()
     done        = len(by_index)
@@ -206,15 +223,22 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
 
     def work(i):
         category, prompt = attacks[i]
-        return i, evaluate_attack(target, judge, category, prompt, baseline,
-                                  canary=canary, known_system_prompt=known_system_prompt)
+        with stop_when(stopping):
+            return i, evaluate_attack(target, judge, category, prompt, baseline,
+                                      canary=canary, known_system_prompt=known_system_prompt)
 
     workers = max(1, concurrency or config.SCAN_CONCURRENCY)
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(work, i) for i in pending]
-        try:
-            for future in as_completed(futures):
-                i, finding = future.result()
+    pool = ThreadPoolExecutor(max_workers=workers)
+    waiting = {pool.submit(work, i) for i in pending}
+    try:
+        while waiting:
+            # wakes at least every second, so a cancel is seen even while every attack waits on the target
+            ready, waiting = wait(waiting, timeout=1, return_when=FIRST_COMPLETED)
+            for future in ready:
+                try:
+                    i, finding = future.result()
+                except Cancelled:
+                    continue                    # gave up waiting because the scan is stopping (raised below)
                 with lock:
                     by_index[i] = finding
                     done += 1
@@ -222,19 +246,22 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
                 if error_streak >= config.MAX_CONSECUTIVE_ERRORS:
                     raise ScanAborted(f"Stopped after {error_streak} failed attacks in a row. "
                                       f"Last error: {finding['reason']}")
-                if should_stop and should_stop():
-                    raise ScanAborted("Scan cancelled")
                 if on_progress:
                     on_progress(done, total, finding["category"])
                 if on_checkpoint and done % 10 == 0 and time.monotonic() - last_checkpoint >= CHECKPOINT_SECONDS:
                     last_checkpoint = time.monotonic()
                     on_checkpoint(ordered())
-        except BaseException:
-            for f in futures:
-                f.cancel()
-            if on_checkpoint:
-                on_checkpoint(ordered())
-            raise
+            if stopping():
+                raise ScanAborted("Scan cancelled")
+    except BaseException:
+        stopped.set()
+        # Don't wait for calls already in flight: they end within the target's timeout, make no further
+        # call, and their results are dropped.
+        pool.shutdown(wait=False, cancel_futures=True)
+        if on_checkpoint:
+            on_checkpoint(ordered())
+        raise
+    pool.shutdown()
 
     results = ordered()
     failed = [r for r in results if r.get("severity") == scoring.ERROR]

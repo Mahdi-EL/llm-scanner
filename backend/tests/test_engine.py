@@ -168,6 +168,32 @@ def test_retry_reads_groq_wait_hint():
     assert retry.retry_after(Exception("Rate limit. Please try again in 1m2.5s")) == 62.5
 
 
+def _rate_limited(seconds="60"):
+    response = requests.Response()
+    response.status_code = 429
+    response.headers["Retry-After"] = seconds
+    return requests.HTTPError("429 Too Many Requests", response=response)
+
+
+def test_a_stopped_call_stops_waiting_out_a_rate_limit():
+    import time
+    calls = []
+
+    def limited():
+        calls.append(1)
+        raise _rate_limited()
+
+    stop = threading.Event()
+    threading.Timer(0.3, stop.set).start()
+    started = time.monotonic()
+    with retry.stop_when(stop.is_set), pytest.raises(retry.Cancelled):
+        retry.call_with_retry(limited)
+    assert time.monotonic() - started < 3 and calls == [1]
+    with retry.stop_when(stop.is_set), pytest.raises(retry.Cancelled):
+        retry.call_with_retry(limited)          # once stopped, no new call is made
+    assert calls == [1]
+
+
 # ── Judge ─────────────────────────────────────────────────────
 class _Msg:
     def __init__(self, content):
@@ -275,6 +301,29 @@ def test_scan_can_be_cancelled(few_attacks):
     with pytest.raises(scanner.ScanAborted, match="cancelled"):
         scanner.run_full_scan(FakeTarget(), judge=FakeJudge(), should_stop=lambda: True,
                               generate_reports=False, concurrency=1)
+
+
+def test_a_cancel_does_not_wait_out_the_targets_rate_limits(few_attacks):
+    """Every attack waiting a minute on a 429 used to hold a cancel (or a deploy's hand-over) that long."""
+    import time
+
+    import scanner
+
+    class RateLimited(FakeTarget):
+        def send(self, message):
+            with self._lock:
+                self.calls += 1
+            raise _rate_limited()
+
+    target, stop, checkpoints = RateLimited(), threading.Event(), []
+    threading.Timer(0.5, stop.set).start()
+    started = time.monotonic()
+    with pytest.raises(scanner.ScanAborted, match="cancelled"):
+        scanner.run_full_scan(target, judge=FakeJudge(), should_stop=stop.is_set, on_checkpoint=checkpoints.append,
+                              generate_reports=False, concurrency=3)
+    assert time.monotonic() - started < 5
+    assert checkpoints == [[]]          # a rate-limited attack isn't recorded as a failed one
+    assert target.calls == 3            # the waiting attacks gave up; the queued ones never started
 
 
 def test_extra_attacks_are_scanned(few_attacks):

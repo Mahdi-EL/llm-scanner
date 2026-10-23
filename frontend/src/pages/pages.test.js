@@ -70,7 +70,11 @@ test('Results shows real progress for a running scan', async () => {
   renderAt('/results/abc', <Results />, '/results/:id');
   expect(await screen.findByText('42%')).toBeInTheDocument();
   expect(screen.getByText(/450 of 1075 attacks done/)).toBeInTheDocument();
-  expect(screen.getByText('Cancel scan')).toBeInTheDocument();
+  api.scansAPI.cancel.mockResolvedValue({ data: {} });
+  fireEvent.click(screen.getByText('Cancel scan'));
+  // the scan takes a moment to stop: the button says so instead of inviting more clicks
+  expect(await screen.findByText('Cancelling…')).toBeDisabled();
+  expect(api.scansAPI.cancel).toHaveBeenCalledWith('abc');
 });
 
 test('Results lists every finding with "show more" and downloads with auth', async () => {
