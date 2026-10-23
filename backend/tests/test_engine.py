@@ -552,6 +552,20 @@ def test_a_busy_scanner_postpones_a_scheduled_scan_and_a_used_up_quota_is_emaile
     assert next_run - datetime.now(timezone.utc) > timedelta(days=6)           # waits for its next run
     assert len(emails) == 1 and emails[0][1] == "Weekly bot" and "200 scans" in emails[0][3]
 
+    # the next runs skipped for the same reason this month don't email again (a daily schedule would every day)
+    due()
+    assert scheduler.run_due() == 0 and len(emails) == 1
+    due()
+    refuse(403, "Please confirm your email address before running scans.")
+    assert scheduler.run_due() == 0 and len(emails) == 2                       # a new reason does
+    # once a run starts, the next skip is news again
+    due()
+    monkeypatch.setattr(services, "queue_scan", lambda *a, **k: "scan-started")
+    assert scheduler.run_due() == 1
+    due()
+    refuse(402, "You've used all 200 scans of the Pro plan this month.")
+    assert scheduler.run_due() == 0 and len(emails) == 3
+
 
 # ── Model resolution (Groq retires models) ────────────────────
 class _FakeModels:
