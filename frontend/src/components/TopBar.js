@@ -15,9 +15,10 @@ const PAGE_TITLES = {
   '/pricing'      : { title:'Pricing',      icon:'💎' },
 };
 
-// Notifications come from the user's own recent scans. What has been read is
+// Notifications come from the workspace's recent scans. What has been read is
 // remembered per browser (a convenience only; nothing breaks without it).
-// Per account, so another account signing in on this browser starts with its own state.
+// Per person and workspace, so another account signing in on this browser starts with its own state,
+// and marking one workspace's scans read leaves another's alone.
 const READ_KEY   = id => `notifs_read_until:${id}`;
 const HIDDEN_KEY = id => `notifs_hidden:${id}`;
 const OPENED_KEY = id => `notifs_opened:${id}`;
@@ -63,7 +64,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
   const { user, canEdit }  = useAuth();
   const [notifOpen, setNotifOpen] = useState(false);
   const [items,     setItems]     = useState([]);
-  const uid = user?.id || 'anon';
+  const uid = user ? `${user.id}${user.workspace ? `@${user.workspace.id}` : ''}` : 'anon';
   const [readUntil, setReadUntil] = useState(() => storageGet(READ_KEY(uid), ''));
   const [hidden,    setHidden]    = useState(() => storageGet(HIDDEN_KEY(uid), []));
   const [opened,    setOpened]    = useState(() => storageGet(OPENED_KEY(uid), []));
@@ -104,7 +105,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
     const latest = items.reduce((m, n) => (n.when > m ? n.when : m), '');
     setReadUntil(latest); storageSet(READ_KEY(uid), latest);
   };
-  const dismiss      = id  => { const next = [...hidden, id].slice(-200); setHidden(next); storageSet(HIDDEN_KEY(uid), next); };
+  const dismiss      = ids => { const next = [...hidden, ...ids].slice(-200); setHidden(next); storageSet(HIDDEN_KEY(uid), next); };
   const open         = n   => {
     if (!opened.includes(n.id)) { const next = [...opened, n.id].slice(-200); setOpened(next); storageSet(OPENED_KEY(uid), next); }
     setNotifOpen(false); navigate(`/results/${n.id}`);
@@ -191,7 +192,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
                       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                       <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
                     </svg>
-                    <div>No finished scans yet.</div>
+                    <div>{items.length ? 'Nothing new. Finished scans show up here.' : 'No finished scans yet.'}</div>
                   </div>
                 ) : notifs.map(n => (
                   <div key={n.id} className={`notif-item${n.read ? '' : ' unread'}`}>
@@ -201,7 +202,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
                       <span className="notif-item-body">{n.body}</span>
                       <span className="notif-item-time">{n.time}</span>
                     </button>
-                    <button className="notif-dismiss" onClick={() => dismiss(n.id)} title="Dismiss" aria-label={`Dismiss: ${n.title}`}>
+                    <button className="notif-dismiss" onClick={() => dismiss([n.id])} title="Dismiss" aria-label={`Dismiss: ${n.title}`}>
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                       </svg>
@@ -212,7 +213,7 @@ export default function TopBar({ onOpenCmd, onOpenNav }) {
 
               {notifs.length > 0 && (
                 <div className="notif-footer">
-                  <button className="notif-clear-all" onClick={() => notifs.forEach(n => dismiss(n.id))}>Clear all</button>
+                  <button className="notif-clear-all" onClick={() => dismiss(notifs.map(n => n.id))}>Clear all</button>
                 </div>
               )}
             </div>
