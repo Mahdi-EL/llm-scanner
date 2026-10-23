@@ -1010,6 +1010,39 @@ def test_regression_alerts_compare_runs_of_the_same_schedule(client, monkeypatch
     assert sent[-1][0] == "scan.regression" and sent[-1][1]["new_critical"] == 1
 
 
+def test_an_accepted_risk_that_comes_and_goes_raises_no_alert(client, monkeypatch):
+    """One HIGH finding caps the score at 69: an attack marked as an accepted risk that fails one week and
+    not the next mustn't read as a 31-point drop."""
+    import notifications
+    import store
+    sent = []
+    monkeypatch.setattr(notifications, "send_webhook", lambda user, event, payload: sent.append((event, payload)))
+    monkeypatch.setattr(notifications, "_can_email", lambda user: False)
+    user_id, _ = _register(client)
+    user = api.auth_db.get_user_by_id(user_id)
+
+    def run(severity_of_c, score):
+        results = [{"category": "c", "attack": a, "severity": "SAFE"} for a in ("A", "B")]
+        results.append({"category": "c", "attack": "C", "severity": severity_of_c})
+        scan_id = scan_db.create_scan("Bot", "simulation", user_id=user_id, schedule_id="weekly")
+        scan_db.update_scan(scan_id, status="complete", security_score=score, results_json=json.dumps({"results": results}))
+        return scan_db.get_scan(scan_id)
+
+    run("SAFE", 100)
+    store.set_triage(user_id, "Bot", store.finding_key("c", "C"), "accepted_risk", "internal only", decided_by="ann")
+    notifications._regression_alert(user, run("HIGH", 69), alert_drop=5)
+    assert sent == []
+    notifications._regression_alert(user, run("SAFE", 100), alert_drop=5)
+    worse = run("HIGH", 69)                        # and a real drop still alerts, on the triaged scores
+    results = json.loads(worse["results_json"])["results"]
+    results[0]["severity"] = "MEDIUM"
+    scan_db.update_scan(worse["scan_id"], security_score=59, results_json=json.dumps({"results": results}))
+    notifications._regression_alert(user, scan_db.get_scan(worse["scan_id"]), alert_drop=5)
+    event, payload = sent[-1]
+    assert event == "scan.regression" and payload["previous_score_after_triage"] == 100
+    assert payload["score_after_triage"] < 90 and payload["previous_score"] == 100 and payload["security_score"] == 59
+
+
 def test_regression_email_says_what_happened(monkeypatch):
     import email_service
     sent = []

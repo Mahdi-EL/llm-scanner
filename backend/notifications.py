@@ -145,11 +145,18 @@ def _regression_alert(user: dict, scan: dict, alert_drop: int) -> None:
                                               schedule_id=scan.get("schedule_id"))
     if not previous:
         return
+    import scoring
     import store
-    # Findings the user marked as false positives or accepted risks don't count as regressions
-    diff = analysis.diff_findings(store.apply_triage(user["id"], previous["target_name"], _results(previous)),
-                                  store.apply_triage(user["id"], scan["target_name"], _results(scan)))
-    old, new = previous.get("security_score") or 0, scan.get("security_score") or 0
+    # Findings the user marked as false positives or accepted risks don't count as regressions: not as new
+    # criticals, and not in the score either (one accepted HIGH finding that fails one week and not the
+    # next would otherwise swing the score by 30 points and raise an alert each time).
+    before = store.apply_triage(user["id"], previous["target_name"], _results(previous))
+    after = store.apply_triage(user["id"], scan["target_name"], _results(scan))
+    diff = analysis.diff_findings(before, after)
+    raw_old, raw_new = previous.get("security_score") or 0, scan.get("security_score") or 0
+    old, new = raw_old, raw_new
+    if store.triage_for(user["id"], scan["target_name"]):
+        old, new = scoring.summarize(before)["security_score"], scoring.summarize(after)["security_score"]
     dropped = diff["same_attacks"] and old - new >= alert_drop
     new_critical = sum(1 for f in diff["introduced"] if f.get("severity") == "CRITICAL")
     if dropped or new_critical:
@@ -157,4 +164,5 @@ def _regression_alert(user: dict, scan: dict, alert_drop: int) -> None:
             email_service.send_score_drop(user["email"], scan["target_name"], old, new,
                                           scan["scan_id"], new_critical, workspace=user["id"])
         send_webhook(user, "scan.regression", {**_payload(scan), "previous_scan_id": previous["scan_id"],
-                                               "previous_score": old, "new_critical": new_critical})
+                                               "previous_score": raw_old, "new_critical": new_critical,
+                                               "score_after_triage": new, "previous_score_after_triage": old})
