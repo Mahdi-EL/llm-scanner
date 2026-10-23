@@ -14,7 +14,7 @@ from typing import Callable, List, Optional
 import requests
 
 from .exceptions import (APIKeyError, LLMScannerError, QuotaError, RateLimitError,
-                         ReportError, ScanError, TargetError)
+                         ReportError, ScanError, TargetError, WaitTimeout)
 from .models import Scan, ScanReport
 
 DEFAULT_API_URL = "http://localhost:8000"
@@ -89,8 +89,9 @@ class Client:
 
     def wait(self, scan_id: str, poll_interval: float = 5.0, timeout: Optional[float] = None,
              on_progress: Optional[Callable[[Scan], None]] = None) -> ScanReport:
-        """Polls until the scan finishes. Raises ScanError if it fails or is cancelled. Unreachable-API,
-        5xx and 429 answers are retried up to POLL_RETRIES times in a row."""
+        """Polls until the scan finishes. Raises ScanError if it fails or is cancelled, and WaitTimeout
+        (a ScanError) when `timeout` seconds pass first: the scan goes on unless you cancel() it.
+        Unreachable-API, 5xx and 429 answers are retried up to POLL_RETRIES times in a row."""
         started, failures = time.monotonic(), 0
         while True:
             try:
@@ -112,7 +113,7 @@ class Client:
             if scan.status in ("failed", "cancelled"):
                 raise ScanError(f"Scan {scan.status}: {scan.error_message or 'no details'}")
             if timeout is not None and time.monotonic() - started > timeout:
-                raise ScanError(f"Timed out after {timeout:.0f}s waiting for scan {scan_id}")
+                raise WaitTimeout(f"Timed out after {timeout:.0f}s waiting for scan {scan_id}")
             time.sleep(poll_interval)
 
     def results(self, scan_id: str) -> ScanReport:

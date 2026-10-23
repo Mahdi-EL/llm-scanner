@@ -161,6 +161,30 @@ def test_findings_marked_as_accepted_risks_dont_fail_the_build(base_url, account
     assert "aren't counted" in capsys.readouterr().out
 
 
+def test_a_wait_that_gives_up_cancels_the_scan(base_url, account, monkeypatch, capsys):
+    """Left running, a scan nobody waits for holds one of the account's two scan slots, and the next CI
+    runs are turned away until it ends."""
+    import signal
+
+    from llmscanner import cli
+    client = Client(api_key=account["key"], base_url=base_url)
+    args = ["--api-key", account["key"], "--api-url", base_url, "scan", "--name", "slow", "--quick",
+            "--categories", "extraction", "--wait", "--poll", "0.05", "--timeout", "0.2"]
+    assert cli.main(args) == 2                                  # workers are off: the scan never finishes
+    err = capsys.readouterr().err
+    assert "Timed out" in err and "Cancelled scan" in err
+    assert [s["status"] for s in client.list()["scans"]] == ["cancelled"]
+
+    def terminated(self, *a, **k):                              # a CI runner stopping the job
+        signal.raise_signal(signal.SIGTERM)
+    monkeypatch.setattr(Client, "wait", terminated)
+    before = signal.getsignal(signal.SIGTERM)
+    assert cli.main(args) == 130
+    assert "Interrupted" in capsys.readouterr().err
+    assert [s["status"] for s in client.list()["scans"]] == ["cancelled", "cancelled"]
+    assert signal.getsignal(signal.SIGTERM) == before            # the handler is put back
+
+
 def test_cli_reads_the_target_key_from_the_environment(monkeypatch):
     """The GitHub Action passes the target key by env, so it never shows up in argv."""
     from llmscanner import cli

@@ -25,6 +25,10 @@ class ScanError(LLMScannerError):
     """The scan failed or was cancelled."""
 
 
+class WaitTimeout(ScanError):
+    """wait() gave up before the scan finished; the scan itself is still running."""
+
+
 class TargetError(LLMScannerError):
     """The target was rejected (bad URL, blocked address) or couldn't be reached."""
 

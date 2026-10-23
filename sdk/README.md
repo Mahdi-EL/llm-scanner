@@ -52,7 +52,10 @@ llmscanner scan --name "Help desk" --type custom_rest --url https://api.example.
 `--quick` runs about 5 attacks per category (~110) instead of all ~1,090: a fast check for every pull
 request, with a full scan before a release.
 
-Exit codes: `0` passed, `1` a finding at or above `--fail-on` (or a score below `--min-score`), `2` error.
+Exit codes: `0` passed, `1` a finding at or above `--fail-on` (or a score below `--min-score`), `2` error,
+`130` interrupted. With `--wait`, the scan belongs to the command: when `--timeout` passes or the command is
+interrupted (Ctrl+C, a cancelled CI job), the scan is cancelled rather than left holding one of your
+account's scan slots. Leave out `--wait` to start a scan and check on it later with `llmscanner status`.
 In GitHub Actions the result is also written to the job summary. A report that can't be downloaded is a
 warning, not a failure, and waiting rides out a few failed status checks in a row (the API restarting
 during a deploy): the scan itself resumes from where it was.
