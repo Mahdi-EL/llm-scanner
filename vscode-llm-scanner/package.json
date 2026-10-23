@@ -2,7 +2,7 @@
   "name": "llm-scanner",
   "displayName": "LLM Scanner",
   "description": "Scan the system prompts in your code for prompt injection, jailbreaks and data leaks",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "publisher": "MahdiEL",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/Mahdi-EL/llm-scanner" },
@@ -53,7 +53,7 @@
         "llmscanner.autoScan": {
           "type": "boolean",
           "default": false,
-          "description": "Scan automatically when a file is saved (each scan counts toward your plan's monthly limit)"
+          "description": "Scan a file's system prompt when you save it, if the prompt changed since its last scan (each scan counts toward your plan's monthly limit)"
         }
       }
     }

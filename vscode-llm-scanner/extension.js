@@ -193,15 +193,34 @@ function decorate(editor, prompt, summary) {
     }]);
 }
 
+// ── Auto-scan on save ─────────────────────────────────────────
+// Each scan counts toward the plan's monthly limit, so a save scans only a prompt that hasn't been scanned
+// yet, never while that file's last scan still runs, and a file without a prompt is skipped silently.
+const scannedPrompts = new Map();   // document URI -> Set of the prompt texts scanned
+const scanning = new Set();         // document URIs with a scan in flight
+
+function rememberScanned(uri, text) {
+    if (!scannedPrompts.has(uri)) scannedPrompts.set(uri, new Set());
+    scannedPrompts.get(uri).add(text.trim());
+}
+
+function promptsToAutoScan(uri, text) {
+    if (scanning.has(uri)) return [];
+    const done = scannedPrompts.get(uri) || new Set();
+    return extractSystemPrompts(text).filter(p => !done.has(p.text));
+}
+
 // ── Commands ──────────────────────────────────────────────────
 async function runScan(context, editor, promptText, promptInfo) {
     const name = path.basename(editor.document.fileName);
+    const uri = editor.document.uri.toString();
     const { categories, quickScan } = settings();
     if (promptText.length > MAX_PROMPT) {
         vscode.window.showErrorMessage(`LLM Scanner: this prompt has ${promptText.length.toLocaleString()} characters; ` +
             `the limit is ${MAX_PROMPT.toLocaleString()}.`);
         return;
     }
+    scanning.add(uri);
     await vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification, title: `LLM Scanner: ${name}${quickScan ? ' (quick scan)' : ''}`, cancellable: true,
     }, async (progress, token) => {
@@ -210,6 +229,7 @@ async function runScan(context, editor, promptText, promptInfo) {
             if (categories.length) body.categories = categories;
             const started = await api(context, 'POST', '/scan', body);
             lastScanId = started.scan_id;
+            rememberScanned(uri, promptText);
             const scan = await waitForScan(context, started.scan_id, progress, token);
             const summary = { ...(scan.summary || {}), ...(scan.results?.summary || {}) };
             if (promptInfo) decorate(editor, promptInfo, summary);
@@ -218,6 +238,8 @@ async function runScan(context, editor, promptText, promptInfo) {
                 `LLM Scanner: ${summary.security_score}/100 (grade ${summary.grade}) for ${name}`);
         } catch (e) {
             vscode.window.showErrorMessage(`LLM Scanner: ${e.message}`);
+        } finally {
+            scanning.delete(uri);
         }
     });
 }
@@ -229,6 +251,10 @@ async function scanFile(context, editor) {
         vscode.window.showInformationMessage('No system prompt found. Select the prompt text and run "Scan Selected Text".');
         return;
     }
+    await scanOneOf(context, editor, prompts);
+}
+
+async function scanOneOf(context, editor, prompts) {
     let chosen = prompts[0];
     if (prompts.length > 1) {
         const pick = await vscode.window.showQuickPick(
@@ -265,7 +291,8 @@ function activate(context) {
         vscode.workspace.onDidSaveTextDocument(doc => {
             const editor = vscode.window.activeTextEditor;
             if (vscode.workspace.getConfiguration('llmscanner').get('autoScan') && editor && editor.document === doc) {
-                scanFile(context, editor);
+                const changed = promptsToAutoScan(doc.uri.toString(), doc.getText());
+                if (changed.length) scanOneOf(context, editor, changed);
             }
         }),
     );
@@ -280,4 +307,5 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, extractSystemPrompts, escapeHtml, errorDetail, waitForScan };
+module.exports = { activate, deactivate, extractSystemPrompts, escapeHtml, errorDetail, waitForScan,
+                   promptsToAutoScan, rememberScanned, scanning };
