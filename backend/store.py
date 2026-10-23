@@ -164,7 +164,16 @@ def retry_schedule_soon(schedule_id: str, minutes: int = 15):
 
 def record_schedule_scan(schedule_id: str, scan_id: str):
     with transaction() as conn:
-        conn.execute("UPDATE schedules SET last_scan_id = ? WHERE id = ?", (scan_id, schedule_id))
+        conn.execute("UPDATE schedules SET last_scan_id = ?, skip_noted = NULL WHERE id = ?", (scan_id, schedule_id))
+
+
+def note_schedule_skip(schedule_id: str, reason: str) -> bool:
+    """Whether to email the owner about a skipped run: once per reason and month until a run starts again.
+    A daily schedule whose month's scans are used up would otherwise send an email every day."""
+    mark = f"{datetime.now(timezone.utc):%Y-%m}|{reason[:300]}"
+    with transaction() as conn:
+        return conn.execute("UPDATE schedules SET skip_noted = ? WHERE id = ? AND COALESCE(skip_noted, '') != ?",
+                            (mark, schedule_id, mark)).rowcount == 1
 
 
 # ── Custom attack prompts ─────────────────────────────────────

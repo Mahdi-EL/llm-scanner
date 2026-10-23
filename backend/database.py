@@ -247,6 +247,8 @@ OTHER_COLUMNS = {
     "api_keys"      : {"created_by": "TEXT"},
     # who marked the finding (shown in the app and the evidence report)
     "finding_triage": {"decided_by": "TEXT"},
+    # "<YYYY-MM>|<reason>" of the last skipped run the owner was emailed about (one email per reason a month)
+    "schedules"     : {"skip_noted": "TEXT"},
 }
 
 

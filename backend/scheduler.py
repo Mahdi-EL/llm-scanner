@@ -48,7 +48,7 @@ def run_due() -> int:
                 log.info("Scheduled scan %s postponed: %s", sched["id"], e.message)
             else:                        # e.g. the month's scans are used up: tell the owner it didn't run
                 log.warning("Scheduled scan %s skipped: %s", sched["id"], e.message)
-                if user.get("email") and user.get("email_verified"):
+                if user.get("email") and user.get("email_verified") and store.note_schedule_skip(sched["id"], e.message):
                     email_service.send_schedule_skipped(user["email"], target["name"], sched["frequency"],
                                                         e.message)
         except Exception:
