@@ -315,3 +315,17 @@ test('Editing a saved target sends only what changed, and a new URL needs the ke
   await waitFor(() => expect(api.targetsAPI.update).toHaveBeenLastCalledWith('t1',
     { api_url: 'https://elsewhere.example.com/v1', api_key: 'sk-new' }));
 });
+
+test('A schedule kept from a paid plan shows as on hold on Free, and can be removed', async () => {
+  auth.value = { ...OWNER, user: { id: 'u1', plan: 'free' } };
+  const saved = { id: 't1', name: 'Prod bot', has_key: false, created_at: '', updated_at: '2026-10-22T10:00:00+00:00',
+    config: { target_type: 'simulation' } };
+  api.targetsAPI.list.mockResolvedValue({ data: { targets: [saved] } });
+  api.schedulesAPI.list.mockResolvedValue({ data: { schedules: [
+    { id: 's1', target_id: 't1', frequency: 'weekly', enabled: true, next_run_at: '2026-10-30T10:00:00+00:00' }] } });
+  api.schedulesAPI.remove.mockResolvedValue({ data: {} });
+  renderAt('/targets', <Targets />, '/targets');
+  expect(await screen.findByText(/weekly schedule on hold: needs a paid plan/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove the schedule of Prod bot' }));
+  await waitFor(() => expect(api.schedulesAPI.remove).toHaveBeenCalledWith('s1'));
+});

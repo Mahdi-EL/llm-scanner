@@ -144,12 +144,26 @@ function TargetForm({ target, onSaved, onCancel }) {
 function ScheduleControl({ target, schedule, paid, onChange, readOnly }) {
   const toast = useToast();
   const navigate = useNavigate();
+  const remove = async () => {
+    try { await schedulesAPI.remove(schedule.id); onChange(); }
+    catch (e) { toast(errorMessage(e), 'error'); }
+  };
+  // a schedule kept from a paid plan doesn't run on Free; it starts again after an upgrade
+  const onHold = schedule && schedule.enabled && !paid;
   if (readOnly) {
     return schedule ? <span style={{ fontSize:'12px', color:'var(--t3)' }}>
-      {schedule.enabled ? `Scanned ${schedule.frequency}, next ${shortDate(schedule.next_run_at)}` : 'Schedule paused'}</span> : null;
+      {onHold ? `${schedule.frequency} schedule on hold: needs a paid plan`
+        : schedule.enabled ? `Scanned ${schedule.frequency}, next ${shortDate(schedule.next_run_at)}` : 'Schedule paused'}</span> : null;
   }
   if (!paid) {
-    return <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => navigate('/pricing')}>Schedules: Pro plan</button>;
+    if (!schedule) return <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => navigate('/pricing')}>Schedules: Pro plan</button>;
+    return (
+      <span style={{ fontSize:'12px', color:'var(--t3)', display:'inline-flex', gap:'8px', alignItems:'center', flexWrap:'wrap' }}>
+        {onHold ? `${schedule.frequency} schedule on hold: needs a paid plan` : 'paused'}
+        <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => navigate('/pricing')}>See plans</button>
+        <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={remove} aria-label={`Remove the schedule of ${target.name}`}>Unschedule</button>
+      </span>
+    );
   }
   const create = async frequency => {
     try { await schedulesAPI.create({ target_id: target.id, frequency, alert_drop: 5 }); onChange(); toast(`Scheduled ${frequency}.`, 'success'); }
@@ -166,10 +180,6 @@ function ScheduleControl({ target, schedule, paid, onChange, readOnly }) {
   }
   const toggle = async () => {
     try { await schedulesAPI.update(schedule.id, { enabled: !schedule.enabled }); onChange(); }
-    catch (e) { toast(errorMessage(e), 'error'); }
-  };
-  const remove = async () => {
-    try { await schedulesAPI.remove(schedule.id); onChange(); }
     catch (e) { toast(errorMessage(e), 'error'); }
   };
   return (
