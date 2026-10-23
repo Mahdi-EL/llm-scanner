@@ -2,15 +2,54 @@
 
 Anything else (bad API key, model not found, invalid request, blocked URL)
 fails immediately, because retrying can't fix it.
+
+A scan runs its calls inside stop_when(check): once check() is true, a call that waits to retry
+(a rate limit can mean minutes) raises Cancelled instead of sleeping on.
 """
 import logging
 import random
 import re
+import threading
 import time
+from contextlib import contextmanager
 
 log = logging.getLogger("llmscanner.retry")
 
 _GROQ_WAIT = re.compile(r"try again in (?:(\d+)m)?(\d+(?:\.\d+)?)s", re.IGNORECASE)
+
+_local = threading.local()
+
+
+class Cancelled(Exception):
+    """The work a call belongs to stopped (e.g. the scan was cancelled), so the call wasn't made or retried."""
+
+
+@contextmanager
+def stop_when(check):
+    """In this thread, until the block ends, call_with_retry gives up as soon as check() returns true."""
+    previous = getattr(_local, "check", None)
+    _local.check = check
+    try:
+        yield
+    finally:
+        _local.check = previous
+
+
+def _stop_requested() -> bool:
+    check = getattr(_local, "check", None)
+    return bool(check and check())
+
+
+def _wait(seconds: float) -> None:
+    """Sleeps, looking every second whether the work was stopped."""
+    if getattr(_local, "check", None) is None:
+        time.sleep(seconds)
+        return
+    deadline = time.monotonic() + seconds
+    while (left := deadline - time.monotonic()) > 0:
+        if _stop_requested():
+            raise Cancelled("Stopped while waiting to retry")
+        time.sleep(min(left, 1.0))
 
 
 def _status(exc) -> int | None:
@@ -64,6 +103,8 @@ def call_with_retry(func, *args, max_retries: int = 5, base_delay: float = 2.0,
     Rate limits get more patience (rate_limit_retries), since they always clear."""
     attempt = 0
     while True:
+        if _stop_requested():
+            raise Cancelled("Stopped before the call")
         try:
             return func(*args, **kwargs)
         except Exception as exc:
@@ -76,5 +117,5 @@ def call_with_retry(func, *args, max_retries: int = 5, base_delay: float = 2.0,
             delay = min(delay + 0.5, max_delay * 2)
             log.warning("Transient %s, retry %d/%d in %.1fs",
                         type(exc).__name__, attempt + 1, limit, delay)
-            time.sleep(delay)
+            _wait(delay)
             attempt += 1

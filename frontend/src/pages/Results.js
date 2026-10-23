@@ -288,7 +288,7 @@ function CategoryTable({ results, cats }) {
 // Scan emails go to whoever started the scan (a team member, or the account owner)
 const startedBy = (scan, user) => (scan.created_by ? scan.created_by === user?.id : scan.user_id === user?.id);
 
-function RunningState({ scan, cats, onCancel, emailed }) {
+function RunningState({ scan, cats, onCancel, cancelling, emailed }) {
   const queued = scan.status === 'pending';
   const done = scan.completed_attacks || 0;
   const total = scan.total_attacks || 0;
@@ -313,7 +313,11 @@ function RunningState({ scan, cats, onCancel, emailed }) {
         </div>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'16px', fontSize:'12px', color:'var(--t3)' }}>
           <span>This page updates by itself. You can leave it{emailed ? '; we’ll email you when it’s done' : ': the report will be in Reports'}.</span>
-          {onCancel && <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }} onClick={onCancel}>Cancel scan</button>}
+          {onCancel && (
+            <button className="btn-outline" style={{ padding:'5px 12px', fontSize:'12px' }} onClick={onCancel} disabled={cancelling}>
+              {cancelling ? 'Cancelling…' : 'Cancel scan'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -374,6 +378,7 @@ export default function Results() {
   const [shown,     setShown]     = useState(PAGE);
   const [cats,      setCats]      = useState({});
   const [busy,      setBusy]      = useState('');
+  const [cancelled, setCancelled] = useState('');      // the scan id asked to stop, until its status says so
 
   const fetchScan = useCallback(async () => {
     try {
@@ -451,8 +456,9 @@ export default function Results() {
   };
 
   const cancel = async () => {
+    setCancelled(id);
     try { await scansAPI.cancel(id); toast('Cancelling scan…', 'info'); fetchScan(); }
-    catch (e) { toast(errorMessage(e), 'error'); }
+    catch (e) { setCancelled(''); toast(errorMessage(e), 'error'); }
   };
 
   const remove = async () => {
@@ -475,7 +481,7 @@ export default function Results() {
       <button className="btn-primary" onClick={()=> notFound ? navigate('/') : fetchScan()}>{notFound ? 'Back to Dashboard' : 'Retry'}</button>
     </div>
   );
-  if (isActive(scan)) return <RunningState scan={scan} cats={cats} onCancel={canEdit ? cancel : null} emailed={!!user?.scan_emails && startedBy(scan, user)} />;
+  if (isActive(scan)) return <RunningState scan={scan} cats={cats} onCancel={canEdit ? cancel : null} cancelling={cancelled === id} emailed={!!user?.scan_emails && startedBy(scan, user)} />;
   if (scan.status === 'failed' || scan.status === 'cancelled') return (
     <div>
       <div className="empty-state" style={{ padding: scan.partial ? '56px 40px 28px' : '100px 40px' }}>
