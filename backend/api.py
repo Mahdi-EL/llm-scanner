@@ -1254,7 +1254,8 @@ def retest_scan(request: Request, scan_id: str, body: RetestRequest, user: dict 
     failures = remediation.failed_findings(_results_after_triage(scan, user))
     if not failures:
         raise HTTPException(status_code=400, detail="Nothing failed in this scan, so there is nothing to re-test")
-    cfg = {k: v for k, v in _scan_config(scan).items() if k in _RETEST_KEEP}
+    original = _scan_config(scan)
+    cfg = {k: v for k, v in original.items() if k in _RETEST_KEEP}
     cfg.setdefault("target_type", scan["target_type"])
     if body.system_prompt:
         cfg["system_prompt"] = body.system_prompt
@@ -1262,7 +1263,10 @@ def retest_scan(request: Request, scan_id: str, body: RetestRequest, user: dict 
     if not api_key and scan.get("target_id"):
         saved = store.get_target(user["id"], scan["target_id"], with_key=True)
         api_key = saved.get("api_key") if saved else None
-    if not api_key and cfg["target_type"] in ("groq", "openai_compatible"):
+    # The scan's key was erased when it ended. Ask again if it had one (older scans don't say: an
+    # OpenAI-compatible API usually has one); an endpoint that needs no key is re-tested without.
+    used_key = original.get("with_key", cfg["target_type"] == "openai_compatible")
+    if not api_key and (cfg["target_type"] == "groq" or (used_key and cfg["target_type"] != "simulation")):
         raise HTTPException(status_code=400, detail="Enter the target's API key to re-test it")
     cfg["attacks"] = [[f["category"], f["attack"]] for f in failures]
     try:
@@ -1522,6 +1526,9 @@ def _check_target_url(url: Optional[str]) -> None:
             raise HTTPException(status_code=400, detail=f"Target URL rejected: {e}")
 
 
+GROQ_KEY_NEEDED = "A Groq target runs on your own Groq API key: enter it. To scan a system prompt on this server's model, use a simulation."
+
+
 @app.get("/api/targets")
 def list_targets(user: dict = Depends(require_user)):
     """Your saved targets (their API keys are never returned)."""
@@ -1533,6 +1540,8 @@ def create_target(body: TargetCreate, user: dict = Depends(require_member)):
     """Saves a target; its API key is stored encrypted."""
     if body.target_type in URL_TARGET_TYPES and not (body.api_url or "").strip():
         raise HTTPException(status_code=400, detail="This target type needs an API URL")
+    if body.target_type == "groq" and not (body.api_key or "").strip():
+        raise HTTPException(status_code=400, detail=GROQ_KEY_NEEDED)
     _check_target_url(body.api_url)
     if len(store.list_targets(user["id"])) >= 50:
         raise HTTPException(status_code=400, detail="You can save up to 50 targets")
@@ -1558,6 +1567,9 @@ def update_target(target_id: str, body: TargetUpdate, user: dict = Depends(requi
     cfg = {**current["config"], **changes} if changes else None
     if cfg and cfg.get("target_type") in URL_TARGET_TYPES and not (cfg.get("api_url") or "").strip():
         raise HTTPException(status_code=400, detail="This target type needs an API URL")
+    keeps_key = bool((body.api_key or "").strip()) or (current.get("has_key") and not body.clear_api_key)
+    if (cfg or current["config"]).get("target_type") == "groq" and not keeps_key:
+        raise HTTPException(status_code=400, detail=GROQ_KEY_NEEDED)
     api_key = "" if body.clear_api_key else body.api_key
     return store.update_target(user["id"], target_id, name=body.name, cfg=cfg, api_key=api_key)
 

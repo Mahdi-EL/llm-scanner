@@ -158,13 +158,18 @@ class Target:
 
     # ── Transports ───────────────────────────────────────────
     @property
+    def _groq_key(self):
+        """A Groq target runs on the user's own key, never on this server's (that's what a simulation is for)."""
+        return self.api_key if self.target_type == "groq" else config.GROQ_API_KEY
+
+    @property
     def _groq(self):
         if self._client is None:
             from groq import Groq
-            key = self.api_key or config.GROQ_API_KEY
-            if not key:
-                raise RuntimeError("No Groq API key: set GROQ_API_KEY on the server")
-            self._client = Groq(api_key=key, max_retries=0)
+            if not self._groq_key:
+                raise RuntimeError("No Groq API key: enter your Groq API key for this target"
+                                   if self.target_type == "groq" else "No Groq API key: set GROQ_API_KEY on the server")
+            self._client = Groq(api_key=self._groq_key, max_retries=0)
         return self._client
 
     def _session(self):
@@ -189,8 +194,7 @@ class Target:
     def _groq_model(self):
         if not self.model:
             import groq_models
-            self.model = groq_models.resolve(config.DEFAULT_MODEL, groq_models.TARGET_PREFERENCES,
-                                             self.api_key or config.GROQ_API_KEY)
+            self.model = groq_models.resolve(config.DEFAULT_MODEL, groq_models.TARGET_PREFERENCES, self._groq_key)
         return self.model
 
     def _send_groq(self, message):
