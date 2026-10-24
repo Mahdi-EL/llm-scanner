@@ -24,7 +24,6 @@ import config
 import detectors
 import errors
 import notifications
-import report
 import scan_db
 import vault
 from db import transaction, utcnow
@@ -133,7 +132,6 @@ def shutdown():
 
 
 def workers_enabled() -> bool:
-    import os
     return os.getenv("LLMSCANNER_DISABLE_WORKERS") != "1"
 
 
@@ -298,19 +296,12 @@ def execute(scan_id: str) -> None:
         )
         if scan_id in _cancel or scan_db.get_scan(scan_id) is None:
             raise ScanAborted("Scan cancelled")       # cancelled or deleted while the last attacks ran
-        paths = report.write_reports(data, config.REPORTS_DIR, scan_id, scan["target_name"])
-        if scan_db.get_scan(scan_id) is None:          # deleted while the reports were written
-            for path in filter(None, paths.values()):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
-            return
+        # No report files: downloads build them from results_json (a full scan's PDF in about 0.3 s), so a
+        # scan takes about 1.5 MB on disk instead of 5, most reports never being downloaded.
         s = data["summary"]
         scan_db.update_scan(
             scan_id,
             status="complete", progress=100, results_json=json.dumps(data), checkpoint_json=None,
-            json_path=paths["json"], pdf_path=paths["pdf"], html_path=paths["html"], md_path=paths["md"],
             security_score=s["security_score"], grade=s["grade"], total_attacks=data["total_attacks"],
             completed_attacks=data["total_attacks"], critical_count=s["critical"], high_count=s["high"],
             medium_count=s["medium"], low_count=s["low"], safe_count=s["safe"], error_count=s["errors"],

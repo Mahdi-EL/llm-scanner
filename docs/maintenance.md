@@ -61,7 +61,8 @@ EOF
 
 Run it daily (cron, a Railway cron service, or a GitHub Action) and copy the file off the server,
 or use [Litestream](https://litestream.io) to stream changes to S3-compatible storage continuously.
-Reports in `REPORTS_DIR` can always be rebuilt from the database, so they don't need backups.
+Reports are built from the database when they're downloaded, so the database is all there is to back up
+(`REPORTS_DIR` only holds files written by versions before October 2026; they can be deleted).
 
 ## 4. Rotating secrets
 
