@@ -248,7 +248,9 @@ def previous_complete_scan(user_id: str, target_name: str, before_scan_id: str,
 def save_findings(scan_id: str, results: list):
     """Stores individual findings (truncated) for analytics, plus the global counters."""
     with transaction() as conn:
-        conn.execute("DELETE FROM findings WHERE scan_id = ?", (scan_id,))
+        conn.execute("DELETE FROM findings WHERE scan_id = ?", (scan_id,))     # takes the write lock
+        if not conn.execute("SELECT 1 FROM scans WHERE scan_id = ?", (scan_id,)).fetchone():
+            return          # deleted as it finished: parts of its replies mustn't outlive it here
         conn.executemany("""
             INSERT INTO findings
                 (scan_id, category, attack, response, score, severity, reason, behavior_changed, confidence)
