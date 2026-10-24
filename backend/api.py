@@ -1079,13 +1079,8 @@ def delete_scan_endpoint(scan_id: str, user: dict = Depends(require_member)):
     return {"message": f"Scan {scan_id} deleted"}
 
 
-# ── Report downloads (rebuilt from the stored results when the file is gone) ──
-_FORMATS = {
-    "pdf" : ("pdf_path", "application/pdf"),
-    "html": ("html_path", "text/html"),
-    "md"  : ("md_path", "text/markdown"),
-    "json": ("json_path", "application/json"),
-}
+# ── Report downloads (built from the stored results) ──────────
+_FORMATS = {"pdf": "application/pdf", "html": "text/html", "md": "text/markdown", "json": "application/json"}
 
 
 def _report_brand(user: dict) -> Optional[str]:
@@ -1094,33 +1089,28 @@ def _report_brand(user: dict) -> Optional[str]:
 
 
 def _report_file(scan: dict, fmt: str, user: Optional[dict] = None) -> FileResponse:
-    brand = _report_brand(user) if user else None
-    if brand and fmt != "json":
-        import tempfile
+    """The report, built from the stored results for this download in a temporary file that's deleted once
+    sent: report files kept for every scan were most of its disk use, and most are never downloaded."""
+    import tempfile
 
-        from starlette.background import BackgroundTask
-        handle, path = tempfile.mkstemp(suffix=f".{fmt}")
-        os.close(handle)
-        report.write_one({**_report_data(scan), "brand": brand}, fmt, path, scan["target_name"])
-        return FileResponse(path=path, media_type=_FORMATS[fmt][1],
-                            filename=f"Security_Report_{scan['scan_id']}.{fmt}",
-                            headers={"Content-Security-Policy": "sandbox"} if fmt == "html" else None,
-                            background=BackgroundTask(os.remove, path))
-    column, media_type = _FORMATS[fmt]
-    path = scan.get(column)
-    if not path or not os.path.exists(path):
-        data = _report_data(scan)
-        path = os.path.join(config.REPORTS_DIR, f"{scan['scan_id']}.{fmt}")
+    from starlette.background import BackgroundTask
+    brand = _report_brand(user) if user and fmt != "json" else None
+    data = _report_data(scan)
+    handle, path = tempfile.mkstemp(suffix=f".{fmt}")
+    os.close(handle)
+    try:
         if fmt == "json":
-            os.makedirs(config.REPORTS_DIR, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         else:
-            report.write_one(data, fmt, path, scan["target_name"])
-        scan_db.update_scan(scan["scan_id"], **{column: path})
-    return FileResponse(path=path, media_type=media_type,
-                        filename=f"LLM_Security_Report_{scan['scan_id']}.{fmt}",
-                        headers={"Content-Security-Policy": "sandbox"} if fmt == "html" else None)
+            report.write_one({**data, "brand": brand} if brand else data, fmt, path, scan["target_name"])
+    except BaseException:
+        os.remove(path)
+        raise
+    return FileResponse(path=path, media_type=_FORMATS[fmt],
+                        filename=f"{'Security_Report' if brand else 'LLM_Security_Report'}_{scan['scan_id']}.{fmt}",
+                        headers={"Content-Security-Policy": "sandbox"} if fmt == "html" else None,
+                        background=BackgroundTask(os.remove, path))
 
 
 @app.get("/download/html/{scan_id}")

@@ -4,6 +4,7 @@ account, sharing, target, schedule, prompt, webhook and download endpoints.
 No test calls an LLM: scans are seeded straight into the database.
 """
 import json
+import os
 import sys
 import time
 import uuid
@@ -372,6 +373,8 @@ def test_downloads_rebuild_reports(client, path, kind):
     r = client.get(path.format(scan_id), headers=headers)
     assert r.status_code == 200, r.text
     assert "attachment" in r.headers["content-disposition"]
+    import config
+    assert not os.path.exists(config.REPORTS_DIR) or not any(scan_id in f for f in os.listdir(config.REPORTS_DIR))
     if kind == "html":
         assert "<script>alert(1)</script>" not in r.text
         assert r.headers.get("content-security-policy") == "sandbox"

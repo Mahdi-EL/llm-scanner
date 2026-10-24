@@ -360,7 +360,7 @@ def test_runner_completes_scan_and_erases_key(few_attacks, monkeypatch):
     assert scan["status"] == "complete" and scan["progress"] == 100
     assert scan["api_key_enc"] is None and scan["checkpoint_json"] is None
     assert scan["critical_count"] == 1 and scan["error_count"] == 1 and scan["grade"] == "F"
-    assert os.path.exists(scan["pdf_path"]) and scan["pdf_path"].startswith(config.REPORTS_DIR)
+    assert scan["results_json"] and scan["pdf_path"] is None        # downloads build the reports from it
     assert sent == [scan_id]
 
 
@@ -453,8 +453,9 @@ def test_runner_marks_unusable_scans_failed(monkeypatch):
     assert scan["api_key_enc"] is None
 
 
-def test_a_scan_deleted_as_it_finishes_leaves_no_report_files(monkeypatch, tmp_path):
-    """Its reports hold the model's replies: they must not outlive the deleted scan."""
+def test_a_finished_scan_writes_no_report_files(monkeypatch, tmp_path):
+    """Four report files per scan (JSON, HTML, PDF, Markdown: about 3 MB for a full scan) were most of its disk use;
+    downloads build them from the stored results instead. And a scan deleted as it finishes stays deleted."""
     import database
     import runner
     import scan_db
@@ -462,17 +463,20 @@ def test_a_scan_deleted_as_it_finishes_leaves_no_report_files(monkeypatch, tmp_p
     monkeypatch.setattr(runner.config, "REPORTS_DIR", str(tmp_path))
     monkeypatch.setattr(runner, "Judge", FakeJudge)
     monkeypatch.setattr(runner.notifications, "scan_finished", lambda *a, **k: None)
-    scan_id = scan_db.create_scan("Gone", "groq", user_id="u-gone", config={"target_type": "groq"})
     monkeypatch.setattr(runner, "build_target", lambda scan: (FakeTarget(), None, None))
-    real_write = runner.report.write_reports
+    kept = scan_db.create_scan("Kept", "groq", user_id="u-files", config={"target_type": "groq"})
+    runner.execute(kept)
+    assert scan_db.get_scan(kept)["status"] == "complete" and list(tmp_path.iterdir()) == []
 
-    def write_then_delete(*a, **k):
-        paths = real_write(*a, **k)
-        scan_db.delete_scan(scan_id)           # the user deletes it while the files are written
-        return paths
-    monkeypatch.setattr(runner.report, "write_reports", write_then_delete)
-    runner.execute(scan_id)
-    assert scan_db.get_scan(scan_id) is None and list(tmp_path.iterdir()) == []
+    gone = scan_db.create_scan("Gone", "groq", user_id="u-files", config={"target_type": "groq"})
+
+    class DeletedMidway(FakeTarget):
+        def send(self, message):
+            scan_db.delete_scan(gone)                # the user deletes it while the last attacks run
+            return super().send(message)
+    monkeypatch.setattr(runner, "build_target", lambda scan: (DeletedMidway(), None, None))
+    runner.execute(gone)
+    assert scan_db.get_scan(gone) is None and list(tmp_path.iterdir()) == []
 
 
 # ── Scheduler ─────────────────────────────────────────────────
