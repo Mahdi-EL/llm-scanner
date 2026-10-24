@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { scansAPI, targetsAPI, promptsAPI, errorMessage, CHECKED_PROMPT_KEY } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import { fmtNum, typeLabel } from '../utils/format';
+import { fmtNum, typeLabel, TARGET_FIELDS } from '../utils/format';
 
 const TARGET_TYPES = [
   { id:'simulation', label:'Simulation', tag:'No key needed',
@@ -101,8 +101,7 @@ export default function NewScan() {
 
   const payload = () => {
     const out = { target_type: form.target_type };
-    ['system_prompt','api_url','api_key','model','baseline_question','input_field','output_field']
-      .forEach(k => { if (form[k]?.trim()) out[k] = form[k].trim(); });
+    TARGET_FIELDS[form.target_type].forEach(k => { if (form[k]?.trim()) out[k] = form[k].trim(); });
     return out;
   };
 

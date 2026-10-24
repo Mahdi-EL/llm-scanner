@@ -38,6 +38,15 @@ export const TARGET_TYPES = {
 };
 export const typeLabel = t => TARGET_TYPES[t] || (t || '').replace(/_/g, ' ');
 
+/** The settings each target type uses. Forms send only these: a field hidden by switching the type keeps
+ *  its text, and a leftover URL or key would otherwise go with a simulation (and a bad URL get it refused). */
+export const TARGET_FIELDS = {
+  simulation       : ['system_prompt', 'model', 'baseline_question'],
+  groq             : ['api_key', 'model', 'system_prompt', 'baseline_question'],
+  openai_compatible: ['api_url', 'api_key', 'model', 'system_prompt', 'baseline_question'],
+  custom_rest      : ['api_url', 'api_key', 'input_field', 'output_field', 'system_prompt', 'baseline_question'],
+};
+
 /** Score colour, matching the grade bands (A/B green, C/D amber, F red). */
 export function scoreColor(score) {
   if (score == null) return 'var(--t3)';

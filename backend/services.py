@@ -70,6 +70,10 @@ def queue_scan(user: dict, cfg: dict, api_key: Optional[str] = None, *,
     if target_type in ("openai_compatible", "custom_rest"):
         if not cfg.get("api_url"):
             raise ScanRejected(400, "This target type needs an API URL")
+    else:
+        cfg = {k: v for k, v in cfg.items() if k != "api_url"}      # not used: neither checked nor stored
+    if target_type == "simulation":
+        api_key = None                    # runs on this server's model: a key would only be stored for nothing
     if target_type == "groq" and not api_key:
         raise ScanRejected(400, "A Groq target runs on your own Groq API key: enter it. "
                                 "To scan a system prompt on this server's model, use a simulation.")

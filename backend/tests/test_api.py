@@ -227,6 +227,17 @@ def test_an_empty_category_list_is_rejected_not_read_as_all(client):
     assert client.post("/api/schedules", headers=headers, json={"target_id": target["id"]}).status_code != 422   # (402: Pro only)
 
 
+def test_a_simulation_ignores_a_url_and_key_it_doesnt_use(client):
+    """A URL left from another target type mustn't get a simulation refused, and a key isn't stored for it."""
+    _, headers = _register(client)
+    r = client.post("/scan", headers=headers, json={
+        "target_name": "Sim", "target_type": "simulation", "api_url": "http://localhost:8000/v1", "api_key": "sk-x",
+        "categories": ["extraction"], "quick": True})
+    assert r.status_code == 200, r.text
+    scan = scan_db.get_scan(r.json()["scan_id"])
+    assert scan["api_key_enc"] is None and "api_url" not in json.loads(scan["config_json"])
+
+
 def test_scan_is_queued_with_encrypted_key(client):
     user_id, headers = _register(client)
     r = client.post("/scan", headers=headers, json={

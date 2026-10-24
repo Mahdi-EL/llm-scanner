@@ -329,3 +329,39 @@ test('A schedule kept from a paid plan shows as on hold on Free, and can be remo
   fireEvent.click(screen.getByRole('button', { name: 'Remove the schedule of Prod bot' }));
   await waitFor(() => expect(api.schedulesAPI.remove).toHaveBeenCalledWith('s1'));
 });
+
+test('NewScan sends only what the chosen target type uses', async () => {
+  api.scansAPI.categories.mockResolvedValue(CATEGORIES);
+  api.scansAPI.models.mockResolvedValue({ data: { default_target: '', groq: [] } });
+  api.promptsAPI.list.mockResolvedValue({ data: { prompts: [] } });
+  api.targetsAPI.list.mockResolvedValue({ data: { targets: [] } });
+  api.scansAPI.start.mockClear();
+  api.scansAPI.start.mockResolvedValue({ data: { scan_id: 'sim1' } });
+  renderAt('/new-scan', <NewScan />, '/new-scan');
+  await screen.findByText(/^Launch scan/);
+  fireEvent.change(screen.getByLabelText('Target name'), { target: { value: 'Bot' } });
+  fireEvent.click(screen.getByRole('button', { name: /OpenAI-compatible API/ }));
+  fireEvent.change(screen.getByLabelText(/API URL/), { target: { value: 'http://localhost:8000/v1' } });
+  fireEvent.change(screen.getByLabelText(/API key/), { target: { value: 'sk-secret' } });
+  fireEvent.click(screen.getByRole('button', { name: /^Simulation/ }));        // changed my mind
+  fireEvent.click(screen.getByText(/^Launch scan/));
+  await waitFor(() => expect(api.scansAPI.start).toHaveBeenCalled());
+  const body = api.scansAPI.start.mock.calls[0][0];
+  expect(body.target_type).toBe('simulation');
+  expect(body).not.toHaveProperty('api_url');
+  expect(body).not.toHaveProperty('api_key');
+});
+
+test('Changing a saved target to a simulation clears the URL it no longer uses', async () => {
+  const saved = { id: 't1', name: 'Prod bot', has_key: false, created_at: '', updated_at: '2026-10-22T10:00:00+00:00',
+    config: { target_type: 'openai_compatible', api_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' } };
+  api.targetsAPI.list.mockResolvedValue({ data: { targets: [saved] } });
+  api.schedulesAPI.list.mockResolvedValue({ data: { schedules: [] } });
+  api.targetsAPI.update.mockClear();
+  api.targetsAPI.update.mockResolvedValue({ data: saved });
+  renderAt('/targets', <Targets />, '/targets');
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+  fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'simulation' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(api.targetsAPI.update).toHaveBeenCalledWith('t1', { target_type: 'simulation', api_url: '' }));
+});
