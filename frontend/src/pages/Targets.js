@@ -5,7 +5,7 @@ import { targetsAPI, schedulesAPI, scansAPI, gatewayAPI, API_URL, errorMessage }
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { relTime, shortDate, TARGET_TYPES } from '../utils/format';
+import { relTime, shortDate, TARGET_TYPES, TARGET_FIELDS } from '../utils/format';
 import FirewallPanel from '../components/FirewallPanel';
 
 const TYPES = TARGET_TYPES;
@@ -27,7 +27,10 @@ function TargetForm({ target, onSaved, onCancel }) {
   const [test, setTest] = useState(null);
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setTest(null); };
   const needsURL = URL_TYPES.includes(form.target_type);
-  const body = () => Object.fromEntries(Object.entries(form).filter(([, v]) => v && String(v).trim()));
+  // what this type uses ("" for a field it doesn't, though it may still hold text from another type)
+  const used = k => k === 'name' || k === 'target_type' || TARGET_FIELDS[form.target_type].includes(k);
+  const value = k => (used(k) ? String(form[k] ?? '').trim() : '');
+  const body = () => Object.fromEntries(Object.keys(form).filter(k => value(k)).map(k => [k, value(k)]));
   // the API sends a saved key only to the address (and kind of target) it was saved for
   const savedType = target?.config.target_type;
   const keyFollows = form.target_type === 'simulation' || (sameURL(form.api_url, target?.config.api_url)
@@ -51,8 +54,9 @@ function TargetForm({ target, onSaved, onCancel }) {
     setSaving(true);
     try {
       if (target) {
-        const changes = Object.fromEntries(EDITABLE.filter(k => form[k].trim() !== initial[k].trim()).map(k => [k, form[k].trim()]));
-        if (form.api_key.trim()) changes.api_key = form.api_key.trim();
+        // a field the new type doesn't use is cleared, so a simulation doesn't keep an old target's URL
+        const changes = Object.fromEntries(EDITABLE.filter(k => value(k) !== initial[k].trim()).map(k => [k, value(k)]));
+        if (value('api_key')) changes.api_key = value('api_key');
         if (clearKey) changes.clear_api_key = true;
         const { data } = Object.keys(changes).length ? await targetsAPI.update(target.id, changes) : { data: target };
         onSaved(data);
