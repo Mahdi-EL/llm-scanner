@@ -478,6 +478,14 @@ def test_a_finished_scan_writes_no_report_files(monkeypatch, tmp_path):
     runner.execute(gone)
     assert scan_db.get_scan(gone) is None and list(tmp_path.iterdir()) == []
 
+    # deleted between the last check and the findings being stored: no findings rows outlive it
+    late = scan_db.create_scan("Late", "groq", user_id="u-files")
+    scan_db.delete_scan(late)
+    scan_db.save_findings(late, [{"category": "c", "attack": "a", "response": "the secret", "severity": "HIGH"}])
+    from db import transaction
+    with transaction() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM findings WHERE scan_id = ?", (late,)).fetchone()[0] == 0
+
 
 # ── Scheduler ─────────────────────────────────────────────────
 def test_scheduler_queues_due_scans(monkeypatch):
