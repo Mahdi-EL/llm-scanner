@@ -212,6 +212,19 @@ test('Reports says it could not load instead of showing an empty account', async
   expect(api.scansAPI.listAll).toHaveBeenCalledTimes(2);
 });
 
+test('Reports sort buttons say how the list is sorted', async () => {
+  const scan = (id, name, score, day) => ({ scan_id: id, target_name: name, status: 'complete', created_at: `2026-10-${day}T10:00:00+00:00`,
+    summary: { security_score: score, critical: 0, high: 0 } });
+  api.scansAPI.listAll.mockResolvedValue({ scans: [scan('a', 'Alpha', 90, '10'), scan('b', 'Beta', 40, '12')], total: 2 });
+  renderAt('/reports', <Reports />, '/reports');
+  const date = await screen.findByRole('button', { name: 'Date, sorted newest first. Sort by date' });
+  expect(screen.getByRole('button', { name: 'Score. Sort by score' })).toBeInTheDocument();
+  fireEvent.click(date);
+  expect(screen.getByRole('button', { name: 'Date, sorted oldest first. Sort by date' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Target. Sort by target' }));
+  expect(screen.getByRole('button', { name: 'Target, sorted Z to A. Sort by target' })).toBeInTheDocument();
+});
+
 test('Pricing offers a yearly switch when yearly prices exist', async () => {
   api.plansAPI.list.mockResolvedValue({ data: { plans: {
     free: { name: 'Free', amount: 0, currency: 'eur', interval: 'month', scan_limit: 10, features: [], purchasable: false, trial_days: 0, yearly: null },

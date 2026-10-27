@@ -139,9 +139,12 @@ export default function Reports() {
   };
 
   const SortIcon = ({ col }) => {
-    if (sortBy !== col) return <span style={{ opacity:0.3, fontSize:'10px', marginLeft:'3px' }}>↕</span>;
-    return <span style={{ fontSize:'10px', marginLeft:'3px', color:'var(--blue)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+    if (sortBy !== col) return <span aria-hidden="true" style={{ opacity:0.3, fontSize:'10px', marginLeft:'3px' }}>↕</span>;
+    return <span aria-hidden="true" style={{ fontSize:'10px', marginLeft:'3px', color:'var(--blue)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
   };
+  // what a screen reader hears: the column, how it's sorted now, and what pressing it does
+  const ORDER_WORDS = { name: ['A to Z', 'Z to A'], score: ['lowest first', 'highest first'], date: ['oldest first', 'newest first'] };
+  const sortLabel = (col, name) => `${name}${sortBy === col ? `, sorted ${ORDER_WORDS[col][sortDir === 'asc' ? 0 : 1]}` : ''}. Sort by ${name.toLowerCase()}`;
 
   const scoreColor = stats.avgScore >= 80 ? '#16a34a' : stats.avgScore >= 50 ? '#b45309' : stats.avgScore != null ? '#dc2626' : 'var(--t3)';
 
@@ -261,16 +264,16 @@ export default function Reports() {
           <div className="table-scroll"><div style={{ minWidth:'900px' }}>
             {/* Column headers */}
             <div style={{ display:'grid', gridTemplateColumns:'minmax(200px,2fr) 120px 160px 64px 64px 110px 130px', alignItems:'center', padding:'9px 20px', borderBottom:'1px solid var(--b1)', fontSize:'11px', fontWeight:'700', color:'var(--t3)', textTransform:'uppercase', letterSpacing:'0.6px' }}>
-              <button onClick={() => toggleSort('name')} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--t3)', textAlign:'left', padding:0, fontSize:'inherit', fontWeight:'inherit', letterSpacing:'inherit', textTransform:'inherit' }}>
+              <button onClick={() => toggleSort('name')} aria-label={sortLabel('name', 'Target')} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--t3)', textAlign:'left', padding:0, fontSize:'inherit', fontWeight:'inherit', letterSpacing:'inherit', textTransform:'inherit' }}>
                 Target <SortIcon col="name" />
               </button>
               <span>Risk</span>
-              <button onClick={() => toggleSort('score')} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--t3)', textAlign:'left', padding:0, fontSize:'inherit', fontWeight:'inherit', letterSpacing:'inherit', textTransform:'inherit' }}>
+              <button onClick={() => toggleSort('score')} aria-label={sortLabel('score', 'Score')} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--t3)', textAlign:'left', padding:0, fontSize:'inherit', fontWeight:'inherit', letterSpacing:'inherit', textTransform:'inherit' }}>
                 Score <SortIcon col="score" />
               </button>
               <span>Crit</span>
               <span>High</span>
-              <button onClick={() => toggleSort('date')} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--t3)', textAlign:'left', padding:0, fontSize:'inherit', fontWeight:'inherit', letterSpacing:'inherit', textTransform:'inherit' }}>
+              <button onClick={() => toggleSort('date')} aria-label={sortLabel('date', 'Date')} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--t3)', textAlign:'left', padding:0, fontSize:'inherit', fontWeight:'inherit', letterSpacing:'inherit', textTransform:'inherit' }}>
                 Date <SortIcon col="date" />
               </button>
               <span></span>
