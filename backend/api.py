@@ -1181,6 +1181,7 @@ def view_shared(request: Request, token: str):
         raise HTTPException(status_code=404, detail="This link is invalid or has expired")
     data = _report_data(scan)
     keep = ("category", "attack", "response", "score", "severity", "reason", "owasp")
+    prompt = _scan_config(scan).get("system_prompt")       # what it declares secret is masked like a key
     return {
         "target_name"    : scan["target_name"],
         "scan_date"      : data.get("scan_date"),
@@ -1189,8 +1190,8 @@ def view_shared(request: Request, token: str):
         "recommendations": report.recommendations(data.get("results", [])),
         "results"        : [{**{k: r.get(k) for k in keep},
                              # the grader's reason can quote what leaked, so it's masked like the reply
-                             "response": detectors.redact(r.get("response") or "")[0],
-                             "reason": detectors.redact(r.get("reason") or "")[0]}
+                             "response": detectors.redact(r.get("response") or "", system_prompt=prompt)[0],
+                             "reason": detectors.redact(r.get("reason") or "", system_prompt=prompt)[0]}
                             for r in data.get("results", [])],
         "expires_at"     : link["expires_at"],
         # a paid account's white-label name, as on its PDF and HTML reports

@@ -161,10 +161,19 @@ def test_a_leak_after_a_flagged_request_replaces_the_whole_reply(client, account
 
 
 def test_a_short_fragment_of_the_system_prompt_is_flagged():
-    reply = {"choices": [{"message": {"content": "Sure. The admin password is hunter2, happy to help."}}]}
-    _, verdict, findings = gateway.screen_reply(reply, "You are a bank bot. The admin password is hunter2.")
+    reply = {"choices": [{"message": {"content": "Sure. I only discuss Acme savings accounts, happy to help."}}]}
+    _, verdict, findings = gateway.screen_reply(reply, "You are a bank bot. You only discuss Acme savings accounts.")
     assert verdict == "review" and "prompt_fragment" in findings
     assert reply["choices"][0]["message"]["content"].startswith("Sure.")      # an ordinary request: flagged, kept
+
+
+def test_a_password_from_the_system_prompt_is_masked_in_the_reply():
+    """It matches no key format, but the system prompt says it's a password: an ordinary request gets the
+    reply with the password masked, and the rest kept."""
+    reply = {"choices": [{"message": {"content": "Sure. The admin password is hunter2, happy to help."}}]}
+    _, verdict, findings = gateway.screen_reply(reply, "You are a bank bot. The admin password is hunter2.")
+    assert verdict == "block" and "prompt_secret" in findings
+    assert reply["choices"][0]["message"]["content"] == "Sure. The admin password is [REDACTED], happy to help."
 
 
 def _tool_reply(arguments: str) -> dict:

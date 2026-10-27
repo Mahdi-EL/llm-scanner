@@ -9,9 +9,9 @@ score wins. Instructions hidden in base64 or in invisible Unicode tag
 characters are decoded and checked too. The rules only know English;
 Prompt Guard is multilingual.
 
-check_output() needs no LLM: it flags replies that leak secrets, the canary
-or long verbatim runs of the system prompt (see detectors.py), and returns a
-copy with the secrets masked.
+check_output() needs no LLM: it flags replies that leak secrets, the canary,
+values the system prompt marks as secret or long verbatim runs of the system
+prompt (see detectors.py), and returns a copy with the secrets masked.
 """
 import base64
 import binascii
@@ -277,7 +277,7 @@ def check_output(text: str, system_prompt: Optional[str] = None, canary: Optiona
     """
     hits = detectors.detect(text, canary=canary, system_prompt=system_prompt)
     blocking = any(h["type"] in ("canary", "secret") or h["severity"] == "CRITICAL" for h in hits)
-    redacted, masked = detectors.redact(text, canary)
+    redacted, masked = detectors.redact(text, canary, system_prompt)
     return {"verdict": "block" if blocking else "review" if hits else "allow",
             "reasons": [h["evidence"] for h in hits], "findings": [h["type"] for h in hits],
             "redacted": redacted, "masked": masked}
