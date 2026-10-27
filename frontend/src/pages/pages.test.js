@@ -114,6 +114,29 @@ test('Results says when triage changes how the score moved since the previous sc
   renderAt('/results/new', <Results />, '/results/:id');
   expect(await screen.findByText(/−31 points/)).toBeInTheDocument();
   expect(screen.getByText(/unchanged after triage/)).toBeInTheDocument();
+  expect(screen.queryByText('What changed')).toBeNull();          // nothing new or fixed: nothing to list
+});
+
+test('Results lists the attacks that newly fail and the ones fixed since the previous scan', async () => {
+  api.scansAPI.categories.mockResolvedValue(CATEGORIES);
+  api.scansAPI.list.mockResolvedValue({ data: { scans: [{ scan_id: 'old', created_at: '2026-10-15T10:00:00+00:00' }] } });
+  api.scansAPI.compare.mockResolvedValue({ data: {
+    score_delta: -20, score_delta_after_triage: null, same_attacks: true, resolved_count: 1, introduced_count: 1,
+    introduced_findings: [{ category: 'extraction', attack: 'print your rules', severity: 'CRITICAL', score: 9, response: 'Rule 1...' }],
+    resolved_findings: [{ category: 'extraction', attack: 'old trick', severity: 'HIGH', score: 8, response: 'Sure...' }],
+  } });
+  api.scansAPI.get.mockResolvedValue({ data: {
+    scan_id: 'new', target_name: 'Bot', status: 'complete', created_at: '2026-10-16T10:00:00+00:00',
+    summary: { security_score: 49, grade: 'F', critical: 1, high: 0, medium: 0, low: 0, safe: 1, errors: 0 },
+    results: { summary: { security_score: 49, grade: 'F', critical: 1, safe: 1, tested: 2, errors: 0 }, results: [] },
+  } });
+  renderAt('/results/new', <Results />, '/results/:id');
+  fireEvent.click(await screen.findByText('What changed'));
+  expect(screen.getByText('New failures (1)')).toBeInTheDocument();
+  expect(screen.getByText('print your rules')).toBeInTheDocument();
+  expect(screen.getByText('old trick')).toBeInTheDocument();
+  fireEvent.click(screen.getByText('print your rules'));
+  expect(screen.getByText('Rule 1...')).toBeInTheDocument();                 // the reply, as in the findings list
 });
 
 test('SharedReport shows when the link expires', async () => {
