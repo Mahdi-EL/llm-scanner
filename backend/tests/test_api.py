@@ -1509,6 +1509,28 @@ def test_evidence_report_covers_owasp_triage_and_retests(client):
     assert "Evidence" in r.headers["content-disposition"]
 
 
+def test_evidence_shows_only_the_retests_of_that_scan(client):
+    """A later scan's re-test re-ran that scan's failures: it isn't remediation evidence for an older scan."""
+    import evidence
+    user_id, headers = _register(client)
+    auth_db.update_plan(user_id, "pro")
+    first = _seed_with_config(user_id, {"target_type": "simulation", "system_prompt": "p"})
+    r = client.post(f"/scan/{first}/retest", headers=headers, json={})
+    assert r.status_code == 200, r.text
+    own = r.json()["scan_id"]
+    assert json.loads(scan_db.get_scan(own)["config_json"])["retest_of"] == first
+    scan_db.update_scan(own, status="complete", results_json=json.dumps({"results": RESULTS}))
+    second = _seed_with_config(user_id, {"target_type": "simulation", "system_prompt": "p"})     # same target
+    later = client.post(f"/scan/{second}/retest", headers=headers, json={}).json()["scan_id"]
+    scan_db.update_scan(later, status="complete", results_json=json.dumps({"results": RESULTS}))
+    # a re-test from before re-tests named their scan: counted only for the scan just before it
+    legacy = scan_db.create_scan("Fix target", "simulation", user_id=user_id, config={"attacks": [["extraction", "A"]]})
+    scan_db.update_scan(legacy, status="complete", results_json=json.dumps({"results": RESULTS}))
+    with api.auth_db.transaction() as conn:
+        assert [r["scan_id"] for r in evidence.retests_of(conn, user_id, scan_db.get_scan(first))] == [own]
+        assert [r["scan_id"] for r in evidence.retests_of(conn, user_id, scan_db.get_scan(second))] == [later, legacy]
+
+
 def test_free_leak_check_counts_leaks_without_returning_replies(client, monkeypatch):
     import config
     import target as target_mod

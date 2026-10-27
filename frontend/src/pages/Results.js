@@ -551,6 +551,10 @@ export default function Results() {
             {scan.config?.target_type ? ` · ${typeLabel(scan.config.target_type)}` : ''}
             {scan.config?.model ? ` · ${scan.config.model}` : ''}
             {scan.config?.quick ? ' · quick scan' : ''}
+            {scan.config?.retest && (scan.config.retest_of
+              ? <> · re-test of <button className="btn-ghost" style={{ fontSize:'13px', padding:0 }}
+                  onClick={()=>navigate(`/results/${scan.config.retest_of}`)}>an earlier scan’s failed attacks</button></>
+              : ' · re-test of failed attacks')}
             {scan.created_by_name ? ` · started by ${scan.created_by_name}` : ''}
           </p>
         </div>
