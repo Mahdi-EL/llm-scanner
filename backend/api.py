@@ -1409,7 +1409,8 @@ class LeakCheckRequest(BaseModel):
 @limiter.limit("5/hour")
 def public_leak_check(request: Request, body: LeakCheckRequest):
     """Free, no account: sends 20 extraction and override attacks at a system prompt on the demo model and says
-    how many got it out. Graded by rules (the canary, verbatim copies); replies are never returned or stored."""
+    how many got it out. Graded by rules (the canary, verbatim copies, a password or code the prompt states); replies
+    are never returned or stored."""
     try:
         return leakcheck.run(body.system_prompt.strip())
     except leakcheck.CheckUnavailable as e:
