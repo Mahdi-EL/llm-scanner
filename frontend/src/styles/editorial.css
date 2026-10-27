@@ -742,3 +742,7 @@ body:has(.landing-editorial)::before {
   .ed-hero-rule { margin-bottom: 40px; }
   .ed-kicker { letter-spacing: 1.2px; font-size: 11px; }
 }
+/* The smallest phones (and 400% zoom): the logo alone, so Sign In and Get Started stay on screen */
+@media (max-width: 380px) {
+  .site-nav-wordmark { display: none; }
+}
