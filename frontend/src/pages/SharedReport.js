@@ -47,7 +47,7 @@ export default function SharedReport() {
   return (
     <div style={{ maxWidth:'880px', margin:'0 auto', padding:'48px 20px 64px' }}>
       <div style={{ fontSize:'12px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--t3)' }}>{data.brand || 'LLM Scanner'} · shared report</div>
-      <h1 style={{ fontFamily:'Georgia, serif', fontSize:'34px', fontWeight:600, margin:'6px 0' }}>{data.target_name}</h1>
+      <h1 style={{ fontFamily:'Georgia, serif', fontSize:'34px', fontWeight:600, margin:'6px 0', overflowWrap:'anywhere' }}>{data.target_name}</h1>
       <div style={{ fontSize:'13px', color:'var(--t3)' }}>Scanned {data.created_at ? new Date(data.created_at).toLocaleString('en-US', { dateStyle:'long', timeStyle:'short' }) : data.scan_date} · {s.tested} attacks graded{data.expires_at && <> · Link expires {shortDate(data.expires_at, true)}</>}</div>
 
       <div style={{ display:'flex', gap:'32px', alignItems:'flex-end', margin:'28px 0 8px', flexWrap:'wrap' }}>
@@ -78,7 +78,7 @@ export default function SharedReport() {
       <h2 style={{ fontFamily:'Georgia, serif', fontSize:'22px', fontWeight:600, marginTop:'36px', paddingTop:'14px', borderTop:'1px solid var(--b1)' }}>Failed attacks ({failed.length})</h2>
       {list.map((r, i) => (
         <details key={i} style={{ borderBottom:'1px solid var(--b1)', padding:'8px 0' }}>
-          <summary style={{ cursor:'pointer', fontSize:'13px' }}>
+          <summary style={{ cursor:'pointer', fontSize:'13px', overflowWrap:'anywhere' }}>
             <strong style={{ color: SEV_COLORS[r.severity], marginRight:'10px' }}>{r.severity}</strong>{r.attack.slice(0, 120)}
           </summary>
           <pre className="finding-pre" tabIndex={0} style={{ marginTop:'8px' }}>{r.response}</pre>
