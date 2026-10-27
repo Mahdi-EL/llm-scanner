@@ -230,7 +230,10 @@ def handle(user: dict, target_id: str, body: dict, upstream_auth: Optional[str] 
     started = time.monotonic()
     if not payment.firewall_limit(user.get("plan", "free")):
         return error(402, "The AI firewall gateway isn't included in your plan.", "plan_required")
-    target = store.get_target(user["id"], target_id, with_key=True)
+    try:
+        target = store.get_target(user["id"], target_id, with_key=True)
+    except store.KeyUnreadable as e:
+        return error(409, str(e), "key_unreadable")
     if not target:
         return error(404, "Saved target not found. Use the id shown on the Targets page.", "target_not_found")
     url = upstream_url(target)

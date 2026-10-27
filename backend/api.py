@@ -189,6 +189,12 @@ async def validation_failed(request: Request, exc: RequestValidationError):
     return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
 
 
+@app.exception_handler(store.KeyUnreadable)
+async def key_unreadable(request: Request, exc: "store.KeyUnreadable"):
+    """A saved target's key that SECRET_KEY rotation made unreadable: say how to fix it instead of a 500."""
+    return JSONResponse({"detail": str(exc)}, status_code=409)
+
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limited(request: Request, exc: RateLimitExceeded):
     """A readable "detail" like every other error, and Retry-After so clients know when to retry."""
