@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
@@ -100,24 +100,34 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
   const location  = useLocation();
   const navigate  = useNavigate();
   const { user, logout, switchWorkspace, canEdit } = useAuth();
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem('sidebar_collapsed') === '1'
-  );
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebar_collapsed') === '1'; } catch { return false; }
+  });
 
   const toggle = () => {
     setCollapsed(c => {
       const next = !c;
-      localStorage.setItem('sidebar_collapsed', next ? '1' : '0');
+      try { localStorage.setItem('sidebar_collapsed', next ? '1' : '0'); } catch { /* storage off */ }
       return next;
     });
   };
 
+  // The phone drawer: focus moves into it when it opens and back to the menu button when it closes,
+  // so keyboard users land in the menu they just opened. onClose is a new function on every render.
+  const asideRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!mobileOpen) return undefined;
-    const onKey = e => { if (e.key === 'Escape') onClose?.(); };
+    const opener = document.activeElement;
+    asideRef.current?.querySelector('a[href], button')?.focus();
+    const onKey = e => { if (e.key === 'Escape') closeRef.current?.(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [mobileOpen, onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (opener && document.contains(opener)) opener.focus?.();
+    };
+  }, [mobileOpen]);
 
   const isActive = path =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
@@ -129,7 +139,7 @@ export default function Sidebar({ mobileOpen = false, onClose }) {
   return (
     <>
     {mobileOpen && <div className="sidebar-backdrop" onClick={onClose} />}
-    <aside className={`sidebar${collapsed && !mobileOpen ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
+    <aside ref={asideRef} className={`sidebar${collapsed && !mobileOpen ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
 
       {/* ── Logo ──────────────────────────── */}
       <Link to="/" className="sidebar-logo" style={{ textDecoration:'none' }}>
