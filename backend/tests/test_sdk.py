@@ -11,10 +11,11 @@ import requests
 import uvicorn
 
 import api
+import auth_db
 import scan_db
 
 sdk = pytest.importorskip("llmscanner")
-from llmscanner import APIKeyError, Client, QuotaError, ScanError  # noqa: E402
+from llmscanner import APIKeyError, Client, QuotaError, ReportError, ScanError  # noqa: E402
 from llmscanner.cli import main as cli_main  # noqa: E402
 
 
@@ -118,6 +119,13 @@ def test_scan_status_results_download_and_quota(base_url, account, tmp_path):
     pdf = client.download(done, "pdf", str(tmp_path / "r.pdf"))
     with open(pdf, "rb") as f:
         assert f.read(4) == b"%PDF"
+    with pytest.raises(ReportError) as e:               # the evidence report is for paid plans
+        client.download(done, "evidence", str(tmp_path / "e.pdf"))
+    assert e.value.status == 402
+    auth_db.update_plan(account["user_id"], "pro")
+    with open(client.download(done, "evidence", str(tmp_path / "e.pdf")), "rb") as f:
+        assert f.read(4) == b"%PDF"
+    auth_db.update_plan(account["user_id"], "free")
     assert client.list()["total"] == 2      # the queued scan and the seeded one
     with pytest.raises(QuotaError):         # FREE_SCAN_LIMIT is 2 in conftest
         client.scan("one too many")
