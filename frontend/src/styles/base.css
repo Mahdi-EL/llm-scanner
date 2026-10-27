@@ -82,6 +82,7 @@ button { cursor:pointer; }
   line-height  : 1.2;
   color        : var(--t1);
   margin-bottom: 6px;
+  overflow-wrap: anywhere;      /* target names can be one long word */
 }
 .page-subtitle { font-size:14px; color:var(--t2); margin-bottom:40px; }
 

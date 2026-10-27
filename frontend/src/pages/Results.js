@@ -542,7 +542,7 @@ export default function Results() {
     <div>
       {/* ── Header ───────────────────────────── */}
       <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'20px', gap:'16px', flexWrap:'wrap' }}>
-        <div>
+        <div style={{ minWidth:0, flex:'1 1 280px' }}>
           <button onClick={()=>navigate('/')} className="btn-ghost" style={{ fontSize:'12px', padding:0, marginBottom:'8px' }}>← Dashboard</button>
           <h1 className="page-title" style={{ marginBottom:'4px' }}>{scan.target_name}</h1>
           <p style={{ fontSize:'13px', color:'var(--t3)', margin:0 }}>
