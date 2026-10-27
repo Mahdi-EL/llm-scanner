@@ -173,6 +173,29 @@ def test_retry_transient_then_succeed(monkeypatch):
     assert retry.call_with_retry(flaky) == "ok" and len(attempts) == 3
 
 
+def test_a_timeout_is_retried_twice_not_five_times(monkeypatch):
+    """Each timeout already waited the whole timeout: a hanging target mustn't take minutes per attack."""
+    monkeypatch.setattr(retry.time, "sleep", lambda s: None)
+    attempts = []
+
+    def hangs():
+        attempts.append(1)
+        raise requests.ReadTimeout("no answer")
+
+    with pytest.raises(requests.ReadTimeout):
+        retry.call_with_retry(hangs)
+    assert len(attempts) == 3
+    dropped = []
+
+    def drops():
+        dropped.append(1)
+        raise requests.ConnectionError("reset")
+
+    with pytest.raises(requests.ConnectionError):
+        retry.call_with_retry(drops)
+    assert len(dropped) == 6                    # a dropped connection still gets the usual five retries
+
+
 def test_no_retry_on_auth_errors(monkeypatch):
     monkeypatch.setattr(retry.time, "sleep", lambda s: None)
     response = requests.Response()

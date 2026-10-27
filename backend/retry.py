@@ -82,6 +82,17 @@ def is_rate_limit(exc: BaseException) -> bool:
     return _status(exc) == 429
 
 
+def is_timeout(exc: BaseException) -> bool:
+    """The other side didn't answer in time (as opposed to refusing or dropping the connection)."""
+    try:
+        import requests
+        if isinstance(exc, requests.Timeout):
+            return True
+    except ImportError:
+        pass
+    return isinstance(exc, TimeoutError) or type(exc).__name__ == "APITimeoutError"
+
+
 def is_retryable(exc: BaseException) -> bool:
     try:
         import groq
@@ -98,9 +109,11 @@ def is_retryable(exc: BaseException) -> bool:
 
 
 def call_with_retry(func, *args, max_retries: int = 5, base_delay: float = 2.0,
-                    max_delay: float = 60.0, rate_limit_retries: int = 10, **kwargs):
+                    max_delay: float = 60.0, rate_limit_retries: int = 10, timeout_retries: int = 2, **kwargs):
     """Calls func, retrying transient failures with exponential backoff and jitter.
-    Rate limits get more patience (rate_limit_retries), since they always clear."""
+    Rate limits get more patience (rate_limit_retries), since they always clear. Timeouts get less
+    (timeout_retries): each one already took the whole timeout, so a target that hangs would otherwise
+    take minutes per attack before the scan notices it's down."""
     attempt = 0
     while True:
         if _stop_requested():
@@ -108,7 +121,8 @@ def call_with_retry(func, *args, max_retries: int = 5, base_delay: float = 2.0,
         try:
             return func(*args, **kwargs)
         except Exception as exc:
-            limit = rate_limit_retries if is_rate_limit(exc) else max_retries
+            limit = rate_limit_retries if is_rate_limit(exc) else \
+                min(max_retries, timeout_retries) if is_timeout(exc) else max_retries
             if attempt >= limit or not is_retryable(exc):
                 raise
             delay = retry_after(exc)
