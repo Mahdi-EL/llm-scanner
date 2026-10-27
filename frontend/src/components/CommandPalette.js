@@ -51,6 +51,11 @@ export default function CommandPalette({ open, onClose, recentScans = [], canSca
     return { groups:g, totalItems:off };
   }, [q, recentScans, canScan]);
 
+  // the selected result stays in view when arrowing through a list longer than the panel
+  useEffect(() => {
+    if (open) document.getElementById(`cmd-opt-${selected}`)?.scrollIntoView?.({ block: 'nearest' });
+  }, [open, selected]);
+
   const handleSelect = useCallback((item) => {
     onClose();
     if (item.path) navigate(item.path);
@@ -60,6 +65,14 @@ export default function CommandPalette({ open, onClose, recentScans = [], canSca
     if (!open) return;
     const handler = e => {
       if (e.key === 'Escape')    { onClose(); return; }
+      if (e.key === 'Tab') {      // a modal dialog: focus moves between its search box and its close button only
+        e.preventDefault();
+        const box = document.querySelector('.cmd-modal');
+        const stops = box ? [...box.querySelectorAll('input, button')] : [];
+        const at = stops.indexOf(document.activeElement);
+        stops[(at + (e.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus();
+        return;
+      }
       if (e.key === 'ArrowDown') { e.preventDefault(); setSelected(s => Math.min(s + 1, totalItems - 1)); }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setSelected(s => Math.max(s - 1, 0)); }
       if (e.key === 'Enter') {

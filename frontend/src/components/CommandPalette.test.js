@@ -29,3 +29,13 @@ test('the palette is a labelled dialog with a listbox of options', () => {
   expect(screen.getByRole('dialog', { name: 'Command palette' })).toBeInTheDocument();
   expect(screen.getAllByRole('option').length).toBeGreaterThan(0);
 });
+
+test('Tab keeps focus inside the open palette', () => {
+  render(<MemoryRouter><button>Behind</button><CommandPalette open onClose={() => {}} /></MemoryRouter>);
+  const box = screen.getByRole('combobox', { name: /search pages/i });
+  box.focus();
+  act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); });
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }));
+  act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); });
+  expect(document.activeElement).toBe(box);               // wraps around, never to the page behind
+});
