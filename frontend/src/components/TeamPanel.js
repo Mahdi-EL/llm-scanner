@@ -50,6 +50,11 @@ export default function TeamPanel() {
     await teamAPI.remove(m.user_id); load();
   });
   const revoke = i => run(`inv-${i.id}`, async () => { await teamAPI.revokeInvite(i.id); load(); });
+  // a new invite to the same address replaces the pending one (and needs no extra seat): a fresh link and 7 days
+  const resend = i => run(`inv-${i.id}`, async () => {
+    const { data } = await teamAPI.invite(i.email, i.role);
+    setCreated(data); load();
+  });
   const leave = () => run('leave', async () => {
     if (!(await confirm({ title: 'Leave this workspace?', confirmLabel: 'Leave',
       body: 'You’ll need a new invite to come back, and API keys you created here stop working.' }))) return;
@@ -108,10 +113,13 @@ export default function TeamPanel() {
       ))}
       {team.invites.map(i => (
         <div key={i.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 20px', borderBottom:'1px solid var(--b1)', flexWrap:'wrap' }}>
-          <div style={{ flex:'1 1 200px', minWidth:0, fontSize:'13px' }}>
+          <div style={{ flex:'1 1 200px', minWidth:0, fontSize:'13px', overflowWrap:'anywhere' }}>
             {i.email} <span style={{ color:'var(--t3)', fontSize:'12px' }}>invited as {i.role} · expires {shortDate(i.expires_at)}</span>
           </div>
-          <button className="btn-ghost" style={{ fontSize:'12px' }} disabled={!!busy} onClick={() => revoke(i)}>Revoke</button>
+          <button className="btn-ghost" style={{ fontSize:'12px' }} disabled={!!busy} onClick={() => resend(i)}
+            aria-label={`Send ${i.email} a new invite`}>Resend</button>
+          <button className="btn-ghost" style={{ fontSize:'12px' }} disabled={!!busy} onClick={() => revoke(i)}
+            aria-label={`Revoke the invite to ${i.email}`}>Revoke</button>
         </div>
       ))}
       {created && (
