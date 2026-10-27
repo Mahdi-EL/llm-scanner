@@ -112,7 +112,7 @@ export default function Login() {
           <h1 className="pw-title">Sign in</h1>
           <p className="pw-subtitle">Welcome back — sign in to your security dashboard.</p>
 
-          {error && <div className="pw-error">{error}</div>}
+          {error && <div className="pw-error" role="alert">{error}</div>}
 
           <form onSubmit={submit} autoComplete="on">
             <div className="pw-field">
