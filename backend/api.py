@@ -61,6 +61,9 @@ if hasattr(sys.stdout, "reconfigure"):
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 logging.basicConfig(level=config.LOG_LEVEL, format=LOG_FORMAT)
+# The Groq SDK's HTTP client logs every request at INFO: ~2,200 lines per full scan. Errors still show.
+if config.LOG_LEVEL != "DEBUG":
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 logsafe.install(LOG_FORMAT)
 log = logging.getLogger("llmscanner.api")
 
