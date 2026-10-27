@@ -25,12 +25,25 @@ class UnsafeURLError(ValueError):
     """The URL points somewhere we refuse to connect to."""
 
 
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")      # a NAT64 gateway turns these into the IPv4 in the last 32 bits
+
+
+def _embedded_ipv4(ip: ipaddress.IPv6Address):
+    """The IPv4 address an IPv6 address stands for (mapped, NAT64 or the old IPv4-compatible form), if any:
+    64:ff9b::a9fe:a9fe reaches 169.254.169.254 through NAT64, and is "global" by the IPv6 rules alone."""
+    if ip.ipv4_mapped:
+        return ip.ipv4_mapped
+    if ip in _NAT64 or (ip.packed[:12] == bytes(12) and int(ip) > 1):       # ::a.b.c.d, but not :: or ::1
+        return ipaddress.IPv4Address(ip.packed[12:])
+    return None
+
+
 def ip_allowed(ip_str: str) -> bool:
     if config.ALLOW_PRIVATE_TARGETS:
         return True
     ip = ipaddress.ip_address(ip_str.split("%", 1)[0])
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-        ip = ip.ipv4_mapped
+    if isinstance(ip, ipaddress.IPv6Address):
+        ip = _embedded_ipv4(ip) or ip
     return ip.is_global and not ip.is_multicast
 
 
