@@ -1264,6 +1264,7 @@ def retest_scan(request: Request, scan_id: str, body: RetestRequest, user: dict 
     if not api_key and (cfg["target_type"] == "groq" or (used_key and cfg["target_type"] != "simulation")):
         raise HTTPException(status_code=400, detail="Enter the target's API key to re-test it")
     cfg["attacks"] = [[f["category"], f["attack"]] for f in failures]
+    cfg["retest_of"] = scan["scan_id"]          # the evidence report shows only this scan's re-tests
     try:
         new_id = services.queue_scan(user, cfg, api_key, target_name=scan["target_name"],
                                      target_id=scan.get("target_id"), include_custom_prompts=False)

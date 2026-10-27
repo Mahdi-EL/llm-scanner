@@ -179,18 +179,29 @@ def build(scan: dict, data: dict, *, triaged_results: list, retests: list,
 
 
 def retests_of(conn, user_id: str, scan: dict) -> list:
-    """Finished re-tests of this target's failures run after this scan, oldest first."""
+    """Finished re-tests of this scan's failures, oldest first. A re-test names the scan it re-ran;
+    one from before that was recorded counts when no other scan of the target ran in between
+    (a later scan's re-test re-ran that scan's failures, not these)."""
     rows = conn.execute(
-        "SELECT scan_id, created_at, config_json, results_json FROM scans WHERE user_id = ? AND target_name = ? "
+        "SELECT id, scan_id, created_at, config_json FROM scans WHERE user_id = ? AND target_name = ? "
         "AND status = 'complete' AND id > (SELECT id FROM scans WHERE scan_id = ?) ORDER BY id",
         (user_id, scan["target_name"], scan["scan_id"])).fetchall()
-    out = []
+    picked, newer_scan = [], False
     for r in rows:
         try:
-            cfg = json.loads(r["config_json"] or "{}")
-            if cfg.get("attacks"):
-                out.append({"scan_id": r["scan_id"], "created_at": r["created_at"],
-                            "results": (json.loads(r["results_json"] or "{}") or {}).get("results", [])})
+            cfg = json.loads(r["config_json"] or "{}") or {}
         except (TypeError, ValueError):
             continue
+        if not cfg.get("attacks"):
+            newer_scan = True
+        elif cfg.get("retest_of") == scan["scan_id"] or ("retest_of" not in cfg and not newer_scan):
+            picked.append(r)
+    out = []
+    for r in picked:          # results only for these: a target's other scans can be megabytes each
+        row = conn.execute("SELECT results_json FROM scans WHERE id = ?", (r["id"],)).fetchone()
+        try:
+            results = (json.loads(row["results_json"] or "{}") or {}).get("results", [])
+        except (TypeError, ValueError):
+            continue
+        out.append({"scan_id": r["scan_id"], "created_at": r["created_at"], "results": results})
     return out
