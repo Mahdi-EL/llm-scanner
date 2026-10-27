@@ -18,6 +18,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait as _wait_all
 from datetime import datetime, timedelta, timezone
 
 import config
@@ -46,6 +47,11 @@ HEARTBEAT_SECONDS = 20
 LEASE_SECONDS     = 90                 # a runner silent this long is gone: its scans can be taken over
 _stopping  = threading.Event()         # the server is shutting down: hand running scans back
 _heartbeat = None
+
+# Emails and webhooks run here, not on the scan's worker: a dead webhook URL takes three attempts and
+# ~30 s, and would hold one of the MAX_CONCURRENT_SCANS slots while queued scans wait.
+_notifier = ThreadPoolExecutor(max_workers=2, thread_name_prefix="notify")
+_notes    = set()
 
 
 def _stale_before() -> str:
@@ -335,4 +341,14 @@ def execute(scan_id: str) -> None:
             row = conn.execute("SELECT alert_drop FROM schedules WHERE id = ?",
                                (scan["schedule_id"],)).fetchone()
         alert_drop = row["alert_drop"] if row else None
-    notifications.scan_finished(scan_id, alert_drop=alert_drop)
+    note = _notifier.submit(notifications.scan_finished, scan_id, alert_drop=alert_drop)
+    with _lock:
+        _notes.add(note)
+    note.add_done_callback(lambda f: _notes.discard(f))
+
+
+def wait_for_notifications(timeout: float = 30) -> None:
+    """Waits until the emails and webhooks of finished scans have gone out (tests, shutdown)."""
+    with _lock:
+        pending = list(_notes)
+    _wait_all(pending, timeout=timeout)

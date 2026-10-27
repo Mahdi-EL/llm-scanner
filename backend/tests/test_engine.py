@@ -2,6 +2,7 @@
 import http.server
 import os
 import threading
+import time
 
 import pytest
 import requests
@@ -370,6 +371,7 @@ def test_runner_completes_scan_and_erases_key(few_attacks, monkeypatch):
     monkeypatch.setattr(runner, "build_target", fake_build)
 
     runner.execute(scan_id)
+    runner.wait_for_notifications()
     scan = scan_db.get_scan(scan_id)
     assert seen["key"] == "gsk_user_key"
     assert scan["status"] == "complete" and scan["progress"] == 100
@@ -377,6 +379,31 @@ def test_runner_completes_scan_and_erases_key(few_attacks, monkeypatch):
     assert scan["critical_count"] == 1 and scan["error_count"] == 1 and scan["grade"] == "F"
     assert scan["results_json"] and scan["pdf_path"] is None        # downloads build the reports from it
     assert sent == [scan_id]
+
+
+def test_a_slow_webhook_doesnt_hold_the_scan_slot(few_attacks, monkeypatch):
+    """Notifications go out after the scan's worker is free: a dead webhook URL takes ~30 s of retries."""
+    import threading
+
+    import database
+    import runner
+    import scan_db
+    database.init_db()
+    release, started = threading.Event(), threading.Event()
+
+    def slow(scan_id, alert_drop=None):
+        started.set()
+        release.wait(10)
+    monkeypatch.setattr(runner, "Judge", FakeJudge)
+    monkeypatch.setattr(runner.notifications, "scan_finished", slow)
+    monkeypatch.setattr(runner, "build_target", lambda scan: (FakeTarget(), None, "You are a helpful assistant."))
+    scan_id = scan_db.create_scan("Slow hook", "simulation", user_id="u-hook", config={"target_type": "simulation"})
+    began = time.monotonic()
+    runner.execute(scan_id)                                    # returns while the notification still runs
+    assert time.monotonic() - began < 5
+    assert started.wait(5) and scan_db.get_scan(scan_id)["status"] == "complete"
+    release.set()
+    runner.wait_for_notifications()
 
 
 def test_only_the_lease_holder_runs_a_scan_and_a_quiet_one_is_taken_over(few_attacks, monkeypatch):
