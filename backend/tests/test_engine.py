@@ -127,9 +127,17 @@ def test_secret_patterns_ignore_what_the_attack_contained():
 
 # ── SSRF guard ────────────────────────────────────────────────
 @pytest.mark.parametrize("ip", ["127.0.0.1", "10.1.2.3", "169.254.169.254", "100.64.0.1",
-                                "::1", "::ffff:127.0.0.1", "fd00::1", "0.0.0.0"])
+                                "::1", "::ffff:127.0.0.1", "fd00::1", "0.0.0.0",
+                                # IPv4 inside IPv6: NAT64 (reaches the metadata service through the gateway)
+                                # and the old IPv4-compatible form
+                                "64:ff9b::a9fe:a9fe", "64:ff9b::7f00:1", "::127.0.0.1", "::a00:1"])
 def test_non_public_addresses_are_blocked(ip):
     assert not netguard.ip_allowed(ip)
+
+
+@pytest.mark.parametrize("ip", ["8.8.8.8", "2606:4700::1111", "::ffff:8.8.8.8", "64:ff9b::808:808"])
+def test_public_addresses_are_allowed(ip):
+    assert netguard.ip_allowed(ip)
 
 
 def test_check_url(monkeypatch):
