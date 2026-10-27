@@ -199,9 +199,12 @@ def test_deleting_the_owner_dissolves_the_team(client):
     assert client.get("/scans", headers=in_ws(bob, owner)).status_code == 403
 
 
-def test_only_admins_see_the_webhook_url(client):
+def test_only_admins_see_the_webhook_url(client, monkeypatch):
+    import netguard        # no real DNS lookup: the test mustn't depend on the network
+    monkeypatch.setattr(netguard.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))])
     owner, dave = person(client, "pro"), person(client)
-    client.put("/api/webhook", headers=owner["auth"], json={"url": "https://hooks.slack.com/services/T0/B0/secret"})
+    r = client.put("/api/webhook", headers=owner["auth"], json={"url": "https://hooks.slack.com/services/T0/B0/secret"})
+    assert r.status_code == 200, r.text
     join(client, owner, dave, "viewer")
     assert client.get("/api/webhook", headers=in_ws(dave, owner)).status_code == 403
     assert client.get("/auth/me", headers=in_ws(dave, owner)).json()["workspace"]["webhook_url"] is None
