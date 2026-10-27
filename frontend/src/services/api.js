@@ -98,10 +98,26 @@ api.interceptors.response.use(
 );
 
 /** The API's error message, or a fallback. */
+// Names for the request fields whose 422 messages are generic ("String should have at least 1 character")
+const FIELD_LABELS = { api_url: 'API URL', api_key: 'API key', target_name: 'Name', system_prompt: 'System prompt',
+  baseline_question: 'Baseline question', input_field: 'Request field', output_field: 'Response field',
+  alert_drop: 'Alert threshold', new_password: 'New password', current_password: 'Current password' };
+
+function fieldLabel(loc) {
+  const field = Array.isArray(loc) ? loc[loc.length - 1] : null;
+  if (typeof field !== 'string' || field === 'body') return null;
+  return FIELD_LABELS[field] || field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
+}
+
 export function errorMessage(err, fallback = 'Something went wrong. Please try again.') {
   const detail = err?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg.replace(/^Value error, /, '');
+  if (Array.isArray(detail) && detail[0]?.msg) {
+    const msg = detail[0].msg.replace(/^Value error, /, '');
+    // the validator's own sentences say what's wrong; pydantic's generic ones don't say which field
+    const label = /^(String|Input|List|Field|Value|value is not)\b/.test(msg) ? fieldLabel(detail[0].loc) : null;
+    return label ? `${label}: ${msg.charAt(0).toLowerCase()}${msg.slice(1)}` : msg;
+  }
   if (err?.message === 'Network Error') return 'Can’t reach the server. Check your connection and retry.';
   return fallback;
 }
