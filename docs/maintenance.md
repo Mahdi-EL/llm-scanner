@@ -64,6 +64,16 @@ or use [Litestream](https://litestream.io) to stream changes to S3-compatible st
 Reports are built from the database when they're downloaded, so the database is all there is to back up
 (`REPORTS_DIR` only holds files written by versions before October 2026; they can be deleted).
 
+**Database size.** A full scan keeps about 1.5 MB of results (a quick scan about a tenth of that), and
+scans stay until their owner deletes them. To cap growth, set `SCAN_RETENTION_DAYS` (for example 365):
+the hourly housekeeping then deletes finished scans older than that. SQLite reuses the freed space but
+doesn't shrink the file; to give it back to the disk, run `VACUUM` at a quiet time (it needs free disk
+space about the size of the database):
+
+```bash
+python -c "import sqlite3; c = sqlite3.connect('/data/llmscanner.db'); c.execute('VACUUM'); c.close()"
+```
+
 ## 4. Rotating secrets
 
 - **SECRET_KEY** signs login tokens. Rotating it signs everyone out. If `ENCRYPTION_KEY` is not set,
