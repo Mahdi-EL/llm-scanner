@@ -69,3 +69,17 @@ test('a refresh that fails for real signs out', async () => {
   expect(localStorage.getItem('refresh_token')).toBeNull();
   expect(window.location.href).toBe('/login?next=%2Freports');
 });
+
+test('an API that is down while refreshing keeps the session (no sign-out during a deploy)', async () => {
+  localStorage.setItem('access_token', 'expired');
+  localStorage.setItem('refresh_token', 'still-good');
+  for (const failure of [new Error('Network Error'), Object.assign(new Error('502'), { response: { status: 502 } })]) {
+    vi.spyOn(axios, 'post').mockRejectedValue(failure);
+    delete window.location;
+    window.location = { pathname: '/reports', search: '', href: '' };
+    const rejected = await api.get('/scans').catch(e => e);
+    expect(rejected).toBe(failure);                                       // not the 401: the app keeps the session
+    expect(localStorage.getItem('refresh_token')).toBe('still-good');   // signed in still
+    expect(window.location.href).toBe('');                               // not sent to the login page
+  }
+});
