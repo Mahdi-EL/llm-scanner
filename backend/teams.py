@@ -108,7 +108,9 @@ def create_invite(account: dict, email: str, role: str, invited_by: str) -> dict
     if role not in ROLES:
         raise TeamError("Role must be viewer, member or admin")
     limit = seat_limit(account.get("plan"))
-    if limit is not None and seats_used(account["id"]) >= limit:
+    # inviting an address again replaces its pending invite, so that one doesn't take a seat
+    pending_same = sum(1 for i in pending_invites(account["id"]) if i["email"] == email)
+    if limit is not None and seats_used(account["id"]) - pending_same >= limit:
         raise TeamError("Your plan has no free seats: upgrade, or remove a member or invite first." if limit > 1
                         else "Team members are part of the paid plans.", 402)
     if any((m["email"] or "").lower() == email for m in members(account["id"])):

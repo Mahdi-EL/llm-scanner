@@ -164,6 +164,21 @@ def test_invites_only_work_for_their_address_once(client, monkeypatch):
     assert client.post("/api/team/invites", headers=owner["auth"], json={"email": carol["email"]}).status_code == 402
 
 
+def test_an_invite_can_be_sent_again_when_every_seat_is_taken(client, monkeypatch):
+    """The new invite replaces the pending one: re-sending it to someone who lost the email needs no extra seat."""
+    owner, bob = person(client, "pro"), person(client)
+    monkeypatch.setattr(config, "PRO_SEATS", 2)                                      # owner + one invite
+    first = client.post("/api/team/invites", headers=owner["auth"], json={"email": bob["email"]})
+    again = client.post("/api/team/invites", headers=owner["auth"], json={"email": bob["email"].upper()})
+    assert first.status_code == 200 and again.status_code == 200, again.text
+    assert [i["email"] for i in client.get("/api/team", headers=owner["auth"]).json()["invites"]] == [bob["email"]]
+    old, new = (r.json()["link"].split("token=")[1] for r in (first, again))
+    assert client.post("/api/team/accept", headers=bob["auth"], json={"token": old}).status_code == 404
+    assert client.post("/api/team/accept", headers=bob["auth"], json={"token": new}).status_code == 200
+    other = client.post("/api/team/invites", headers=owner["auth"], json={"email": "someone@example.com"})
+    assert other.status_code == 402                                                  # a different person: no seat
+
+
 def test_removed_members_lose_access_and_members_can_leave(client):
     owner, bob, carol = person(client, "pro"), person(client), person(client)
     join(client, owner, bob)
