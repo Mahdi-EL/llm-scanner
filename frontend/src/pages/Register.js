@@ -161,7 +161,7 @@ export default function Register() {
         <h1 className="auth-right-title">Create account</h1>
         <p className="auth-right-sub">Start scanning AI applications for free</p>
 
-        {error && <div className="alert-error">{error}</div>}
+        {error && <div className="alert-error" role="alert">{error}</div>}
 
         <form onSubmit={submit} autoComplete="on">
           <div className="form-group">
