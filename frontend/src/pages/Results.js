@@ -299,7 +299,7 @@ function RunningState({ scan, cats, onCancel, cancelling, emailed }) {
     <div style={{ maxWidth:'560px', margin:'56px auto' }}>
       <div style={{ marginBottom:'24px' }}>
         <div style={{ fontSize:'12px', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--t3)' }}>{queued ? 'Queued' : 'Scanning'}</div>
-        <h2 style={{ fontFamily:'Georgia, serif', fontSize:'28px', fontWeight:600, margin:'6px 0' }}>{scan.target_name}</h2>
+        <h2 style={{ fontFamily:'Georgia, serif', fontSize:'28px', fontWeight:600, margin:'6px 0', overflowWrap:'anywhere' }}>{scan.target_name}</h2>
         <p style={{ color:'var(--t3)', fontSize:'14px' }}>
           {queued ? 'Waiting for a free scanner slot. It starts automatically.'
                   : `${done} of ${total} attacks done${scan.current_category ? ` · now: ${titleOf(cats, scan.current_category)}` : ''}`}
@@ -494,7 +494,7 @@ export default function Results() {
   if (scan.status === 'failed' || scan.status === 'cancelled') return (
     <div>
       <div className="empty-state" style={{ padding: scan.partial ? '56px 40px 28px' : '100px 40px' }}>
-        <h3 style={{ color: scan.status === 'failed' ? '#b42318' : 'var(--t1)' }}>
+        <h3 style={{ color: scan.status === 'failed' ? '#b42318' : 'var(--t1)', overflowWrap:'anywhere' }}>
           {scan.status === 'failed' ? 'Scan failed' : 'Scan cancelled'}: {scan.target_name}
         </h3>
         <p style={{ maxWidth:'520px', margin:'8px auto 20px' }}>
@@ -503,7 +503,7 @@ export default function Results() {
             : scan.error_message || 'The scan stopped before it finished.'}
         </p>
         {canEdit && (
-          <div style={{ display:'flex', gap:'8px', justifyContent:'center' }}>
+          <div style={{ display:'flex', gap:'8px', justifyContent:'center', flexWrap:'wrap' }}>
             <button className="btn-primary" onClick={()=>navigate(scan.target_id ? `/new-scan?target=${scan.target_id}` : '/new-scan')}>
               {scan.target_id ? 'Scan this target again' : 'Start a new scan'}
             </button>

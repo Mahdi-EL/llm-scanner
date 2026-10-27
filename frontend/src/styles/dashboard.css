@@ -1213,6 +1213,7 @@
 .notif-item-title {
   font-size  : 12px; font-weight:700; color:var(--t1);
   margin-bottom:2px;
+  overflow-wrap: anywhere;
 }
 .notif-item-body {
   font-size  : 11px; color:var(--t3);
@@ -1520,6 +1521,8 @@ button:focus:not(:focus-visible) { outline: none; }
 @media (max-width:480px) {
   .topbar-new-scan-btn { display:none; }      /* the drawer and the page itself both offer New Scan */
   .topbar-page-icon { display:none; }
+  /* the bell isn't at the screen's edge: a 340 px panel under it would start off-screen */
+  .notif-panel { position:fixed; top:60px; left:12px; right:12px; width:auto; }
 }
 
 /* Wide grid "tables" scroll sideways inside their card on narrow screens */
