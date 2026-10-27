@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -440,6 +440,20 @@ export default function Results() {
 
   useEffect(() => { setLoading(true); fetchScan(); }, [fetchScan]);
   usePolling(fetchScan, 3000, isActive(scan));
+
+  // A scan that ends while its page is open says so (toasts are a live region, so screen readers hear it too)
+  const watched = useRef(false);
+  useEffect(() => { watched.current = false; }, [id]);
+  useEffect(() => {
+    if (!scan || scan.scan_id !== id) return;
+    if (isActive(scan)) { watched.current = true; return; }
+    if (!watched.current) return;
+    watched.current = false;
+    const s = { ...(scan.summary || {}), ...(scan.results?.summary || {}) };
+    if (scan.status === 'complete') toast(`Scan complete: ${s.security_score ?? 0}/100, grade ${s.grade || '?'}.`, 'success', 6000);
+    else if (scan.status === 'failed') toast(`Scan failed: ${scan.error_message || 'it stopped before it finished.'}`, 'error', 8000);
+    else if (scan.status === 'cancelled') toast('Scan cancelled.', 'info');
+  }, [scan, id, toast]);
   useEffect(() => {
     scansAPI.categories().then(r => setCats(Object.fromEntries(r.data.categories.map(c => [c.id, c])))).catch(() => {});
   }, []);
