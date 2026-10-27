@@ -80,7 +80,12 @@ api.interceptors.response.use(
         const newToken = await refreshPromise;
         original.headers.Authorization = `Bearer ${newToken}`;
         return api(original);
-      } catch {
+      } catch (refreshErr) {
+        // The API is down or restarting (no answer, 5xx, 429): the session may be fine. Keep the tokens and
+        // fail this request only; signing out here would sign everyone out during a deploy.
+        // Reject with that failure, not the 401: a 401 tells the app the session is over.
+        const status = refreshErr?.response?.status;
+        if (!status || status >= 500 || status === 429) return Promise.reject(refreshErr);
         // Another tab may have spent the same refresh token a moment earlier (it rotates on use): carry on
         // with the tokens it saved instead of signing every tab out.
         if (localStorage.getItem(REFRESH_KEY) && localStorage.getItem(REFRESH_KEY) !== refresh) {
