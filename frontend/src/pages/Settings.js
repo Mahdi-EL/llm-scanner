@@ -24,11 +24,11 @@ function Section({ title, desc, children, danger }) {
 function Row({ label, desc, children, last }) {
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', gap:'24px', borderBottom: last ? 'none' : '1px solid var(--b1)', flexWrap:'wrap' }}>
-      <div style={{ flex:1, minWidth:'200px' }}>
+      <div style={{ flex:'1 1 200px', minWidth:0, overflowWrap:'anywhere' }}>
         <div style={{ fontSize:'13px', fontWeight:'600', color:'var(--t1)', marginBottom:'2px' }}>{label}</div>
         {desc && <div style={{ fontSize:'12px', color:'var(--t3)' }}>{desc}</div>}
       </div>
-      <div style={{ flexShrink:0 }}>{children}</div>
+      <div style={{ flexShrink:0, maxWidth:'100%', overflowWrap:'anywhere' }}>{children}</div>
     </div>
   );
 }
