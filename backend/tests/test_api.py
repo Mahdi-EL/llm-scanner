@@ -1522,6 +1522,38 @@ def test_triage_marks_carry_over_and_change_what_counts(client):
     assert client.put(f"/scan/{first}/triage", headers=headers, json={"key": key, "status": "nope"}).status_code == 422
 
 
+def test_reports_say_what_was_triaged(client):
+    """Downloaded reports show the scan as graded, plus the score after triage and each finding's mark;
+    "What to fix first" leaves the marked ones out, like the Results page."""
+    import store
+    user_id, headers = _register(client)
+    results = [{"category": "extraction", "attack": "leak", "severity": "CRITICAL", "score": 9, "response": "r", "reason": "x"},
+               {"category": "roleplay", "attack": "dan", "severity": "SAFE", "score": 0, "response": "no", "reason": "ok"}]
+    scan_id = _seed_complete_scan(user_id, results, score=49, target="Bot")
+    plain = client.get(f"/download/md/{scan_id}", headers=headers).text
+    assert "After triage" not in plain and "System prompt extraction" in plain.split("## What to fix first")[1]
+    store.set_triage(user_id, "Bot", store.finding_key("extraction", "leak"), "accepted_risk", "known, filtered in code",
+                     decided_by="ann")
+    md = client.get(f"/download/md/{scan_id}", headers=headers).text
+    assert "After triage: 100/100, grade A" in md and "Marked as accepted risk by ann: known, filtered in code" in md
+    assert "No attack succeeded" in md.split("## What to fix first")[1].split("##")[0]      # nothing left to fix
+    assert "CRITICAL" in md                                                                 # still shown as graded
+    page = client.get(f"/download/html/{scan_id}", headers=headers).text
+    assert "After triage: 100/100" in page and ">Accepted risk<" in page and "known, filtered in code" in page
+    data = client.get(f"/download/json/{scan_id}", headers=headers).json()
+    assert data["triaged_summary"]["security_score"] == 100
+    assert data["results"][0]["triage"]["status"] == "accepted_risk" and data["results"][0]["severity"] == "CRITICAL"
+    pdf = client.get(f"/download/{scan_id}", headers=headers)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    # a share link shows the mark, never the team's note or who decided
+    token = client.post(f"/scan/{scan_id}/share", headers=headers, json={"days": 1}).json()["token"]
+    shared = client.get(f"/shared/{token}")
+    body = shared.json()
+    assert body["triaged_summary"]["security_score"] == 100 and body["recommendations"] == []
+    assert body["results"][0]["triage"] == "accepted_risk" and body["results"][1]["triage"] is None
+    assert "filtered in code" not in shared.text and "ann" not in shared.text
+
+
 def test_a_triaged_finding_doesnt_raise_a_regression_alert(client, monkeypatch):
     import notifications
     import store

@@ -167,6 +167,21 @@ test('SharedReport shows when the link expires', async () => {
   expect(screen.getByText(/LLM Scanner · shared report/)).toBeInTheDocument();
 });
 
+test('SharedReport shows the score after triage and which findings were marked', async () => {
+  api.scansAPI.shared.mockResolvedValue({ data: {
+    target_name: 'Bot', scan_date: '2026-10-16',
+    summary: { security_score: 49, grade: 'F', critical: 1, high: 0, medium: 0, low: 0, safe: 1, tested: 2 },
+    triaged_summary: { security_score: 100, grade: 'A' },
+    recommendations: [],
+    results: [{ category: 'extraction', attack: 'leak it', severity: 'CRITICAL', score: 9, response: 'r', reason: 'x', triage: 'accepted_risk' }],
+  } });
+  renderAt('/shared/tok', <SharedReport />, '/shared/:token');
+  expect(await screen.findByText('100 · grade A')).toBeInTheDocument();
+  expect(screen.getByText(/1 finding marked as a false positive or an accepted risk/)).toBeInTheDocument();
+  expect(screen.getByText('(Accepted risk)')).toBeInTheDocument();
+  expect(screen.getByText(/Nothing left to fix/)).toBeInTheDocument();
+});
+
 test("SharedReport carries the owner's white-label name", async () => {
   api.scansAPI.shared.mockResolvedValue({ data: {
     target_name: 'Bot', scan_date: '2026-10-16', brand: 'Acme Security',

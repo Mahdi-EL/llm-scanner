@@ -1083,6 +1083,24 @@ def _report_brand(user: dict) -> Optional[str]:
     return user.get("report_brand") if user.get("plan", "free") != "free" else None
 
 
+def _with_triage(scan: dict, data: dict) -> dict:
+    """The report data with each failed finding marked as a false positive or an accepted risk carrying that
+    mark ("triage"), plus the summary after triage. Reports show the scan as graded and say what was marked."""
+    owner = scan.get("user_id")
+    marks = store.triage_for(owner, scan["target_name"]) if owner else {}
+    if not marks:
+        return data
+    results = []
+    for r in data.get("results") or []:
+        mark = marks.get(store.finding_key(r.get("category", ""), r.get("attack", "")))
+        failed = r.get("severity") not in ("SAFE", "ERROR", None)
+        results.append({**r, "triage": mark} if mark and failed else r)
+    if not any(r.get("triage") for r in results):
+        return data
+    return {**data, "results": results,
+            "triaged_summary": scoring.summarize(store.apply_triage(owner, scan["target_name"], data.get("results") or []))}
+
+
 def _report_file(scan: dict, fmt: str, user: Optional[dict] = None) -> FileResponse:
     """The report, built from the stored results for this download in a temporary file that's deleted once
     sent: report files kept for every scan were most of its disk use, and most are never downloaded."""
@@ -1090,7 +1108,7 @@ def _report_file(scan: dict, fmt: str, user: Optional[dict] = None) -> FileRespo
 
     from starlette.background import BackgroundTask
     brand = _report_brand(user) if user and fmt != "json" else None
-    data = _report_data(scan)
+    data = _with_triage(scan, _report_data(scan))
     handle, path = tempfile.mkstemp(suffix=f".{fmt}")
     os.close(handle)
     try:
@@ -1179,7 +1197,7 @@ def view_shared(request: Request, token: str):
     scan = scan_db.get_scan(link["scan_id"]) if link else None
     if not scan or scan["status"] != "complete":
         raise HTTPException(status_code=404, detail="This link is invalid or has expired")
-    data = _report_data(scan)
+    data = _with_triage(scan, _report_data(scan))
     keep = ("category", "attack", "response", "score", "severity", "reason", "owasp")
     prompt = _scan_config(scan).get("system_prompt")       # what it declares secret is masked like a key
     return {
@@ -1187,11 +1205,15 @@ def view_shared(request: Request, token: str):
         "scan_date"      : data.get("scan_date"),
         "created_at"     : scan["created_at"],
         "summary"        : scoring.ensure_summary(data),
-        "recommendations": report.recommendations(data.get("results", [])),
+        # what's left to fix: findings marked as a false positive or an accepted risk aren't part of it
+        "recommendations": report.recommendations(report.open_results(data.get("results", []))),
+        "triaged_summary": data.get("triaged_summary"),
         "results"        : [{**{k: r.get(k) for k in keep},
                              # the grader's reason can quote what leaked, so it's masked like the reply
                              "response": detectors.redact(r.get("response") or "", system_prompt=prompt)[0],
-                             "reason": detectors.redact(r.get("reason") or "", system_prompt=prompt)[0]}
+                             "reason": detectors.redact(r.get("reason") or "", system_prompt=prompt)[0],
+                             # the mark only: the team's note and who decided stay with the team
+                             "triage": (r.get("triage") or {}).get("status")}
                             for r in data.get("results", [])],
         "expires_at"     : link["expires_at"],
         # a paid account's white-label name, as on its PDF and HTML reports
