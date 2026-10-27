@@ -53,7 +53,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/auth/login` |  | Log in with a username or email. Returns an access token and a refresh token. |
 | POST | `/auth/logout` |  | Revokes a refresh token; with everywhere=true, ends every session of the signed-in person (not an API key, whatever workspace is selected). |
 | DELETE | `/auth/me` | yes | Deletes the account, its scans and report files. Cancels any subscription. |
-| GET | `/auth/me` | yes | The signed-in user's profile, plan and usage. |
+| GET | `/auth/me` | yes | The signed-in user's profile, plan and usage (`billing_interval`: `month` or `year` for a paid plan). |
 | GET | `/auth/me/export` | yes | Everything we store about you, as JSON (GDPR data portability). |
 | PUT | `/auth/password` | yes | Changes the password, signs out every other session, and returns fresh tokens. |
 | POST | `/auth/refresh` |  | Swaps a refresh token for a new access token and a new refresh token. |
@@ -78,11 +78,11 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | GET | `/scan/{scan_id}` | yes | Status and progress; includes the findings once the scan is complete, or what it had found (partial) if it stopped early. |
 | POST | `/scan/{scan_id}/cancel` | yes | Stops a queued or running scan. |
 | POST | `/scan/{scan_id}/remediate` | yes | Suggests a hardened system prompt based on the attacks that succeeded in this scan (10 a day on Free, 100 on Pro). |
-| POST | `/scan/{scan_id}/retest` | yes | Runs only the attacks that failed in this scan again, optionally with a new system prompt. |
+| POST | `/scan/{scan_id}/retest` | yes | Runs only the attacks that failed in this scan again, optionally with a new system prompt. The new scan's `config.retest_of` names the scan it re-tests. |
 | DELETE | `/scan/{scan_id}/share` | yes | Disables the scan's share link. |
 | POST | `/scan/{scan_id}/share` | yes | Creates a read-only link to a finished scan that expires after `days` (default 7). |
 | PUT | `/scan/{scan_id}/triage` | yes | Marks a failed finding as a false positive or an accepted risk ("open" clears the mark). The mark applies to that attack in every scan of the same target: re-tests, suggestions and regression alerts leave it out, and the scan shows its score after triage. |
 | GET | `/scans` | yes | Your scans, newest first (summary only; findings come from /scan/{id}). |
 | GET | `/scans/stats` | yes | Totals over all your finished scans: count, average score, critical findings, clean scans. |
-| GET | `/shared/{token}` |  | A shared report: findings and summary only, never the target's configuration. |
+| GET | `/shared/{token}` |  | A shared report: findings and summary only, never the target's configuration. Keys, card numbers and values the scanned system prompt marks as secret are masked in replies. |
 | POST | `/targets/test` | yes | Sends one harmless question to a target and reports what happened. With target_id and no api_key, the saved target's key is used if the address hasn't changed. |
