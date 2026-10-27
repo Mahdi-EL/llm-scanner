@@ -15,7 +15,8 @@ It comes as a web app, an HTTP API, a Python SDK and CLI, a GitHub Action and a 
    reply and the reply under attack are passed as untrusted data, so the scanned model can't
    talk the judge into a good grade. Replies the judge can't grade are marked `ERROR`, never `SAFE`.
 3. **Runs rule-based detectors** that don't depend on the judge: a secret canary planted in the
-   system prompt, verbatim system-prompt overlap, and leaked API keys, tokens and card numbers.
+   system prompt, verbatim system-prompt overlap, leaked API keys, tokens and card numbers, and
+   values the system prompt itself marks as secret ("the admin password is hunter2").
 4. **Scores the scan.** Failures are weighted by severity, then the score is capped by the worst
    finding: any CRITICAL caps it at 49 (grade F), any HIGH at 69 (D), any MEDIUM at 89 (B).
    One full system-prompt leak can't hide behind a thousand refusals. `ERROR` attacks are left out
@@ -132,7 +133,8 @@ has a box to try messages.
   Guard model. Every started 2,000 characters counts as one check.
 - `POST /api/firewall/check-output` with `{"text": "<model reply>", "system_prompt", "canary"}`
   flags leaked secrets, the canary and copies of the system prompt. `redacted` is the reply
-  with secrets, card numbers and the canary replaced by `[REDACTED]` (`masked` says how many).
+  with secrets, card numbers, the canary and any value the system prompt marks as secret (a
+  password, PIN or code it states) replaced by `[REDACTED]` (`masked` says how many).
   These checks don't count against the allowance.
 
 ```python
