@@ -662,7 +662,7 @@ export default function Results() {
               if (!['FAILED','ALL'].includes(sev) && !counts[sev]) return null;
               const label = sev === 'FAILED' ? 'Failed' : sev === 'ALL' ? 'All' : sev === 'TRIAGED' ? 'Triaged' : SEV_META[sev].label;
               return (
-                <button key={sev} className={`filter-btn${sevFilter===sev?' active':''}`} style={{ padding:'4px 11px', fontSize:'11px' }}
+                <button key={sev} className={`filter-btn${sevFilter===sev?' active':''}`} aria-pressed={sevFilter===sev} style={{ padding:'4px 11px', fontSize:'11px' }}
                   onClick={()=>{ setSevFilter(sev); setShown(PAGE); }}>
                   {label} ({counts[sev] || 0})
                 </button>

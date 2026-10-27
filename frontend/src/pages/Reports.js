@@ -237,7 +237,7 @@ export default function Reports() {
           </div>
           <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
             {RISK_FILTERS.map(f => (
-              <button key={f.key} className={`filter-btn${filter === f.key ? ' active' : ''}`} onClick={() => setFilter(f.key)} style={{ padding:'5px 12px', fontSize:'12px' }}>
+              <button key={f.key} className={`filter-btn${filter === f.key ? ' active' : ''}`} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)} style={{ padding:'5px 12px', fontSize:'12px' }}>
                 {f.label}
               </button>
             ))}
