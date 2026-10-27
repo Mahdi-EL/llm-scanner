@@ -291,6 +291,7 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_targets_user ON targets (user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_schedules_next ON schedules (enabled, next_run_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_prompts_user ON custom_prompts (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_share_scan ON share_links (scan_id)")     # each finished scan's page
         try:    # sign-up checks usernames case-insensitively; this makes the database enforce it too
             conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase ON users (lower(username))")
         except sqlite3.IntegrityError:
