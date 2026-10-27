@@ -31,6 +31,15 @@ test('API error messages are readable', () => {
     .toBe('Target name can\'t be empty');
   expect(errorMessage({ message: 'Network Error' })).toMatch(/reach the server/);
   expect(errorMessage({}, 'fallback')).toBe('fallback');
+  // pydantic's generic messages get the field's name; the validators' own sentences are kept as they are
+  const v = (loc, msg) => errorMessage({ response: { data: { detail: [{ loc, msg }] } } });
+  expect(v(['body', 'api_url'], 'String should have at most 2048 characters')).toBe('API URL: string should have at most 2048 characters');
+  expect(v(['body', 'name'], 'String should have at least 1 character')).toBe('Name: string should have at least 1 character');
+  expect(v(['body', 'alert_drop'], 'Input should be greater than or equal to 1')).toBe('Alert threshold: input should be greater than or equal to 1');
+  expect(v(['body', 'email'], 'value is not a valid email address: An email address must have an @-sign.'))
+    .toBe('Email: value is not a valid email address: An email address must have an @-sign.');
+  expect(v(['body', 'username'], 'Value error, Usernames are 3 to 32 characters')).toBe('Usernames are 3 to 32 characters');
+  expect(v(['body'], 'Input should be a valid dictionary')).toBe('Input should be a valid dictionary');
 });
 
 describe('shortDate / fmtNum', () => {
