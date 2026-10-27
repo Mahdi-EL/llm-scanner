@@ -61,9 +61,10 @@ export default function Navbar() {
     }}>
 
       {/* Logo */}
-      <Link to={user ? '/' : '/landing'} style={{ display:'flex', alignItems:'center', gap:'10px', textDecoration:'none', flexShrink:0 }}>
+      <Link to={user ? '/' : '/landing'} aria-label="LLM Scanner home"
+        style={{ display:'flex', alignItems:'center', gap:'10px', textDecoration:'none', flexShrink:0 }}>
         <Logo size={28} />
-        <span style={{ fontSize:'14px', fontWeight:'800', color:ink, letterSpacing:'-0.3px' }}>
+        <span className="site-nav-wordmark" style={{ fontSize:'14px', fontWeight:'800', color:ink, letterSpacing:'-0.3px' }}>
           LLM<span style={{ color:accent }}>Scanner</span>
         </span>
       </Link>

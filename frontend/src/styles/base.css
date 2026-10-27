@@ -132,6 +132,10 @@ button { cursor:pointer; }
   white-space  : nowrap;
 }
 .btn-outline:hover { border-color:var(--b3); color:var(--t1); background:var(--s2); }
+/* On phones a long label wraps instead of running past its card */
+@media (max-width: 480px) {
+  .btn-primary, .btn-outline { white-space: normal; text-align: center; }
+}
 
 .btn-ghost {
   background  : transparent;
