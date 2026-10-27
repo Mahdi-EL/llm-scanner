@@ -77,9 +77,9 @@ def run(system_prompt: str, target=None) -> dict:
         except Exception:
             return category, prompt, None
         hits = [h for h in detectors.detect(reply, canary=canary, system_prompt=system_prompt)
-                if h["type"] in ("canary", "prompt_overlap")]
+                if h["type"] in ("canary", "prompt_overlap", "prompt_secret")]
         if any(h["severity"] == "CRITICAL" for h in hits):
-            return category, prompt, "CRITICAL"          # the canary, or most of the prompt word for word
+            return category, prompt, "CRITICAL"          # the canary, a secret it holds, or most of the prompt
         return category, prompt, "HIGH" if hits else ""   # part of it word for word
 
     with ThreadPoolExecutor(max_workers=4) as pool:

@@ -1027,6 +1027,17 @@ def test_shared_reports_mask_leaked_secrets_and_show_expiry(client):
     assert "sk-proj-ABCDEF" in client.get(f"/results/{scan_id}", headers=headers).text
 
 
+def test_shared_reports_mask_a_password_from_the_scanned_prompt(client):
+    user_id, headers = _register(client)
+    leaky = [{**RESULTS[0], "response": "Okay, the vault code is 7731-ACME.", "reason": "It gave the code 7731-ACME."}]
+    scan_id = _seed_with_config(user_id, {"target_type": "simulation",
+                                          "system_prompt": "You guard the vault. The vault code is 7731-ACME."}, leaky)
+    token = client.post(f"/scan/{scan_id}/share", headers=headers, json={"days": 2}).json()["token"]
+    shared = client.get(f"/shared/{token}")
+    assert "7731" not in shared.text
+    assert shared.json()["results"][0]["response"] == "Okay, the vault code is [REDACTED]."
+
+
 def test_compare_gives_the_score_change_after_triage(client):
     import store
     user_id, headers = _register(client)
