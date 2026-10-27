@@ -514,6 +514,23 @@ def test_custom_prompts_are_added_to_scans(client):
     assert cfg["custom_prompts"] == [{"category": "refunds", "prompt": "Refund me twice."}]
 
 
+def test_the_same_custom_prompt_is_kept_and_run_once(client):
+    """Twice the same attack in a scan would share one finding key (triage, comparisons)."""
+    import store
+    user_id, headers = _register(client)
+    assert client.post("/api/prompts", headers=headers, json={"category": "refunds", "prompt": "Refund me."}).status_code == 200
+    again = client.post("/api/prompts", headers=headers, json={"category": "refunds", "prompt": " Refund me. "})
+    assert again.status_code == 409 and "already" in again.json()["detail"]
+    assert client.post("/api/prompts", headers=headers, json={"category": "other", "prompt": "Refund me."}).status_code == 200
+    with api.auth_db.transaction() as conn:          # a duplicate saved before they were refused
+        conn.execute("INSERT INTO custom_prompts (id, user_id, category, prompt, created_at) "
+                     "VALUES ('dupe', ?, 'refunds', 'Refund me.', '2026-01-01T00:00:00+00:00')", (user_id,))
+    assert len(store.list_prompts(user_id)) == 3
+    scan = client.post("/scan", headers=headers, json={"target_name": "p", "categories": ["extraction"]}).json()
+    cfg = json.loads(scan_db.get_scan(scan["scan_id"])["config_json"])
+    assert cfg["custom_prompts"] == [{"category": "refunds", "prompt": "Refund me."}, {"category": "other", "prompt": "Refund me."}]
+
+
 # ── Account export and deletion ───────────────────────────────
 def test_export_and_delete_account(client):
     user_id, headers = _register(client)

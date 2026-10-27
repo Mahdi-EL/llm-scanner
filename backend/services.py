@@ -99,8 +99,10 @@ def queue_scan(user: dict, cfg: dict, api_key: Optional[str] = None, *,
         cfg["canary"] = detectors.make_canary()
     if include_custom_prompts and not attacks:
         prompts = store.list_prompts(user["id"])
-        if prompts:
-            cfg["custom_prompts"] = [{"category": p["category"], "prompt": p["prompt"]} for p in prompts]
+        # once each: duplicates saved before they were refused would share a finding key
+        unique = list(dict.fromkeys((p["category"], p["prompt"]) for p in prompts))
+        if unique:
+            cfg["custom_prompts"] = [{"category": c, "prompt": p} for c, p in unique]
 
     from target import HISTORY_TYPES
     planned = attacks if attacks else build_attack_list(categories, with_history=target_type in HISTORY_TYPES,

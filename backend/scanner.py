@@ -178,7 +178,7 @@ def run_full_scan(target, target_name="AI Application", output_name="scan_report
     """
     depth = "quick" if quick and not attacks else "full"     # a re-test's explicit list is neither
     base = [tuple(a) for a in attacks] if attacks else build_attack_list(categories, quick=quick)
-    attacks = base + [tuple(a) for a in (extra_attacks or [])]
+    attacks = list(dict.fromkeys(base + [tuple(a) for a in (extra_attacks or [])]))   # each attack once
     if not getattr(target, "supports_history", False):
         skipped = sum(1 for _, p in attacks if is_multi_turn(p))
         if skipped:
