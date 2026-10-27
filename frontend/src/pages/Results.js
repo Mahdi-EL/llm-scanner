@@ -327,8 +327,30 @@ function RunningState({ scan, cats, onCancel, cancelling, emailed }) {
 }
 
 /* ── Comparison with the previous scan of this target ───── */
-function PreviousComparison({ scan }) {
+const CHANGED_SHOWN = 25;
+
+function ChangedList({ title, items, cats }) {
+  if (!items?.length) return null;
+  const rank = s => SEV_ORDER.indexOf(s) === -1 ? 9 : SEV_ORDER.indexOf(s);
+  items = [...items].sort((a, b) => rank(a.severity) - rank(b.severity) || (b.score || 0) - (a.score || 0));
+  return (
+    <div style={{ marginTop:'10px' }}>
+      <div style={{ fontSize:'10px', color:'var(--t3)', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.7px' }}>
+        {title} ({items.length})
+      </div>
+      {items.slice(0, CHANGED_SHOWN).map((item, i) => (
+        <FindingCard key={`${item.category}-${i}`} item={item} cats={cats} mark={null} onTriage={null} />
+      ))}
+      {items.length > CHANGED_SHOWN && (
+        <p style={{ fontSize:'12px', color:'var(--t3)', marginTop:'8px' }}>…and {items.length - CHANGED_SHOWN} more.</p>
+      )}
+    </div>
+  );
+}
+
+function PreviousComparison({ scan, cats }) {
   const [diff, setDiff] = useState(null);
+  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   useEffect(() => {
     let alive = true;
@@ -348,8 +370,10 @@ function PreviousComparison({ scan }) {
   const triagedDelta = diff.score_delta_after_triage;      // null when nothing on these targets is triaged
   const comparable = diff.same_attacks !== false;
   const points = d => `${d > 0 ? '+' : '−'}${Math.abs(d)} point${Math.abs(d) !== 1 ? 's' : ''}`;
+  const changed = diff.introduced_count + diff.resolved_count > 0;
   return (
-    <div className="card-glow" style={{ padding:'14px 18px', marginBottom:'16px', display:'flex', gap:'18px', alignItems:'center', flexWrap:'wrap', fontSize:'13px' }}>
+    <div className="card-glow" style={{ padding:'14px 18px', marginBottom:'16px', fontSize:'13px' }}>
+    <div style={{ display:'flex', gap:'18px', alignItems:'center', flexWrap:'wrap' }}>
       <span style={{ fontWeight:700 }}>Since the previous scan</span>
       {comparable ? (
         <span style={{ color: delta > 0 ? '#15803d' : delta < 0 ? '#b42318' : 'var(--t3)', fontWeight:700 }}>
@@ -368,7 +392,19 @@ function PreviousComparison({ scan }) {
       <span>{diff.resolved_count} fixed</span>
       {!comparable && <span>{diff.still_failing_count} still failing</span>}
       <span>{diff.introduced_count} new failure{diff.introduced_count!==1?'s':''}</span>
+      {changed && (
+        <button className="btn-ghost" style={{ fontSize:'12px' }} aria-expanded={open} onClick={() => setOpen(o => !o)}>
+          {open ? 'Hide what changed' : 'What changed'}
+        </button>
+      )}
       <button className="btn-ghost" style={{ fontSize:'12px', marginLeft:'auto' }} onClick={()=>navigate(`/results/${diff.previous.scan_id}`)}>Open previous scan →</button>
+    </div>
+    {open && (
+      <div style={{ marginTop:'4px' }}>
+        <ChangedList title="New failures" items={diff.introduced_findings} cats={cats} />
+        <ChangedList title="Fixed since the previous scan (its reply then)" items={diff.resolved_findings} cats={cats} />
+      </div>
+    )}
     </div>
   );
 }
@@ -584,7 +620,7 @@ export default function Results() {
         </div>
       </div>
 
-      <PreviousComparison scan={scan} />
+      <PreviousComparison scan={scan} cats={cats} />
 
       {/* ── Summary ──────────────────────────── */}
       <div className="results-hero results-summary">
