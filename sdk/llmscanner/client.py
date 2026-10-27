@@ -34,7 +34,8 @@ class Client:
         self.base_url = (base_url or os.getenv("LLMSCANNER_API_URL") or DEFAULT_API_URL).rstrip("/")
         self.timeout = timeout
         self._http = session or requests.Session()
-        self._http.headers.update({"X-API-Key": self.api_key, "User-Agent": "llmscanner-python/3.0"})
+        from . import __version__
+        self._http.headers.update({"X-API-Key": self.api_key, "User-Agent": f"llmscanner-python/{__version__}"})
 
     # ── HTTP ─────────────────────────────────────────────────
     def _request(self, method: str, path: str, **kwargs):

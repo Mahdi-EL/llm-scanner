@@ -29,7 +29,7 @@ from .exceptions import (
 )
 from .models import Finding, Scan, ScanReport, ScanSummary
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 __all__ = [
     "Client",
     "Scan",
