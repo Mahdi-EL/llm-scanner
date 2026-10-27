@@ -94,6 +94,9 @@ MAX_ERROR_PERCENT    = _int("MAX_ERROR_PERCENT", 50)
 QUICK_SCAN_PER_CATEGORY = _int("QUICK_SCAN_PER_CATEGORY", 5)
 # Free accounts run quick scans only (full scans cost ~10x the model calls). Off by default.
 FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", False)
+# Finished scans older than this many days are deleted with their findings (a full scan keeps ~1.5 MB of
+# results). 0 keeps them until their owner deletes them. Deleted scans still count toward the month's quota.
+SCAN_RETENTION_DAYS  = _int("SCAN_RETENTION_DAYS", 0)
 
 # People per workspace on Pro, owner included (Free: 1, Enterprise: no limit).
 PRO_SEATS            = _int("PRO_SEATS", 5)

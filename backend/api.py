@@ -1062,14 +1062,7 @@ def _delete_scan_everything(scan: Optional[dict]) -> None:
         return
     if scan["status"] in ("pending", "running"):
         runner.cancel(scan["scan_id"])
-    paths = {scan.get(k) for k in ("json_path", "pdf_path", "html_path", "md_path")}
-    paths |= {os.path.join(config.REPORTS_DIR, f"{scan['scan_id']}.{ext}") for ext in ("json", "pdf", "html", "md")}
-    for path in filter(None, paths):
-        try:
-            if os.path.isfile(path):
-                os.remove(path)
-        except OSError:
-            log.warning("Couldn't delete %s", path)
+    scan_db.remove_report_files(scan)
     scan_db.delete_scan(scan["scan_id"])
 
 
