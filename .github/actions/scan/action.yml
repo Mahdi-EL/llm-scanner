@@ -56,7 +56,7 @@ inputs:
     description: Fail when the score after triage is below this value. Empty disables.
     required: false
   report-format:
-    description: Report to upload as an artifact (pdf, html, md or json). Empty disables.
+    description: Report to upload as an artifact (pdf, html, md, json, or evidence for the audit evidence PDF on paid plans). Empty disables.
     default: html
   timeout:
     description: Seconds to wait for the scan before failing.
@@ -132,7 +132,8 @@ runs:
         [ -n "$IN_FAIL_ON" ] && args+=(--fail-on "$IN_FAIL_ON")
         [ -n "$IN_MIN_SCORE" ] && args+=(--min-score "$IN_MIN_SCORE")
         if [ -n "$IN_FORMAT" ]; then
-          args+=(--download "$IN_FORMAT" --out "llm-scanner-report.$IN_FORMAT")
+          ext="$IN_FORMAT"; [ "$IN_FORMAT" = "evidence" ] && ext="evidence.pdf"
+          args+=(--download "$IN_FORMAT" --out "llm-scanner-report.$ext")
         fi
         # exec: a cancelled job's signal reaches the CLI itself, which then cancels the scan
         exec llmscanner "${args[@]}"
