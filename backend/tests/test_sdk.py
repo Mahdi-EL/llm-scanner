@@ -131,6 +131,23 @@ def test_scan_status_results_download_and_quota(base_url, account, tmp_path):
         client.scan("one too many")
 
 
+def test_retest_and_remediate(base_url, account, monkeypatch):
+    import remediation
+    monkeypatch.setattr(remediation, "suggest", lambda prompt, results, client=None: {
+        "hardened_prompt": "You are careful.", "changes": ["x"], "app_changes": [], "remove_from_prompt": [],
+        "model": "fake", "based_on": len(remediation.failed_findings(results))})
+    client = Client(api_key=account["key"], base_url=base_url)
+    done = _seed(account["user_id"])
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE scans SET config_json = ? WHERE scan_id = ?",
+                     (json.dumps({"target_type": "simulation", "system_prompt": "You are a bot."}), done))
+    assert client.remediate(done)["hardened_prompt"] == "You are careful."
+    again = client.retest(done, system_prompt="You are careful.")
+    assert again.status == "pending" and again.total_attacks == 1          # only the failed attack
+    cfg = json.loads(scan_db.get_scan(again.scan_id)["config_json"])
+    assert cfg["retest_of"] == done and cfg["system_prompt"] == "You are careful."
+
+
 def test_cli_status_and_fail_on(base_url, account, monkeypatch, capsys):
     done = _seed(account["user_id"], severity="CRITICAL")
     args = ["--api-key", account["key"], "--api-url", base_url]
