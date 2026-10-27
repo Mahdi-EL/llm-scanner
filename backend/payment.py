@@ -290,6 +290,23 @@ def _subscription_plan(sub: dict) -> Optional[str]:
     return (sub.get("metadata") or {}).get("plan")
 
 
+def _subscription_interval(sub: dict) -> Optional[str]:
+    """"month" or "year": how often the subscription's plan is billed (None when it can't tell)."""
+    items = (sub.get("items") or {}).get("data") or []
+    for item in items:
+        price_id = (item.get("price") or {}).get("id")
+        for plan in PLANS.values():
+            if price_id and price_id == plan.get("yearly_price_id"):
+                return "year"
+            if price_id and price_id == plan.get("price_id"):
+                return "month"
+    for item in items:
+        interval = (((item.get("price") or {}).get("recurring")) or {}).get("interval")
+        if interval in ("month", "year"):
+            return interval
+    return None
+
+
 def handle_webhook(payload: bytes, sig_header: str) -> dict:
     """Verifies a Stripe webhook and returns what changed.
 
@@ -321,6 +338,7 @@ def handle_webhook(payload: bytes, sig_header: str) -> dict:
         status = obj.get("status")
         if status in ("active", "trialing"):
             result["plan"] = _subscription_plan(obj)
+            result["interval"] = _subscription_interval(obj)
         elif status in ("canceled", "unpaid", "incomplete_expired"):
             result["plan"] = "free"
             result["subscription_id"] = ""

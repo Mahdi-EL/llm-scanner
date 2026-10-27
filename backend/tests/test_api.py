@@ -1291,6 +1291,13 @@ def test_a_yearly_subscription_maps_to_its_plan(client, monkeypatch):
            "items": {"data": [{"price": {"id": "price_pro_year"}}]}}
     _stripe_event(client, monkeypatch, "customer.subscription.created", sub)
     assert auth_db.get_user_by_id(user_id)["plan"] == "pro"
+    assert auth_db.get_user_by_id(user_id)["billing_interval"] == "year"      # Pricing then offers monthly billing
+    sub["items"]["data"][0]["price"]["id"] = "price_pro"
+    _stripe_event(client, monkeypatch, "customer.subscription.updated", sub)
+    assert auth_db.get_user_by_id(user_id)["billing_interval"] == "month"
+    _stripe_event(client, monkeypatch, "customer.subscription.deleted", dict(sub, status="canceled"))
+    user = auth_db.get_user_by_id(user_id)
+    assert user["plan"] == "free" and user["billing_interval"] is None
 
 
 def test_cost_report_sums_server_tokens_per_plan(client):

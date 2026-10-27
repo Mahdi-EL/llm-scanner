@@ -172,9 +172,13 @@ def increment_scan_count(user_id: str):
         conn.execute("UPDATE users SET scans_count = scans_count + 1 WHERE id = ?", (user_id,))
 
 
-def update_plan(user_id: str, plan: str):
+def update_plan(user_id: str, plan: str, interval: Optional[str] = None):
+    """interval: "month" or "year" for a paid plan (kept as it was when not given); Free clears it."""
     with transaction() as conn:
         conn.execute("UPDATE users SET plan = ? WHERE id = ?", (plan, user_id))
+        if plan == "free" or interval:
+            conn.execute("UPDATE users SET billing_interval = ? WHERE id = ?",
+                         (None if plan == "free" else interval, user_id))
 
 
 def set_stripe_ids(user_id: str, customer_id: Optional[str] = None,

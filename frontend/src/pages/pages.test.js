@@ -186,6 +186,33 @@ test('Pricing offers a yearly switch when yearly prices exist', async () => {
   expect(screen.getByText(/17% less than monthly/)).toBeInTheDocument();
 });
 
+test('Pricing lets a monthly subscriber switch the same plan to yearly billing', async () => {
+  auth.value = { ...OWNER, user: { plan: 'pro', billing_interval: 'month', has_billing: true } };
+  api.plansAPI.list.mockResolvedValue({ data: { plans: {
+    pro: { name: 'Pro', amount: 4900, currency: 'eur', interval: 'month', scan_limit: 200, features: [], purchasable: true, trial_days: 0,
+           yearly: { amount: 49000, currency: 'eur', interval: 'year' } },
+  } } });
+  api.plansAPI.checkout.mockResolvedValue({ data: { url: '#updated' } });
+  renderAt('/pricing', <Pricing />, '/pricing');
+  expect(await screen.findByText('Your current plan')).toBeDisabled();
+  fireEvent.click(screen.getByText('Yearly'));
+  fireEvent.click(screen.getByText('Switch to yearly billing'));
+  await waitFor(() => expect(api.plansAPI.checkout).toHaveBeenCalledWith('pro', 'year'));
+});
+
+test('Pricing opens on yearly prices for a yearly subscriber', async () => {
+  auth.value = { ...OWNER, user: { plan: 'pro', billing_interval: 'year', has_billing: true } };
+  api.plansAPI.list.mockResolvedValue({ data: { plans: {
+    pro: { name: 'Pro', amount: 4900, currency: 'eur', interval: 'month', scan_limit: 200, features: [], purchasable: true, trial_days: 0,
+           yearly: { amount: 49000, currency: 'eur', interval: 'year' } },
+  } } });
+  renderAt('/pricing', <Pricing />, '/pricing');
+  expect(await screen.findByText('€490')).toBeInTheDocument();
+  expect(screen.getByText('Your current plan')).toBeDisabled();
+  fireEvent.click(screen.getByText('Monthly'));
+  expect(screen.getByText('Switch to monthly billing')).toBeEnabled();
+});
+
 test('NewScan sends a quick scan with its smaller attack count', async () => {
   api.scansAPI.categories.mockResolvedValue({ data: { categories: [
     { id: 'extraction', title: 'System prompt extraction', tests: '', owasp: ['LLM07'], attacks: 68, quick_attacks: 5 },

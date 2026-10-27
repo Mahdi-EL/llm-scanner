@@ -374,6 +374,7 @@ def _public_user(user: dict) -> dict:
         "webhook_url"       : user.get("webhook_url"),
         "has_webhook_secret": bool(user.get("webhook_secret")),
         "has_billing"       : bool(user.get("stripe_customer_id")),
+        "billing_interval"  : user.get("billing_interval") if user.get("plan", "free") != "free" else None,
         "report_brand"      : user.get("report_brand"),
         "full_scans"        : _can_run_full_scans(user),
     }
@@ -718,7 +719,7 @@ def logout(request: Request, body: LogoutRequest):
 
 
 _WORKSPACE_KEYS = ("plan", "scans_count", "scans_this_month", "scan_limit", "full_scans", "webhook_url",
-                   "has_webhook_secret", "has_billing", "report_brand")
+                   "has_webhook_secret", "has_billing", "billing_interval", "report_brand")
 
 
 @app.get("/auth/me")
@@ -1811,7 +1812,7 @@ def _apply_stripe_event(event: dict) -> None:
         return
     auth_db.set_stripe_ids(user["id"], event.get("customer_id"), event.get("subscription_id"), event_at=created)
     if event.get("plan"):
-        auth_db.update_plan(user["id"], event["plan"])
+        auth_db.update_plan(user["id"], event["plan"], event.get("interval"))
         log.info("User %s plan set to %s (%s)", user["id"], event["plan"], event["type"])
     if event.get("payment_failed") and user.get("email"):
         email_service.send_payment_failed(user["email"])

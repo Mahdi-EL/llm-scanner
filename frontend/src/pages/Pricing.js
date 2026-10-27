@@ -48,6 +48,9 @@ export default function Pricing() {
   const [busy, setBusy] = useState('');
   const [yearly, setYearly] = useState(false);
 
+  // a yearly subscriber sees yearly prices first
+  useEffect(() => { if (user?.billing_interval === 'year') setYearly(true); }, [user?.billing_interval]);
+
   useEffect(() => {
     plansAPI.list().then(r => setPlans(r.data.plans)).catch(() => setPlans({}));
     if (params.get('payment') === 'cancelled') toast('Checkout cancelled. You haven’t been charged.', 'info');
@@ -66,7 +69,15 @@ export default function Pricing() {
   };
 
   const cta = (key, plan) => {
-    if (user?.plan === key) return { label:'Your current plan', disabled:true };
+    if (user?.plan === key) {
+      // the same plan, billed the other way: the subscription moves to that price (prorated)
+      const interval = yearly && plan.yearly ? 'year' : 'month';
+      const other = key !== 'free' && plan.purchasable && plan.yearly && user.billing_interval
+        && user.billing_interval !== interval;
+      if (!other) return { label:'Your current plan', disabled:true };
+      if (role !== 'owner') return { label:'Only the workspace’s owner can change the plan', disabled:true };
+      return { label: interval === 'year' ? 'Switch to yearly billing' : 'Switch to monthly billing', onClick: () => choose(key) };
+    }
     if (key === 'free') return user ? null : { label:'Start free', onClick: () => navigate('/register') };
     if (!plan.purchasable) return { label:'Not available yet', disabled:true };
     if (!user) return { label:`Start with ${plan.name}`, onClick: () => choose(key) };
