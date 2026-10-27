@@ -139,6 +139,22 @@ class Client:
         body = {"key": key, "status": status, **({"note": note} if note else {})}
         return self._json("PUT", f"/scan/{scan_id}/triage", json=body)
 
+    def remediate(self, scan_id: str, system_prompt: Optional[str] = None) -> dict:
+        """A hardened system prompt written from the attacks that succeeded in a finished scan:
+        {"hardened_prompt", "changes", "app_changes", "remove_from_prompt", ...}. Pass system_prompt when
+        the scan didn't store one (an endpoint that adds its own prompt)."""
+        body = {"system_prompt": system_prompt} if system_prompt else {}
+        return self._json("POST", f"/scan/{scan_id}/remediate", json=body, timeout=max(self.timeout, 120))
+
+    def retest(self, scan_id: str, system_prompt: Optional[str] = None, api_key: Optional[str] = None) -> Scan:
+        """Runs only the attacks that failed in a finished scan again (counts as one scan), optionally with a
+        new system prompt. api_key: the target's key, when the scan had one and no saved target holds it.
+        Use wait() on the returned scan."""
+        body = {k: v for k, v in (("system_prompt", system_prompt), ("api_key", api_key)) if v}
+        data = self._json("POST", f"/scan/{scan_id}/retest", json=body)
+        return Scan(scan_id=data["scan_id"], target_name="", status=data.get("status", "pending"),
+                    total_attacks=int(data.get("attacks") or 0))
+
     def cancel(self, scan_id: str) -> dict:
         return self._json("POST", f"/scan/{scan_id}/cancel")
 

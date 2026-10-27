@@ -29,6 +29,11 @@ for finding in report.critical_findings:
     print(finding)
 client.download(scan.scan_id, "pdf", "report.pdf")
 client.download(scan.scan_id, "evidence", "evidence.pdf")   # testing evidence for audits (paid plans)
+
+# Fix it: a hardened prompt written from the failed attacks, then re-run only those attacks
+fix = client.remediate(scan.scan_id)
+retest = client.retest(scan.scan_id, system_prompt=fix["hardened_prompt"])
+print(client.wait(retest.scan_id).security_score)
 ```
 
 ## Command line
