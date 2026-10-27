@@ -489,7 +489,7 @@ export default function ThreatIntel() {
         </div>
         <div className="filter-row" style={{ margin:0 }}>
           {['all','critical','high','medium'].map(s => (
-            <button key={s} className={`filter-btn${filterSev === s ? ' active' : ''}`}
+            <button key={s} className={`filter-btn${filterSev === s ? ' active' : ''}`} aria-pressed={filterSev === s}
               onClick={() => { setFilterSev(s); setExpanded(null); }}>
               {s === 'all' ? `All (${counts.all})` : `${s.charAt(0).toUpperCase() + s.slice(1)} (${counts[s]})`}
             </button>

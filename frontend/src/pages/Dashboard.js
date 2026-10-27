@@ -477,7 +477,7 @@ export default function Dashboard() {
               </div>
               <div style={{ display:'flex', gap:'4px', flexWrap:'wrap' }}>
                 {['ALL','COMPLETE','RUNNING','FAILED'].map(f=>(
-                  <button key={f} className={`filter-btn${filter===f?' active':''}`} style={{ padding:'4px 11px', fontSize:'11px' }}
+                  <button key={f} className={`filter-btn${filter===f?' active':''}`} aria-pressed={filter===f} style={{ padding:'4px 11px', fontSize:'11px' }}
                     onClick={()=>{setFilter(f);setPage(1);}}>{f[0]+f.slice(1).toLowerCase()}</button>
                 ))}
               </div>
