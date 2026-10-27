@@ -5,6 +5,7 @@ import { scoreColor, shortDate } from '../utils/format';
 import CenterCard from '../components/CenterCard';
 
 const SEV_COLORS = { CRITICAL:'#b42318', HIGH:'#c4320a', MEDIUM:'#a15c07', LOW:'#4b6b2f', SAFE:'#3d6b4f', ERROR:'#6b6b6b' };
+const TRIAGE_LABEL = { false_positive: 'False positive', accepted_risk: 'Accepted risk' };
 
 /* A read-only report opened from a share link. No account needed. */
 export default function SharedReport() {
@@ -43,6 +44,7 @@ export default function SharedReport() {
 
   const s = data.summary;
   const list = showAll ? failed : failed.slice(0, 30);
+  const triagedCount = failed.filter(r => r.triage).length;
 
   return (
     <div style={{ maxWidth:'880px', margin:'0 auto', padding:'48px 20px 64px' }}>
@@ -66,8 +68,16 @@ export default function SharedReport() {
         </div>
       </div>
 
+      {data.triaged_summary && (
+        <p style={{ fontSize:'13px', margin:'4px 0 0' }}>
+          After triage: <strong style={{ color: scoreColor(data.triaged_summary.security_score) }}>
+            {data.triaged_summary.security_score} · grade {data.triaged_summary.grade}</strong>
+          <span style={{ color:'var(--t3)' }}> ({triagedCount} finding{triagedCount !== 1 ? 's' : ''} marked as a false positive or an accepted risk by the team)</span>
+        </p>
+      )}
+
       <h2 style={{ fontFamily:'Georgia, serif', fontSize:'22px', fontWeight:600, marginTop:'36px', paddingTop:'14px', borderTop:'1px solid var(--b1)' }}>What to fix first</h2>
-      {data.recommendations.length === 0 ? <p style={{ fontSize:'14px' }}>No attack succeeded.</p> : data.recommendations.map((r, i, all) => (
+      {data.recommendations.length === 0 ? <p style={{ fontSize:'14px' }}>{triagedCount ? 'Nothing left to fix: the attacks that succeeded are marked as false positives or accepted risks.' : 'No attack succeeded.'}</p> : data.recommendations.map((r, i, all) => (
         <div key={r.category} style={{ padding:'12px 0', borderBottom: i < all.length - 1 ? '1px solid var(--b1)' : 'none' }}>
           <div style={{ fontWeight:700, fontSize:'14px' }}>{r.priority} · {r.title} <span style={{ color:'var(--t3)', fontWeight:400, fontSize:'12px' }}>{r.failed} failed</span></div>
           <div style={{ fontSize:'12px', color:'var(--t3)', margin:'2px 0 4px' }}>{r.owasp.join(' · ')}</div>
@@ -80,6 +90,7 @@ export default function SharedReport() {
         <details key={i} style={{ borderBottom:'1px solid var(--b1)', padding:'8px 0' }}>
           <summary style={{ cursor:'pointer', fontSize:'13px', overflowWrap:'anywhere' }}>
             <strong style={{ color: SEV_COLORS[r.severity], marginRight:'10px' }}>{r.severity}</strong>{r.attack.slice(0, 120)}
+            {r.triage && <span style={{ marginLeft:'10px', fontSize:'11px', color:'var(--t3)' }}>({TRIAGE_LABEL[r.triage] || r.triage})</span>}
           </summary>
           <pre className="finding-pre" tabIndex={0} style={{ marginTop:'8px' }}>{r.response}</pre>
           <p style={{ fontSize:'13px', margin:'8px 0 0' }}>{r.reason}</p>

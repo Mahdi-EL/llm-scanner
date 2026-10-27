@@ -71,6 +71,36 @@ def recommendations(results):
     return recs
 
 
+TRIAGE_LABEL = {"false_positive": "False positive", "accepted_risk": "Accepted risk"}
+
+
+def open_results(results):
+    """The results with findings marked as a false positive or an accepted risk counted as safe: what's left to fix."""
+    return [{**r, "severity": "SAFE", "score": 0} if r.get("triage") else r for r in results]
+
+
+def triage_line(r) -> str:
+    """"Marked as accepted risk by ann: the value is public" for a triaged finding, else ""."""
+    mark = r.get("triage") or {}
+    if not mark.get("status"):
+        return ""
+    text = f"Marked as {TRIAGE_LABEL.get(mark['status'], mark['status']).lower()}"
+    if mark.get("decided_by"):
+        text += f" by {mark['decided_by']}"
+    return text + (f": {mark['note']}" if mark.get("note") else "")
+
+
+def triage_note(data) -> str:
+    """The score after triage when findings of this scan are marked, else ""."""
+    after = data.get("triaged_summary")
+    count = sum(1 for r in data.get("results") or [] if r.get("triage"))
+    if not after or not count:
+        return ""
+    return (f"After triage: {after['security_score']}/100, grade {after['grade']}. "
+            f"{count} finding{'s' if count != 1 else ''} marked as a false positive or an accepted risk "
+            f"{'are' if count != 1 else 'is'} not counted in it, nor in what to fix first.")
+
+
 def category_rows(results):
     """Per-category totals in the order categories were scanned."""
     rows = OrderedDict()
@@ -142,7 +172,7 @@ def render_html(data, target_name="AI Application"):
         for s in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "SAFE"]
     )
 
-    recs = recommendations(results)
+    recs = recommendations(open_results(results))
     if recs:
         recs_html = "".join(
             f'<article class="rec"><div class="rec-head"><span class="pri pri-{e(r["priority"])}">{e(r["priority"])}</span>'
@@ -166,17 +196,22 @@ def render_html(data, target_name="AI Application"):
     for r in _sorted_findings(results):
         sev = r.get("severity", "SAFE")
         det = "".join(f"<li>{e(d.get('evidence', ''))}</li>" for d in r.get("detectors") or [])
+        tri = triage_line(r)
+        label = TRIAGE_LABEL.get((r.get("triage") or {}).get("status"), "")
         findings.append(
             f'<details class="finding" data-sev="{e(sev)}">'
             f'<summary><span class="sev" style="color:{_HTML_SEV.get(sev, "#555")}">{e(sev)}</span>'
             f'<span class="cat">{e(catalog.info(r.get("category", "")).get("title", ""))}</span>'
-            f'<span class="score">{int(r.get("score") or 0)}/10</span></summary>'
+            + (f'<span class="tri">{e(label)}</span>' if tri else "")
+            + f'<span class="score">{int(r.get("score") or 0)}/10</span></summary>'
             f'<div class="body"><h4>Attack</h4><pre>{e(_clip(r.get("attack"), 2000))}</pre>'
             f'<h4>Reply</h4><pre>{e(_clip(r.get("response"), 4000))}</pre>'
             f'<h4>Why</h4><p>{e(r.get("reason") or "")}</p>'
             + (f'<h4>Rule-based detection</h4><ul>{det}</ul>' if det else "")
+            + (f'<h4>Triage</h4><p>{e(tri)}</p>' if tri else "")
             + '</div></details>'
         )
+    note = triage_note(data)
 
     coverage = ""
     if summary.get("errors"):
@@ -210,6 +245,8 @@ h3{{font-size:17px;margin:0}} h4{{font-size:12px;letter-spacing:.06em;text-trans
 .counts{{display:flex;gap:24px;flex-wrap:wrap;margin:28px 0 8px}}
 .count .n{{display:block;font-family:Georgia,serif;font-size:30px;line-height:1}} .count .l{{font-size:12px;color:var(--muted)}}
 .warn{{border-left:3px solid #a15c07;padding:8px 12px;background:var(--card)}}
+.note{{border-left:3px solid var(--rule);padding:8px 12px;background:var(--card)}}
+.tri{{font-size:11px;color:var(--muted);border:1px solid var(--rule);border-radius:3px;padding:1px 6px}}
 .rec{{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:16px 18px;margin:10px 0}}
 .rec-head{{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}}
 .pri{{font-size:11px;font-weight:700;padding:2px 7px;border-radius:3px;border:1px solid currentColor}}
@@ -239,6 +276,7 @@ footer{{margin-top:48px;color:var(--muted);font-size:12px}}
   </div>
   <div class="counts">{counts}</div>
   {coverage}
+  {f'<p class="note">{e(note)}</p>' if note else ""}
   <p class="muted">The score weights failures by severity. Any critical finding caps it at 49, any high at 69, any medium at 89.</p>
 
   <h2>What to fix first</h2>
@@ -302,8 +340,10 @@ def render_markdown(data, target_name="AI Application"):
         lines.append(f"| {sev.title()} | {summary.get(sev.lower(), 0)} |")
     if summary.get("errors"):
         lines.append(f"| Errors (not scored) | {summary['errors']} |")
+    if triage_note(data):
+        lines += ["", f"*{_md(triage_note(data))}*"]
     lines += ["", "## What to fix first", ""]
-    recs = recommendations(results)
+    recs = recommendations(open_results(results))
     if not recs:
         lines.append("No attack succeeded. Re-scan after every change to the system prompt or model.")
     for r in recs:
@@ -325,6 +365,7 @@ def render_markdown(data, target_name="AI Application"):
             f"- **Attack:** {_md(r.get('attack'), 300)}",
             f"- **Reply:** {_md(r.get('response'), 300)}",
             f"- **Why:** {_md(r.get('reason'), 400)}",
+            *([f"- **Triage:** {_md(triage_line(r), 400)}"] if triage_line(r) else []),
             "",
         ]
     if len(serious) > 25:
@@ -434,10 +475,12 @@ def build_pdf(data, output_path, target_name="AI Application"):
                                   "(target or grading errors) and are not counted in the score."), S["small"]))
     story.append(Paragraph("The score weights failures by severity. Any critical finding caps it at 49, "
                            "any high at 69, any medium at 89.", S["small"]))
+    if triage_note(data):
+        story.append(Paragraph(_p(triage_note(data)), S["small"]))
 
     # What to fix
     story += [Paragraph("What to fix first", S["h2"])]
-    recs = recommendations(results)
+    recs = recommendations(open_results(results))
     if not recs:
         story.append(Paragraph("No attack succeeded. Re-scan after every change to the system prompt or model.",
                                S["body"]))
@@ -483,6 +526,7 @@ def build_pdf(data, output_path, target_name="AI Application"):
             Paragraph("<b>Attack:</b> " + _p(_clip(r.get("attack"), 400)), S["small"]),
             Paragraph("<b>Reply:</b> " + _p(_clip(r.get("response"), 600)), S["small"]),
             Paragraph("<b>Why:</b> " + _p(_clip(r.get("reason"), 400)), S["small"]),
+            *([Paragraph("<b>Triage:</b> " + _p(_clip(triage_line(r), 400)), S["small"])] if triage_line(r) else []),
             Spacer(1, 0.25 * cm),
         ]
         story.append(KeepTogether(block))
@@ -498,7 +542,8 @@ def build_pdf(data, output_path, target_name="AI Application"):
         for r in others[:200]:
             rows_ml.append([Paragraph(_p(r["severity"]), S["cellb"]),
                             Paragraph(_p(catalog.info(r.get("category", ""))["title"]), S["cell"]),
-                            Paragraph(_p(_clip(r.get("reason"), 160)), S["cell"])])
+                            Paragraph(_p((f"[{TRIAGE_LABEL.get(r['triage'].get('status'), '')}] " if r.get("triage") else "")
+                                         + _clip(r.get("reason"), 160)), S["cell"])])
         tml = Table(rows_ml, colWidths=[W * f for f in (0.13, 0.29, 0.58)], repeatRows=1)
         tml.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.3, C_BORDER),
                                  ("VALIGN", (0, 0), (-1, -1), "TOP")]))
