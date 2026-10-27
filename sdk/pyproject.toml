@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmscanner"
-version = "3.0.0"
+version = "3.1.0"
 description = "Python client and CLI for the LLM Scanner API: security scans for AI applications"
 readme = "README.md"
 requires-python = ">=3.9"
