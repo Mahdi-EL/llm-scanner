@@ -25,7 +25,8 @@ vi.mock('../services/api', async () => {
 const OWNER = { user: null, role: 'owner', canEdit: true, canAdmin: true };
 const auth = vi.hoisted(() => ({ value: null }));
 vi.mock('../context/AuthContext', () => ({ useAuth: () => auth.value }));
-vi.mock('../context/ToastContext', () => ({ useToast: () => vi.fn() }));
+const toastFn = vi.hoisted(() => vi.fn());
+vi.mock('../context/ToastContext', () => ({ useToast: () => toastFn }));
 vi.mock('../context/ConfirmContext', () => ({ useConfirm: () => () => Promise.resolve(true) }));
 
 const api = await import('../services/api');
@@ -75,6 +76,23 @@ test('Results shows real progress for a running scan', async () => {
   // the scan takes a moment to stop: the button says so instead of inviting more clicks
   expect(await screen.findByText('Cancelling…')).toBeDisabled();
   expect(api.scansAPI.cancel).toHaveBeenCalledWith('abc');
+});
+
+test('Results says when the scan it shows has finished (a toast, which screen readers hear)', async () => {
+  api.scansAPI.categories.mockResolvedValue(CATEGORIES);
+  api.scansAPI.get.mockResolvedValueOnce({ data: {
+    scan_id: 'abc', target_name: 'Bot', status: 'running', progress: 99, completed_attacks: 109, total_attacks: 110,
+    created_at: '2026-10-16T10:00:00+00:00',
+  } });
+  api.scansAPI.get.mockResolvedValue({ data: {
+    scan_id: 'abc', target_name: 'Bot', status: 'complete', created_at: '2026-10-16T10:00:00+00:00',
+    summary: { security_score: 30, grade: 'F' }, results: { summary: { security_score: 30, grade: 'F' }, results: [] },
+  } });
+  toastFn.mockClear();
+  renderAt('/results/abc', <Results />, '/results/:id');
+  api.scansAPI.cancel.mockResolvedValue({ data: {} });
+  fireEvent.click(await screen.findByText('Cancel scan'));            // it finished as the cancel arrived
+  await waitFor(() => expect(toastFn).toHaveBeenCalledWith('Scan complete: 30/100, grade F.', 'success', 6000));
 });
 
 test('Results lists every finding with "show more" and downloads with auth', async () => {
