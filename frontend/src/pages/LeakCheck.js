@@ -70,7 +70,8 @@ export default function LeakCheck() {
             </>
           )}
           <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:1.7, marginTop:'18px' }}>
-            This quick check runs on a demo model and only counts word-for-word leaks. A full scan sends 1,090 attacks
+            This quick check runs on a demo model and only counts word-for-word leaks (including a password or code your
+            prompt states). A full scan sends 1,090 attacks
             to your real app, grades every reply (paraphrased leaks too) and writes a hardened prompt for you.
           </p>
           <Link to={next} onClick={carryPrompt} className="btn-primary" style={{ display:'inline-flex', marginTop:'8px', padding:'11px 22px' }}>
