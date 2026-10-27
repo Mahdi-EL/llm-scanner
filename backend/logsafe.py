@@ -35,6 +35,13 @@ class ScrubbingFormatter(logging.Formatter):
         return scrub(super().format(record))
 
 
+def quiet_http_clients(level: str) -> None:
+    """The Groq SDK's HTTP client (httpx) logs every request at INFO: ~2,200 lines per full scan.
+    Below DEBUG it logs warnings and errors only."""
+    if str(level).upper() != "DEBUG":
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
 def install(fmt: str) -> None:
     """Puts the scrubbing formatter on every handler of the root logger."""
     for handler in logging.getLogger().handlers:

@@ -23,6 +23,7 @@ from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import config
 import detectors
 import errors
+import logsafe
 import scoring
 from analysis import build_report_data, calculate_final_severity, get_severity_color
 from attacks import catalog
@@ -301,6 +302,8 @@ def main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     logging.basicConfig(level=config.LOG_LEVEL, format="%(levelname)s %(message)s")
+    logsafe.quiet_http_clients(config.LOG_LEVEL)
+    logsafe.install("%(levelname)s %(message)s")
 
     parser = argparse.ArgumentParser(description="LLM Scanner: full analysis engine")
     parser.add_argument("--target", default="AI Application")
