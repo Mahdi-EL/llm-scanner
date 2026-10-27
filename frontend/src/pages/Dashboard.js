@@ -435,10 +435,11 @@ export default function Dashboard() {
                   const h = Math.max(6, Math.round((sc/100)*CHART_H));
                   const relScan = chronological[i];
                   return (
-                    <div key={i} title={`${sc}/100 — click to view`}
+                    <button key={i} type="button" title={`${sc}/100 — click to view`}
+                      aria-label={`${relScan.target_name}, ${new Date(relScan.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}: ${sc}/100. Open the scan`}
                       className="score-chart-bar"
-                      style={{ height:`${h}px`, background:color, boxShadow:`0 0 8px ${color}40`, flex:1, cursor:relScan?'pointer':'default', minWidth:0 }}
-                      onClick={()=>relScan&&navigate(`/results/${relScan.scan_id}`)}
+                      style={{ height:`${h}px`, background:color, boxShadow:`0 0 8px ${color}40`, flex:1, cursor:'pointer', minWidth:0, border:'none', padding:0 }}
+                      onClick={()=>navigate(`/results/${relScan.scan_id}`)}
                     />
                   );
                 })}
