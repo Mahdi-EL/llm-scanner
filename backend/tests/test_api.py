@@ -1117,6 +1117,9 @@ def test_regression_email_says_what_happened(monkeypatch):
     email_service.send_score_drop("a@b.c", "Bot", 49, 49, "s2", new_critical=2)
     assert "dropped to 60" in sent[0][0] and "down from 80" in sent[0][1] and "&lt;x&gt;" in sent[0][1]
     assert "2 new critical findings" in sent[1][0] and "down from" not in sent[1][1]
+    assert "/results/s1?changed=1" in sent[0][1]                     # opens the list of what changed
+    email_service.send_score_drop("a@b.c", "Bot", 80, 60, "s3", workspace="acct1")
+    assert "/results/s3?workspace=acct1&amp;changed=1" in sent[2][1]
 
 
 def test_scan_stats_cover_every_finished_scan(client):

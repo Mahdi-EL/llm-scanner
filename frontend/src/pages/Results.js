@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { scansAPI, downloadReport, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -348,9 +348,9 @@ function ChangedList({ title, items, cats }) {
   );
 }
 
-function PreviousComparison({ scan, cats }) {
+function PreviousComparison({ scan, cats, openAtStart }) {
   const [diff, setDiff] = useState(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!openAtStart);      // the regression email's "See what changed" link
   const navigate = useNavigate();
   useEffect(() => {
     let alive = true;
@@ -412,6 +412,7 @@ function PreviousComparison({ scan, cats }) {
 /* ── Main Results page ───────────────────────────────────── */
 export default function Results() {
   const { id } = useParams();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
   const toast = useToast();
   const { user, canEdit } = useAuth();      // viewers read the scan and download reports; they can't change it
@@ -620,7 +621,7 @@ export default function Results() {
         </div>
       </div>
 
-      <PreviousComparison scan={scan} cats={cats} />
+      <PreviousComparison scan={scan} cats={cats} openAtStart={params.get('changed') === '1'} />
 
       {/* ── Summary ──────────────────────────── */}
       <div className="results-hero results-summary">

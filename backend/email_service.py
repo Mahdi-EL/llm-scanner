@@ -95,9 +95,10 @@ def send_score_drop(email: str, target_name: str, old_score: int, new_score: int
     subject = (f"Security regression: {target_name[:60]} dropped to {int(new_score)}" if dropped else
                f"Security regression: {int(new_critical)} new critical finding{'s' if new_critical != 1 else ''} "
                f"on {target_name[:60]}")
+    link = scan_link(scan_id, workspace)
+    link += ("&" if "?" in link else "?") + "changed=1"       # opens the list of what changed
     return _send(email, subject,
-                 _layout("Security score dropped" if dropped else "New critical findings", body, "See what changed",
-                         scan_link(scan_id, workspace)))
+                 _layout("Security score dropped" if dropped else "New critical findings", body, "See what changed", link))
 
 
 def send_schedule_skipped(email: str, target_name: str, frequency: str, reason: str) -> bool:
