@@ -35,7 +35,8 @@ function AreaChart({ data, color = 'var(--blue)', height = 160 }) {
   const yLines = [0, 25, 50, 75, 100];
 
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:'visible' }}>
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:'visible' }} role="img"
+      aria-label={`Security score of the last ${data.length} completed scans: ${data.map(d => `${d.label} ${d.score}`).join(', ')}`}>
       <defs>
         <linearGradient id={`grad-${color.replace(/[^a-z]/g,'')}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"   stopColor={color} stopOpacity="0.25" />
@@ -87,7 +88,8 @@ function DonutChart({ segments, size = 120 }) {
   const R = 44, CIRC = 2 * Math.PI * R;
   let offset = 0;
   return (
-    <svg width={size} height={size} viewBox="0 0 120 120">
+    <svg width={size} height={size} viewBox="0 0 120 120" role="img"
+      aria-label={`Findings by severity: ${segments.map(s => `${s.label} ${s.pct}%`).join(', ')}`}>
       <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(17,24,39,0.04)" strokeWidth="14" />
       {segments.map((s, i) => {
         const dash = (s.pct / 100) * CIRC;
@@ -110,7 +112,8 @@ function DonutChart({ segments, size = 120 }) {
 function SparkBar({ values }) {
   const max = Math.max(...values, 1);
   return (
-    <div style={{ display:'flex', alignItems:'flex-end', gap:'2px', height:'32px' }}>
+    <div role="img" aria-label={`Scans per day over the last ${values.length} days: ${values.reduce((a, v) => a + v, 0)} in all, at most ${Math.max(...values, 0)} a day`}
+      style={{ display:'flex', alignItems:'flex-end', gap:'2px', height:'32px' }}>
       {values.map((v, i) => {
         const h = Math.max(3, Math.round((v / max) * 32));
         return <div key={i} style={{ flex:1, height:`${h}px`, background:'var(--blue)', borderRadius:'2px', opacity: 0.4 + (i / values.length) * 0.6 }} />;
@@ -220,7 +223,7 @@ export default function Analytics() {
   const catEntries = catStats.filter(c => c.attacks > 0);
 
   /* Scan frequency (last 30 days) */
-  const now = Date.now();
+  const today = new Date();
   const dayCounts = {};
   scans.forEach(s => {
     const d = new Date(s.created_at);
@@ -228,7 +231,8 @@ export default function Analytics() {
     dayCounts[key] = (dayCounts[key] || 0) + 1;
   });
   const last30 = Array.from({ length:30 }, (_, i) => {
-    const d = new Date(now - (29 - i) * 86400000);
+    // calendar days, not 24-hour steps: across a daylight-saving change those skip or repeat a date
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (29 - i));
     const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     return dayCounts[key] || 0;
   });
