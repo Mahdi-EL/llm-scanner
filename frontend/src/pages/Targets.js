@@ -350,7 +350,7 @@ jobs:
           return (
             <React.Fragment key={t.id}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'16px', padding:'14px 20px', borderBottom:'1px solid var(--b1)', flexWrap:'wrap' }}>
-              <div style={{ minWidth:'220px', flex:1 }}>
+              <div style={{ flex:'1 1 220px', minWidth:0, overflowWrap:'anywhere' }}>
                 <div style={{ fontSize:'14px', fontWeight:'600' }}>{t.name}</div>
                 <div style={{ fontSize:'12px', color:'var(--t3)' }}>
                   {TYPES[t.config.target_type] || t.config.target_type}
