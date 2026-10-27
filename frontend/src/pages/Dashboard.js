@@ -489,6 +489,12 @@ export default function Dashboard() {
               <div className="empty-state-icon">{search?'🔍':'🛡️'}</div>
               <h3>{search?'No results found':'No scans match filter'}</h3>
               <p>{search?`Nothing matches "${search}"`:'Try changing the filter above.'}</p>
+              {search && scans.length<total && (
+                <p style={{ fontSize:'12px', color:'var(--t3)' }}>
+                  This searches your latest {scans.length} scans. <button className="btn-ghost" style={{ fontSize:'12px', padding:0 }}
+                    onClick={()=>navigate('/reports')}>Reports</button> searches every finished scan.
+                </p>
+              )}
             </div>
           ) : (
             <>
