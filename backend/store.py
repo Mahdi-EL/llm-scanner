@@ -184,9 +184,14 @@ def list_prompts(user_id: str) -> list:
         return [dict(r) for r in rows]
 
 
-def add_prompt(user_id: str, category: str, prompt: str) -> Optional[dict]:
+def add_prompt(user_id: str, category: str, prompt: str):
+    """The new prompt; None when the user has MAX_PROMPTS already, False when they have this one already (the
+    same attack twice in a scan would share one finding key: one triage mark, one row in comparisons)."""
     prompt_id = uuid.uuid4().hex
     with transaction() as conn:
+        if conn.execute("SELECT 1 FROM custom_prompts WHERE user_id = ? AND category = ? AND prompt = ?",
+                        (user_id, category, prompt)).fetchone():
+            return False
         # One statement, so parallel requests can't both pass the count.
         added = conn.execute(
             "INSERT INTO custom_prompts (id, user_id, category, prompt, created_at) "

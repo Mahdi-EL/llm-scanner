@@ -1633,6 +1633,8 @@ def list_prompts(user: dict = Depends(require_user)):
 def add_prompt(body: PromptCreate, user: dict = Depends(require_member)):
     """Adds a custom attack prompt; it runs with your future scans."""
     created = store.add_prompt(user["id"], body.category, body.prompt.strip())
+    if created is False:
+        raise HTTPException(status_code=409, detail="You already have this attack prompt in that category")
     if not created:
         raise HTTPException(status_code=400, detail=f"You can save up to {store.MAX_PROMPTS} custom prompts")
     return created

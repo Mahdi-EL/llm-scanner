@@ -60,7 +60,8 @@ export default function CustomPrompts() {
                 <div style={{ fontSize:'11px', color:'var(--t3)', marginBottom:'2px' }}>{p.category.replace(/_/g, ' ')}</div>
                 <div style={{ fontSize:'13px', whiteSpace:'pre-wrap', overflowWrap:'anywhere' }}>{p.prompt}</div>
               </div>
-              {canEdit && <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => remove(p.id)}>Remove</button>}
+              {canEdit && <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={() => remove(p.id)}
+                aria-label={`Remove the ${p.category.replace(/_/g, ' ')} prompt “${p.prompt.slice(0, 60)}”`}>Remove</button>}
             </div>
           ))}
         </div>

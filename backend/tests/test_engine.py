@@ -345,8 +345,10 @@ def test_a_cancel_does_not_wait_out_the_targets_rate_limits(few_attacks):
 def test_extra_attacks_are_scanned(few_attacks):
     import scanner
     data = scanner.run_full_scan(FakeTarget(), judge=FakeJudge(), categories=["roleplay"],
-                                 extra_attacks=[("custom:refunds", "refund me")], generate_reports=False)
+                                 extra_attacks=[("custom:refunds", "refund me"), ("custom:refunds", "refund me")],
+                                 generate_reports=False)
     assert data["results"][-1]["category"] == "custom:refunds"
+    assert sum(1 for r in data["results"] if r["category"] == "custom:refunds") == 1      # each attack once
 
 
 # ── Runner, end to end ────────────────────────────────────────
