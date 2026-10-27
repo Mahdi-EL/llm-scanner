@@ -18,7 +18,8 @@ from .exceptions import (APIKeyError, LLMScannerError, QuotaError, RateLimitErro
 from .models import Scan, ScanReport
 
 DEFAULT_API_URL = "http://localhost:8000"
-_FORMATS = {"pdf": "/download", "html": "/download/html", "md": "/download/md", "json": "/download/json"}
+_FORMATS = {"pdf": "/download", "html": "/download/html", "md": "/download/md", "json": "/download/json",
+            "evidence": "/download/evidence"}      # evidence: the PDF for audits (paid plans)
 
 
 class Client:
@@ -145,14 +146,15 @@ class Client:
         return self._json("DELETE", f"/scan/{scan_id}")
 
     def download(self, scan_id: str, fmt: str = "pdf", path: Optional[str] = None) -> str:
-        """Saves a report (pdf, html, md or json) and returns its path."""
+        """Saves a report (pdf, html, md, json, or evidence: the testing-evidence PDF for audits, on paid
+        plans) and returns its path."""
         if fmt not in _FORMATS:
             raise ValueError(f"Format must be one of {sorted(_FORMATS)}")
         try:
             response = self._request("GET", f"{_FORMATS[fmt]}/{scan_id}", timeout=max(self.timeout, 120))
         except LLMScannerError as e:
             raise ReportError(str(e), status=e.status) from e
-        path = path or f"llm-scanner-{scan_id}.{fmt}"
+        path = path or (f"llm-scanner-evidence-{scan_id}.pdf" if fmt == "evidence" else f"llm-scanner-{scan_id}.{fmt}")
         with open(path, "wb") as f:
             f.write(response.content)
         return path

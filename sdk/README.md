@@ -28,6 +28,7 @@ print(report.security_score, report.grade)
 for finding in report.critical_findings:
     print(finding)
 client.download(scan.scan_id, "pdf", "report.pdf")
+client.download(scan.scan_id, "evidence", "evidence.pdf")   # testing evidence for audits (paid plans)
 ```
 
 ## Command line

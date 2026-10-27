@@ -172,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="exit 1 if any finding is at or above this severity")
     scan.add_argument("--min-score", type=int, help="exit 1 if the score is below this")
     scan.add_argument("--json", help="write the full results to this file")
-    scan.add_argument("--download", choices=["pdf", "html", "md", "json"], help="download a report")
+    scan.add_argument("--download", choices=["pdf", "html", "md", "json", "evidence"], help="download a report")
     scan.add_argument("--out", help="where to save the downloaded report")
     scan.add_argument("--poll", type=float, default=10.0, help="seconds between status checks")
     scan.add_argument("--timeout", type=float, default=None, help="give up after this many seconds")
@@ -184,7 +184,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     rep = sub.add_parser("report", help="download a finished scan's report")
     rep.add_argument("scan_id")
-    rep.add_argument("--format", default="pdf", choices=["pdf", "html", "md", "json"])
+    rep.add_argument("--format", default="pdf", choices=["pdf", "html", "md", "json", "evidence"])
     rep.add_argument("--out")
     rep.set_defaults(func=cmd_report)
 
