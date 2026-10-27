@@ -51,8 +51,15 @@ export default function LeakCheck() {
 
       {error && <div className="alert-error" role="alert" style={{ marginTop:'18px' }}>{error}</div>}
 
+      {/* on the page from the start, so screen readers announce the check starting and its outcome */}
+      <p className="sr-only" role="status">
+        {busy ? 'Running 20 attacks, about 20 seconds.' : result ? (result.leaked
+          ? `${result.leaked} of ${result.attacks} attacks got your prompt out.`
+          : `None of ${result.attacks} attacks got your prompt out word for word.`) : ''}
+      </p>
+
       {result && (
-        <section aria-live="polite" aria-label="Check results" style={{ marginTop:'32px', paddingTop:'24px', borderTop:'1px solid var(--b1)' }}>
+        <section aria-label="Check results" style={{ marginTop:'32px', paddingTop:'24px', borderTop:'1px solid var(--b1)' }}>
           <div style={{ fontFamily:'Georgia, serif', fontSize:'34px', lineHeight:1.2, color: result.leaked ? '#b42318' : '#15803d' }}>
             {result.leaked
               ? `${result.leaked} of ${result.attacks} attacks got your prompt out.`

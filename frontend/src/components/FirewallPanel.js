@@ -68,11 +68,14 @@ export default function FirewallPanel({ Snippet }) {
             <button className="btn-primary" style={{ fontSize:'12px' }} disabled={busy || !text.trim()} onClick={check}>
               {busy ? 'Checking…' : 'Check message'}
             </button>
-            {v && (
-              <span role="status" style={{ fontSize:'12px', fontWeight:'700', color:v.color, background:v.bg, padding:'3px 10px', borderRadius:'20px' }}>
-                {v.label}{result.score != null ? ` · ${Math.round(result.score * 100)}% injection likelihood` : ''}
-              </span>
-            )}
+            {/* always on the page: a live region added together with its text often isn't announced */}
+            <span role="status">
+              {v && (
+                <span style={{ fontSize:'12px', fontWeight:'700', color:v.color, background:v.bg, padding:'3px 10px', borderRadius:'20px' }}>
+                  {v.label}{result.score != null ? ` · ${Math.round(result.score * 100)}% injection likelihood` : ''}
+                </span>
+              )}
+            </span>
           </div>
           {error && <div className="alert-error" role="alert" style={{ marginTop:'10px', marginBottom:0 }}>{error}</div>}
           {result?.reasons?.length > 0 && (
