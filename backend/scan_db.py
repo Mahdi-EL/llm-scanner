@@ -4,12 +4,17 @@ Internal rows hold secrets (the encrypted target key) and large blobs
 (results, checkpoints). public_scan() is the only shape the API returns.
 """
 import json
+import logging
+import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import config
 import scoring
 from db import transaction, utcnow
+
+log = logging.getLogger("llmscanner.scans")
 
 ACTIVE = ("pending", "running")
 
@@ -223,6 +228,35 @@ def delete_scan(scan_id: str):
         conn.execute("DELETE FROM findings WHERE scan_id = ?", (scan_id,))
         conn.execute("DELETE FROM share_links WHERE scan_id = ?", (scan_id,))
         conn.execute("DELETE FROM scans WHERE scan_id = ?", (scan_id,))
+
+
+def remove_report_files(scan: dict) -> None:
+    """Report files kept on disk for a scan by versions that saved them (reports are now built on download)."""
+    paths = {scan.get(k) for k in ("json_path", "pdf_path", "html_path", "md_path")}
+    paths |= {os.path.join(config.REPORTS_DIR, f"{scan['scan_id']}.{ext}") for ext in ("json", "pdf", "html", "md")}
+    for path in filter(None, paths):
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except OSError:
+            log.warning("Couldn't delete %s", path)
+
+
+def prune_old_scans(days: int, batch: int = 200) -> int:
+    """Deletes up to `batch` finished scans that ended more than `days` days ago (0: none), with their findings,
+    share links and report files. Returns how many were deleted."""
+    if days <= 0:
+        return 0
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    with transaction() as conn:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT scan_id, json_path, pdf_path, html_path, md_path FROM scans "
+            "WHERE status IN ('complete', 'failed', 'cancelled') AND COALESCE(completed_at, created_at) < ? "
+            "ORDER BY id LIMIT ?", (cutoff, batch))]
+    for row in rows:
+        remove_report_files(row)
+        delete_scan(row["scan_id"])           # counts it in the month's usage, like a scan its owner deletes
+    return len(rows)
 
 
 def user_scan_ids(user_id: str) -> list:

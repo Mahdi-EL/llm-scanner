@@ -64,8 +64,10 @@ PRUNE_EVERY = 3600.0     # seconds between housekeeping runs
 def _loop(interval: float):
     import time
 
+    import config
     import database
     import runner
+    import scan_db
     last_prune = 0.0
     while not _stop.wait(interval):
         try:
@@ -82,6 +84,9 @@ def _loop(interval: float):
             last_prune = time.monotonic()
             try:
                 removed = {k: v for k, v in database.prune().items() if v}
+                old_scans = scan_db.prune_old_scans(config.SCAN_RETENTION_DAYS)
+                if old_scans:
+                    removed["scans"] = old_scans
                 if removed:
                     log.info("Housekeeping removed %s", removed)
             except Exception:

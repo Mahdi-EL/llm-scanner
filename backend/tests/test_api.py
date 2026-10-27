@@ -717,6 +717,33 @@ def test_housekeeping_prunes_only_expired_rows():
         assert conn.execute("SELECT COUNT(*) FROM gateway_events WHERE user_id = ?", (tag,)).fetchone()[0] == 0
 
 
+def test_scan_retention_deletes_old_finished_scans_only(client, tmp_path, monkeypatch):
+    import config
+    user_id, headers = _register(client)
+    long_ago = "2026-01-05T10:00:00+00:00"
+    old = _seed_complete_scan(user_id, RESULTS, target="Old")
+    recent = _seed_complete_scan(user_id, RESULTS, target="Recent")
+    stuck = scan_db.create_scan("Running", "simulation", user_id=user_id)
+    report = tmp_path / f"{old}.pdf"
+    report.write_bytes(b"%PDF")
+    monkeypatch.setattr(config, "REPORTS_DIR", str(tmp_path))
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE scans SET completed_at = ?, created_at = ? WHERE scan_id = ?", (long_ago, long_ago, old))
+        conn.execute("UPDATE scans SET status = 'running', created_at = ? WHERE scan_id = ?", (long_ago, stuck))
+    used = client.get("/auth/me", headers=headers).json()["scans_this_month"]
+
+    assert scan_db.prune_old_scans(0) == 0                       # the default: scans are kept
+    assert scan_db.get_scan(old)
+    assert scan_db.prune_old_scans(30, batch=10_000) >= 1
+    assert scan_db.get_scan(old) is None and not report.exists()
+    assert scan_db.get_scan(recent) and scan_db.get_scan(stuck)  # recent, or still running
+    with auth_db.transaction() as conn:
+        assert conn.execute("SELECT count FROM deleted_scan_usage WHERE user_id = ? AND month = '2026-01'",
+                            (user_id,)).fetchone()[0] == 1       # a deleted scan still counts as used
+        assert conn.execute("SELECT COUNT(*) FROM findings WHERE scan_id = ?", (old,)).fetchone()[0] == 0
+    assert client.get("/auth/me", headers=headers).json()["scans_this_month"] == used
+
+
 def test_stripe_portal_plan_switch_uses_the_price(client, monkeypatch):
     import payment
     user_id, _ = _register(client)

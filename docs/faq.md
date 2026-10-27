@@ -60,7 +60,8 @@ where more than half the attacks errored (`MAX_ERROR_PERCENT`, default 50) fails
 reporting a score.
 
 **Where is my data stored, and for how long?**
-In the API's SQLite database until you delete the scan or your account (Settings → Delete account).
+In the API's SQLite database until you delete the scan or your account (Settings → Delete account),
+or, when the server sets `SCAN_RETENTION_DAYS`, until the scan is that many days old.
 A target's API key is encrypted while its scan runs and deleted when it ends, unless you save the
 target. You can export everything from Settings → Export your data.
 
