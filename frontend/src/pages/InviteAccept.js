@@ -8,9 +8,10 @@ import CenterCard from '../components/CenterCard';
 export default function InviteAccept() {
   const [params] = useSearchParams();
   const token = params.get('token') || '';
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [otherAccount, setOtherAccount] = useState(false);    // signed in with an address the invite isn't for
   const [sent, setSent] = useState(false);
   // someone who must confirm their address first: the confirmation page links back to this invite
   useEffect(() => {
@@ -56,13 +57,19 @@ export default function InviteAccept() {
       window.location.assign('/');
     } catch (e) {
       setError(errorMessage(e, 'Couldn’t join the workspace.'));
+      setOtherAccount(e.response?.status === 403 && /invite is for/i.test(e.response?.data?.detail || ''));
       setBusy(false);
     }
   };
+  // signing out leaves this page on the invite, which then offers to sign in with the right address
+  const switchAccount = async () => { await logout(); setError(''); setOtherAccount(false); };
   return (
     <CenterCard title="Join this workspace?" subtitle={`You’re signed in as ${user.email || user.username}. The invite has to be for this address.`}>
       <button className="btn-primary" onClick={join} disabled={busy}>{busy ? 'Joining…' : 'Join the workspace'}</button>
       {error && <div className="alert-error" role="alert" style={{ marginTop:'14px' }}>{error}</div>}
+      {otherAccount && (
+        <button className="btn-outline" style={{ marginTop:'12px' }} onClick={switchAccount}>Sign out and use that address</button>
+      )}
     </CenterCard>
   );
 }
