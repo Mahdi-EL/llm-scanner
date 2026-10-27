@@ -27,7 +27,15 @@ def run_due() -> int:
         if not store.claim_schedule(sched):          # another process took this run
             continue
         user = get_user_by_id(sched["user_id"])
-        target = store.get_target(sched["user_id"], sched["target_id"], with_key=True) if user else None
+        try:
+            target = store.get_target(sched["user_id"], sched["target_id"], with_key=True) if user else None
+        except store.KeyUnreadable as e:        # the owner has to enter the key again: say so once a month
+            log.warning("Scheduled scan %s skipped: %s", sched["id"], e)
+            if user.get("email") and user.get("email_verified") and store.note_schedule_skip(sched["id"], str(e)):
+                saved = store.get_target(sched["user_id"], sched["target_id"]) or {}
+                email_service.send_schedule_skipped(user["email"], saved.get("name", "a saved target"),
+                                                    sched["frequency"], str(e))
+            continue
         if not user or not target:
             store.update_schedule(sched["user_id"], sched["id"], enabled=False)
             continue

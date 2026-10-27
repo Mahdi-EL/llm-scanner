@@ -649,6 +649,31 @@ def test_a_retest_asks_for_a_key_only_when_the_scan_had_one(client, monkeypatch)
     assert client.post(f"/scan/{old}/retest", headers=headers, json={}).status_code == 400   # before the flag: asked
 
 
+def test_a_saved_key_the_server_cant_read_says_how_to_fix_it(client, monkeypatch):
+    """After SECRET_KEY rotation without ENCRYPTION_KEY, stored keys can't be decrypted: a clear 409, not a 500."""
+    import email_service
+    import scheduler
+    import store
+    user_id, headers = _register(client)
+    auth_db.update_plan(user_id, "pro")
+    t = client.post("/api/targets", headers=headers, json={"name": "Old", "target_type": "groq", "api_key": "gsk_x"}).json()
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE targets SET api_key_enc = 'gAAAAABnot-a-valid-token' WHERE id = ?", (t["id"],))
+    r = client.post("/scan", headers=headers, json={"target_name": "Old", "target_id": t["id"]})
+    assert r.status_code == 409 and "enter its key again" in r.json()["detail"]
+    r = client.post("/targets/test", headers=headers, json={"target_type": "groq", "target_id": t["id"]})
+    assert r.status_code == 409
+    assert client.get("/api/targets", headers=headers).status_code == 200     # listing never decrypts
+    # a schedule skips the run and tells the owner (once a month)
+    sent = []
+    monkeypatch.setattr(email_service, "send_schedule_skipped", lambda *a: sent.append(a))
+    sched = store.create_schedule(user_id, t["id"], "daily", None, 5)
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE schedules SET next_run_at = '2020-01-01T00:00:00+00:00' WHERE id = ?", (sched["id"],))
+    assert scheduler.run_due() == 0
+    assert sent and sent[0][1] == "Old" and "enter its key again" in sent[0][3]
+
+
 def test_a_groq_scan_never_runs_on_the_servers_key(client):
     _, headers = _register(client)
     r = client.post("/scan", headers=headers, json={"target_name": "Mine", "target_type": "groq",

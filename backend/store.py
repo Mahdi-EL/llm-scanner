@@ -16,6 +16,14 @@ FREQUENCIES = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
 MAX_PROMPTS = 200
 
 
+class KeyUnreadable(ValueError):
+    """A saved target's key can't be decrypted any more: the server's encryption key changed."""
+
+    def __init__(self):
+        super().__init__("This target's saved API key can't be read any more (the server's encryption key changed). "
+                         "Edit the target and enter its key again.")
+
+
 # ── Saved targets ─────────────────────────────────────────────
 def _target_out(row) -> dict:
     cfg = json.loads(row["config_json"] or "{}")
@@ -46,7 +54,10 @@ def get_target(user_id: str, target_id: str, with_key: bool = False) -> Optional
         return None
     out = _target_out(row)
     if with_key:
-        out["api_key"] = vault.decrypt(row["api_key_enc"])
+        try:
+            out["api_key"] = vault.decrypt(row["api_key_enc"])
+        except ValueError:
+            raise KeyUnreadable() from None
     return out
 
 
