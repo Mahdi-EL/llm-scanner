@@ -401,7 +401,11 @@ def main():
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
     import logging
+
+    import logsafe
     logging.basicConfig(level="INFO", format="%(message)s")
+    logsafe.quiet_http_clients("INFO")
+    logsafe.install("%(message)s")
 
     parser = argparse.ArgumentParser(
         prog       ="llmscanner",
