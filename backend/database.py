@@ -241,6 +241,8 @@ USER_COLUMNS = {
     "report_brand"          : "TEXT",
     # Stripe's `created` of the last billing event applied: Stripe doesn't deliver events in order
     "stripe_event_at"       : "INTEGER",
+    # "month" or "year": how the paid plan is billed (Pricing offers to switch to the other one)
+    "billing_interval"      : "TEXT",
 }
 OTHER_COLUMNS = {
     # who created the key: a member's keys stop working when they leave the workspace or become a viewer

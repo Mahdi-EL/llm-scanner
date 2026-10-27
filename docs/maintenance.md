@@ -91,7 +91,8 @@ Or by hand, in the Stripe dashboard:
    prices in `STRIPE_PRO_YEARLY_PRICE_ID` / `STRIPE_ENTERPRISE_YEARLY_PRICE_ID` add a Monthly/Yearly
    switch, and `STRIPE_TRIAL_DAYS=14` gives first-time customers a trial (one per customer: anyone
    who has paid before is charged straight away). A customer who picks another plan on the Pricing
-   page has their subscription switched, prorated, instead of getting a second one.
+   page has their subscription switched, prorated, instead of getting a second one; the same goes
+   for moving their plan between monthly and yearly billing.
 2. Add a webhook endpoint `https://<api>/api/stripe-webhook` for `checkout.session.completed`,
    `customer.subscription.created`, `customer.subscription.updated`,
    `customer.subscription.deleted` and `invoice.payment_failed`; set `STRIPE_WEBHOOK_SECRET`.

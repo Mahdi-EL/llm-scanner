@@ -3,7 +3,7 @@ import { authAPI, clearAuth, saveTokens, getWorkspace, setWorkspace } from '../s
 
 // In a team workspace, plan, quota and workspace settings come from it; identity stays the person's.
 const WORKSPACE_FIELDS = ['plan', 'scans_count', 'scans_this_month', 'scan_limit', 'full_scans', 'webhook_url',
-                          'has_webhook_secret', 'has_billing', 'report_brand'];
+                          'has_webhook_secret', 'has_billing', 'billing_interval', 'report_brand'];
 function withWorkspace(me) {
   if (!me?.workspace) return me;
   return { ...me, ...Object.fromEntries(WORKSPACE_FIELDS.map(k => [k, me.workspace[k]])) };
