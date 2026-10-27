@@ -289,9 +289,11 @@ export default function NewScan() {
               <button type="button" className="btn-outline" onClick={testConnection} disabled={testing}>
                 {testing ? 'Testing…' : 'Test connection'}
               </button>
-              {testResult && (testResult.ok
-                ? <span style={{ fontSize:'12px', color:'#16a34a' }}>Connected in {testResult.latency_ms} ms. Reply: “{testResult.reply_preview?.slice(0, 90)}”</span>
-                : <span style={{ fontSize:'12px', color:'#b42318' }}>{testResult.error}</span>)}
+              <span role="status">
+                {testResult && (testResult.ok
+                  ? <span style={{ fontSize:'12px', color:'#16a34a' }}>Connected in {testResult.latency_ms} ms. Reply: “{testResult.reply_preview?.slice(0, 90)}”</span>
+                  : <span style={{ fontSize:'12px', color:'#b42318' }}>{testResult.error}</span>)}
+              </span>
             </div>
             <label style={{ display:'flex', gap:'8px', alignItems:'center', fontSize:'13px', marginTop:'14px' }}>
               <input type="checkbox" checked={saveTarget} onChange={e => setSaveTarget(e.target.checked)} />

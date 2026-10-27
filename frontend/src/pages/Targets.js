@@ -135,11 +135,13 @@ function TargetForm({ target, onSaved, onCancel }) {
         </button>
         <button className="btn-outline" style={{ fontSize:'12px' }} disabled={test?.pending} onClick={runTest}>{test?.pending ? 'Testing…' : 'Test connection'}</button>
         <button className="btn-ghost" style={{ fontSize:'12px' }} onClick={onCancel}>Cancel</button>
-        {test && !test.pending && (
-          <span style={{ fontSize:'12px', color: test.ok ? '#16a34a' : '#b42318' }}>
-            {test.ok ? `Connected in ${test.latency_ms} ms` : test.error}
-          </span>
-        )}
+        <span role="status">
+          {test && !test.pending && (
+            <span style={{ fontSize:'12px', color: test.ok ? '#16a34a' : '#b42318' }}>
+              {test.ok ? `Connected in ${test.latency_ms} ms` : test.error}
+            </span>
+          )}
+        </span>
       </div>
     </div>
   );
