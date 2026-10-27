@@ -361,8 +361,9 @@ function CategoryCard({ cat, live, expanded, onToggle }) {
       style={{ borderLeftColor: m.color, cursor:'pointer' }}
       onClick={onToggle}
     >
-      {/* Header */}
-      <div className="ti-card-header">
+      {/* Header: the card opens on a click anywhere; the header also takes Enter and Space */}
+      <div className="ti-card-header" role="button" tabIndex={0} aria-expanded={expanded}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}>
         <div className="ti-card-left">
           <span className="ti-icon">{cat.icon}</span>
           <div>
