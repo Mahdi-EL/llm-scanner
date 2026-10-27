@@ -365,3 +365,17 @@ test('Changing a saved target to a simulation clears the URL it no longer uses',
   fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
   await waitFor(() => expect(api.targetsAPI.update).toHaveBeenCalledWith('t1', { target_type: 'simulation', api_url: '' }));
 });
+
+test('Attack library cards open from the keyboard', async () => {
+  api.scansAPI.categories.mockResolvedValue({ data: { total_attacks: 10, categories: [] } });
+  api.promptsAPI.list.mockResolvedValue({ data: { prompts: [] } });
+  const { default: ThreatIntel } = await import('./ThreatIntel');
+  renderAt('/threat-intel', <ThreatIntel />, '/threat-intel');
+  const header = screen.getByRole('button', { name: /System Prompt Extraction/ });
+  expect(header).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.keyDown(header, { key: 'Enter' });
+  expect(header).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByText('Example Attack Prompt')).toBeInTheDocument();
+  fireEvent.keyDown(header, { key: ' ' });
+  expect(header).toHaveAttribute('aria-expanded', 'false');
+});
