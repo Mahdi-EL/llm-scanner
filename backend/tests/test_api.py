@@ -551,6 +551,9 @@ def test_category_analytics_reports_failure_rates(client):
     cats = {c["id"]: c for c in client.get("/analytics/categories", headers=headers).json()["categories"]}
     assert cats["extraction"]["rate"] == 1.0 and cats["roleplay"]["rate"] == 0.0
     assert cats["extraction"]["owasp"][0].startswith("LLM07")
+    with api.auth_db.transaction() as conn:          # only what analytics reads: no copy of the replies
+        rows = conn.execute("SELECT attack, response, reason FROM findings WHERE scan_id = ?", (scan_id,)).fetchall()
+    assert rows and all(r["attack"] == "" and r["response"] is None and r["reason"] is None for r in rows)
 
 
 def test_scans_that_never_started_dont_use_quota(client):

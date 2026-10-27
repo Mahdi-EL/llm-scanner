@@ -282,7 +282,8 @@ def previous_complete_scan(user_id: str, target_name: str, before_scan_id: str,
 
 
 def save_findings(scan_id: str, results: list):
-    """Stores individual findings (truncated) for analytics, plus the global counters."""
+    """Stores each finding's category and grade for analytics, plus the global counters. Not the attack, reply
+    or reason: nothing reads them here (reports and exports use results_json), and they doubled a scan's size."""
     with transaction() as conn:
         conn.execute("DELETE FROM findings WHERE scan_id = ?", (scan_id,))     # takes the write lock
         if not conn.execute("SELECT 1 FROM scans WHERE scan_id = ?", (scan_id,)).fetchone():
@@ -292,8 +293,7 @@ def save_findings(scan_id: str, results: list):
                 (scan_id, category, attack, response, score, severity, reason, behavior_changed, confidence)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [
-            (scan_id, r.get("category", ""), (r.get("attack") or "")[:500], (r.get("response") or "")[:500],
-             r.get("score", 0), r.get("severity", "SAFE"), (r.get("reason") or "")[:300],
+            (scan_id, r.get("category", ""), "", None, r.get("score", 0), r.get("severity", "SAFE"), None,
              1 if r.get("behavior_changed") else 0, r.get("confidence", "LOW"))
             for r in results
         ])
