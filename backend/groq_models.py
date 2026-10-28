@@ -6,6 +6,7 @@ every scan failed at its first call). resolve() checks Groq's live model list
 configured model is gone.
 """
 import logging
+import re
 import threading
 import time
 from typing import Optional
@@ -87,6 +88,37 @@ def generation_params(model: str) -> dict:
     if model.startswith("openai/gpt-oss") or "qwen3" in model:
         return {"max_tokens": 1500}
     return {"max_tokens": 400}
+
+
+_THINKING = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL | re.IGNORECASE)
+
+
+def strip_reasoning(text: Optional[str]) -> str:
+    """The answer without the <think>...</think> reasoning some models write before it
+    (cut off mid-thought by max_tokens, there is no answer)."""
+    return _THINKING.sub("", text or "").strip()
+
+
+_tool_client = None
+
+
+def complete(prompt: str, max_tokens: int = 800) -> str:
+    """The default model's answer to one message, on this server's key, retrying transient errors.
+    For the command-line tools (prompt generation, hardening, auto-discovery)."""
+    global _tool_client
+    import config
+    from retry import call_with_retry
+    if _tool_client is None:
+        from groq import Groq
+        if not config.GROQ_API_KEY:
+            raise RuntimeError("No Groq API key: set GROQ_API_KEY")
+        _tool_client = Groq(api_key=config.GROQ_API_KEY, max_retries=0, timeout=90)
+    model = default_model()
+    params = generation_params(model)
+    params["max_tokens"] = max(params["max_tokens"], max_tokens)
+    response = call_with_retry(_tool_client.chat.completions.create, model=model,
+                               messages=[{"role": "user", "content": prompt}], **params)
+    return strip_reasoning(response.choices[0].message.content)
 
 
 def clear_cache():
