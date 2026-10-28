@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { authAPI, keysAPI, webhookAPI, plansAPI, saveBlob, errorMessage, brandingAPI } from '../services/api';
-import { relTime } from '../utils/format';
+import { fmtNum, relTime } from '../utils/format';
 
 function Section({ title, desc, children, danger }) {
   return (
@@ -172,7 +172,7 @@ export default function Settings() {
     navigate('/');
   });
 
-  const usage = user?.scan_limit == null ? 'Unlimited scans' : `${user?.scans_this_month ?? 0} of ${user?.scan_limit} scans used this month`;
+  const usage = user?.scan_limit == null ? 'Unlimited scans' : `${fmtNum(user?.scans_this_month ?? 0)} of ${fmtNum(user?.scan_limit)} scans used this month`;
 
   return (
     <div style={{ maxWidth:'720px' }}>

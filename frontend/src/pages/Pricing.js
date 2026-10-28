@@ -144,7 +144,7 @@ export default function Pricing() {
                   </div>
                 )}
                 <div style={{ fontSize:'13px', fontWeight:'600', marginBottom:'6px' }}>
-                  {plan.scan_limit == null ? 'Unlimited scans' : `${plan.scan_limit} scans per month`}
+                  {plan.scan_limit == null ? 'Unlimited scans' : `${fmtNum(plan.scan_limit)} scans per month`}
                 </div>
                 {plan.trial_days > 0 && trialEligible && <div style={{ fontSize:'12px', color:'#16a34a', marginBottom:'6px' }}>{plan.trial_days}-day free trial</div>}
                 <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:1.5, paddingBottom:'18px', borderBottom:'1px solid var(--b1)', marginBottom:'18px' }}>{DESCRIPTIONS[key]}</p>

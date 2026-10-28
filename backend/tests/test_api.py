@@ -1472,6 +1472,23 @@ def test_free_accounts_run_quick_scans_only_by_default_in_production(tmp_path):
     assert quick_only(ENV="development") == "False"
 
 
+def test_enterprise_scans_have_a_fair_use_cap(client, monkeypatch, tmp_path):
+    import payment
+    assert _fresh("payment.PLANS['enterprise']['scan_limit']", tmp_path) == "1000"         # the default
+    plans = client.get("/api/plans").json()["plans"]
+    limit = plans["enterprise"]["scan_limit"]
+    assert limit is not None and f"{limit:,} scans per month (fair use)" in plans["enterprise"]["features"]
+
+    user_id, headers = _register(client)
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET plan = 'enterprise' WHERE id = ?", (user_id,))
+    monkeypatch.setitem(payment.PLANS["enterprise"], "scan_limit", 1)
+    _seed_complete_scan(user_id)
+    r = client.post("/scan", headers=headers, json={"target_name": "over the cap"})
+    # there's no bigger plan to upgrade to
+    assert r.status_code == 402 and "fair-use limit" in r.json()["detail"] and "Upgrade" not in r.json()["detail"]
+
+
 class _FakeStripeAccount:
     """Just enough of the stripe module for stripe_setup: products, prices, webhook endpoints."""
     def __init__(self):
