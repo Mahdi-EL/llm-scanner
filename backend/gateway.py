@@ -6,8 +6,9 @@ LLM Scanner API key as its api_key. For each chat completion:
 1. The text this turn adds (user and tool messages after the last assistant message, where both
    direct and indirect injections arrive) is screened with firewall.check_input. A blocked request
    never reaches the model: the caller gets an ordinary completion with a refusal, so apps don't
-   break. When the day's firewall allowance is used up the request is forwarded unscreened and
-   the response says so in X-LLMScanner-Firewall (failing open keeps the customer's app working).
+   break. When the day's firewall allowance is used up, GATEWAY_FAIL_MODE decides: "open" (the
+   default) forwards the request unscreened, which keeps the customer's app working; "closed"
+   answers with the refusal. Either way the response says so in X-LLMScanner-Firewall.
 2. The request goes to the saved target's API with the target's stored key, or the key in
    X-Upstream-Authorization. Streaming requests are answered as a stream, but the reply is
    fetched whole first so it can be checked.
@@ -254,7 +255,7 @@ def handle(user: dict, target_id: str, body: dict, upstream_auth: Optional[str] 
         except services.FirewallRejected as e:
             if e.status != 429:
                 return error(e.status, e.message, "plan_required")
-            screened = False                     # allowance used up: fail open, and say so
+            screened = False                     # allowance used up: say so, then fail open or closed
             headers["X-LLMScanner-Firewall"] = "quota-exceeded"
         if screened:
             check = firewall.check_input(text, threshold=config.GATEWAY_BLOCK_SCORE)
@@ -262,6 +263,11 @@ def handle(user: dict, target_id: str, body: dict, upstream_auth: Optional[str] 
             if check.get("degraded"):
                 headers["X-LLMScanner-Firewall"] = "rules-only"
     headers["X-LLMScanner-Input"] = input_verdict if screened else "unscreened"
+
+    if not screened and config.GATEWAY_FAIL_MODE == "closed":       # nothing unscreened reaches the model
+        reply = refusal(model)
+        _record(user, target_id, input_verdict, None, rules, started, 200, screened)
+        return Result(200, None if stream else reply, as_stream(reply) if stream else None, headers)
 
     if input_verdict == "block":
         reply = refusal(model)

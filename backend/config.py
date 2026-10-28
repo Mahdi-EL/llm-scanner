@@ -109,6 +109,12 @@ GATEWAY_TIMEOUT      = _int("GATEWAY_TIMEOUT", 120)      # seconds for the model
 GATEWAY_CONCURRENCY  = _int("GATEWAY_CONCURRENCY", 16)   # gateway requests in flight; the rest queue
 GATEWAY_BLOCK_SCORE  = float(os.getenv("GATEWAY_BLOCK_SCORE", "0.8"))   # Prompt Guard score that blocks
 GATEWAY_BLOCK_MESSAGE = os.getenv("GATEWAY_BLOCK_MESSAGE") or "I can't help with that request."
+# When the day's firewall allowance is used up: "open" forwards gateway requests unscreened, so the customer's
+# app keeps working; "closed" answers them with GATEWAY_BLOCK_MESSAGE instead.
+GATEWAY_FAIL_MODE = (os.getenv("GATEWAY_FAIL_MODE") or "open").strip().lower()
+if GATEWAY_FAIL_MODE not in ("open", "closed"):
+    log.warning("GATEWAY_FAIL_MODE is %r; it must be open or closed. Failing open.", GATEWAY_FAIL_MODE)
+    GATEWAY_FAIL_MODE = "open"
 # Lets local development scan http://localhost targets. Never enable in production.
 ALLOW_PRIVATE_TARGETS = _bool("ALLOW_PRIVATE_TARGETS", False) and not IS_PROD
 

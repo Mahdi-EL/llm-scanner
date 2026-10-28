@@ -166,7 +166,8 @@ request, is replaced by the refusal. Tool-call arguments are checked the same wa
 URL the model wants your app to send is a leak too): secrets are masked inside them, and calls that
 leak more are dropped in favour of the refusal. Streaming works (the reply is checked whole, then streamed).
 `X-LLMScanner-Input` / `X-LLMScanner-Output` headers give the verdicts. When the day's allowance is
-used up, requests pass unscreened with `X-LLMScanner-Firewall: quota-exceeded`. Only verdicts and
+used up, requests pass unscreened with `X-LLMScanner-Firewall: quota-exceeded`; set
+`GATEWAY_FAIL_MODE=closed` on the server to answer them with the refusal instead. Only verdicts and
 timings are stored, never messages; `GET /api/gateway/stats` sums them up.
 
 ## Deploying
