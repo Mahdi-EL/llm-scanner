@@ -12,6 +12,7 @@
 import hashlib
 import json
 import logging
+import math
 import re
 import secrets
 import threading
@@ -109,6 +110,8 @@ def _score(value) -> int:
         if not match:
             raise JudgeError(f"unreadable score: {value!r}")
         number = float(match.group(0))
+    if not math.isfinite(number):              # JSON allows NaN and Infinity
+        raise JudgeError(f"unreadable score: {value!r}")
     return max(0, min(10, round(number)))
 
 
