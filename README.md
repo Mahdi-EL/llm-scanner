@@ -1,8 +1,8 @@
 # LLM Scanner
 
-Automated red-teaming for AI applications. LLM Scanner fires over 1,000 adversarial prompts at an
+Automated red-teaming for AI applications. LLM Scanner fires a library of adversarial prompts at an
 AI app (prompt injection, jailbreaks, system-prompt extraction, data exfiltration, multi-turn
-conversations and 17 more categories), grades every reply, and produces a report with a 0–100 score, a letter grade, the
+conversations and many more categories), grades every reply, and produces a report with a 0–100 score, a letter grade, the
 OWASP Top 10 for LLM Applications risk behind each finding, and what to fix first.
 
 It comes as a web app, an HTTP API, a Python SDK and CLI, a GitHub Action and a VS Code extension.
@@ -28,9 +28,11 @@ process runs a scan at a time). A scan that is cancelled or stops early still sh
 
 ## Features
 
-- 1,090 attack prompts in 22 categories (including 15 multi-turn conversations), each mapped to the OWASP LLM Top 10 (2025)
-- Quick scans: about 110 attacks spread across every category, for a check on each change
-- A free, no-signup leak check at /check: 20 attacks on a pasted system prompt, rule-graded, nothing stored
+- An attack library of single prompts and multi-turn conversations, each category mapped to the OWASP LLM Top 10
+  (2025); [docs/attack-categories.md](docs/attack-categories.md) lists every category with its exact count
+- Quick scans: a few attacks from every category (`QUICK_SCAN_PER_CATEGORY`), basic to advanced, for a check on each change
+- A free, no-signup leak check at /check: a sample of extraction and override attacks on a pasted system prompt,
+  rule-graded, nothing stored
 - Your own custom attack prompts, run with every scan
 - Reports in PDF, HTML, Markdown and JSON; read-only share links that expire
 - Saved targets (keys stored encrypted), daily or weekly scheduled scans, regression alerts
@@ -96,7 +98,7 @@ llmscanner scan --name "Support bot" --type openai_compatible --url https://api.
     target-key: ${{ secrets.OPENAI_API_KEY }}
     model: gpt-4o-mini
     fail-on: high
-    quick: "true"        # ~110 attacks on every PR; drop it for a full scan
+    quick: "true"        # a few attacks per category on every PR; drop it for a full scan
 ```
 
 **Engine only, no server:** `python backend/scanner.py --target "Demo" --categories extraction`

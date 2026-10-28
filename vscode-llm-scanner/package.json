@@ -43,12 +43,12 @@
           "type": "array",
           "items": { "type": "string" },
           "default": ["direct_override", "extraction", "social_engineering", "boundary_testing"],
-          "description": "Attack categories to run (empty = all 22). Fewer categories make scans faster and cheaper."
+          "description": "Attack categories to run (empty = all of them). Fewer categories make scans faster and cheaper."
         },
         "llmscanner.quickScan": {
           "type": "boolean",
           "default": true,
-          "description": "Run quick scans: about 5 attacks per category, from basic to advanced. Turn off to send every attack in the chosen categories (a full scan, best before a release; Free plans may be limited to quick scans)."
+          "description": "Run quick scans: a few attacks from every category, from basic to advanced. Turn off to send every attack in the chosen categories (a full scan, best before a release; Free plans may be limited to quick scans)."
         },
         "llmscanner.autoScan": {
           "type": "boolean",

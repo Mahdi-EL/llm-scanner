@@ -6,8 +6,8 @@ prompts and uses the target's API quota.
 
 **What does a scan cost?**
 Each attack is one call to the target plus one call to the judge model (Groq by default); a
-multi-turn attack is three target calls. A full scan is about 1,090 attacks, so roughly 1,100
-calls per model. Plain refusals ("I'm sorry, I can't help with that.") that the rule detectors
+multi-turn attack is three target calls. A full scan sends every attack in the library (the
+[attack categories](attack-categories.md) page has the count), so roughly that many calls per model. Plain refusals ("I'm sorry, I can't help with that.") that the rule detectors
 cleared are graded without a judge call. Choose fewer categories, or a quick scan, for a cheaper,
 faster scan.
 
@@ -18,9 +18,9 @@ needs a paid Groq tier (or fewer categories). Attacks that still fail are marked
 out of the score; if more than half of them fail, the scan fails rather than report a score.
 
 **What is a quick scan?**
-About 5 attacks from every category (110 in all), spread from the basic ones to the most
-sophisticated, instead of all 1,090. It's ten times faster and cheaper, which suits a check on every
-change; run a full scan before a release. A quick scan counts as one scan.
+A few attacks from every category (`QUICK_SCAN_PER_CATEGORY` on the server), spread from the basic
+ones to the most sophisticated, instead of the whole library. It's many times faster and cheaper, which
+suits a check on every change; run a full scan before a release. A quick scan counts as one scan.
 
 **How long does it take?**
 It depends on how fast the target and the judge answer, and on `SCAN_CONCURRENCY`. Progress is

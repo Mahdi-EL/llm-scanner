@@ -165,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
     scan.add_argument("--output-field", help="custom_rest: JSON field the reply is read from (default: response)")
     scan.add_argument("--categories", nargs="+")
     scan.add_argument("--quick", action="store_true",
-                      help="about 5 attacks per category (~110) instead of the full library")
+                      help="a few attacks from every category instead of the full library")
     scan.add_argument("--target-id", help="use a saved target instead of --type/--url/--target-key")
     scan.add_argument("--wait", action="store_true", help="wait for the result")
     scan.add_argument("--fail-on", type=str.lower, choices=[s.lower() for s in SEVERITY_RANK if s != "SAFE"],

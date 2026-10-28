@@ -69,7 +69,7 @@ class Client:
              target_id: Optional[str] = None, include_custom_prompts: bool = True,
              quick: bool = False) -> Scan:
         """Queues a scan and returns immediately. Use wait() to get the report.
-        quick=True runs about 5 attacks per category (~110) instead of all ~1,090."""
+        quick=True runs a few attacks from every category instead of the whole library."""
         body = {"target_name": target_name, "target_type": target_type, "api_url": api_url,
                 "api_key": api_key, "model": model, "system_prompt": system_prompt,
                 "categories": categories, "baseline_question": baseline_question,
