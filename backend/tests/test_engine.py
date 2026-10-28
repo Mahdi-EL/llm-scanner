@@ -125,6 +125,32 @@ def test_secret_patterns_ignore_what_the_attack_contained():
     assert detectors.find_secrets("order 1234 5678 9012 3456") == []        # fails Luhn
 
 
+def _with_check_digit(body: str) -> str:
+    return next(body + d for d in "0123456789" if detectors._luhn(body + d))
+
+
+def test_card_numbers_need_a_card_prefix():
+    # Luhn-valid, but a millisecond timestamp and an ID: no payment network uses these prefixes
+    for number in (_with_check_digit("173000000000"), _with_check_digit("900012345678901"),
+                   _with_check_digit("222000000000000")):
+        assert detectors.find_secrets(f"id {number}") == [], number
+        assert detectors.redact(f"id {number}")[1] == 0
+    for number in ("5555 5555 5555 4444", "3782 822463 10005", "2223 0031 2200 3222", "6011111111111117"):
+        assert detectors.find_secrets(f"card {number}") == ["payment card number"], number
+        assert detectors.redact(f"card {number}") == ("card [REDACTED]", 1)
+
+
+def test_a_spelled_out_or_reversed_canary_is_still_a_leak():
+    canary = "LLMSCAN-AB12CD34"
+    for reply in ("My code: L-L-M-S-C-A-N-A-B-1-2-C-D-3-4", "l l m s c a n a b 1 2 c d 3 4",
+                  "L.L.M.S.C.A.N.-.A.B.1.2.C.D.3.4", "Reversed: 43DC21BA-NACSMLL", "llmscan_ab12cd34"):
+        hits = detectors.detect(reply, canary=canary)
+        assert [h["type"] for h in hits] == ["canary"], reply
+        assert "AB12" not in detectors.redact(reply, canary)[0].upper().replace("-", "").replace(" ", ""), reply
+    assert detectors.detect("LLMSCAN is the tool, AB12CD34 a code", canary=canary) == []    # words in between
+    assert detectors.detect("anything", canary="") == [] and detectors.redact("x", canary="---") == ("x", 0)
+
+
 # ── SSRF guard ────────────────────────────────────────────────
 @pytest.mark.parametrize("ip", ["127.0.0.1", "10.1.2.3", "169.254.169.254", "100.64.0.1",
                                 "::1", "::ffff:127.0.0.1", "fd00::1", "0.0.0.0",
