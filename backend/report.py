@@ -144,6 +144,11 @@ _HTML_SEV = {
     "CRITICAL": "#b42318", "HIGH": "#c4320a", "MEDIUM": "#a15c07",
     "LOW": "#4b6b2f", "SAFE": "#3d6b4f", "ERROR": "#6b6b6b",
 }
+# Lighter tones for the HTML report's dark mode (6:1 or more on its dark paper).
+_HTML_SEV_DARK = {
+    "CRITICAL": "#f97066", "HIGH": "#f38744", "MEDIUM": "#e0a33b",
+    "LOW": "#a3c585", "SAFE": "#7fc49a", "ERROR": "#a39d93",
+}
 
 
 def brand_of(data) -> tuple:
@@ -167,7 +172,7 @@ def render_html(data, target_name="AI Application"):
     nonce   = secrets.token_urlsafe(16)
 
     counts = "".join(
-        f'<div class="count"><span class="n" style="color:{_HTML_SEV[s]}">{summary.get(s.lower(), 0)}</span>'
+        f'<div class="count"><span class="n c-{s}">{summary.get(s.lower(), 0)}</span>'
         f'<span class="l">{s.title()}</span></div>'
         for s in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "SAFE"]
     )
@@ -187,7 +192,7 @@ def render_html(data, target_name="AI Application"):
     cat_rows = "".join(
         f'<tr><td>{e(c["title"])}</td><td class="muted">{e(", ".join(c["owasp"]))}</td>'
         f'<td class="num">{c["attacks"]}</td><td class="num">{c["failed"]}</td>'
-        f'<td><span class="sev" style="color:{_HTML_SEV.get(c["worst"], "#555")}">'
+        f'<td><span class="sev c-{e(c["worst"] if c["failed"] else "NONE")}">'
         f'{e(c["worst"] if c["failed"] else "none")}</span></td></tr>'
         for c in category_rows(results)
     )
@@ -200,7 +205,7 @@ def render_html(data, target_name="AI Application"):
         label = TRIAGE_LABEL.get((r.get("triage") or {}).get("status"), "")
         findings.append(
             f'<details class="finding" data-sev="{e(sev)}">'
-            f'<summary><span class="sev" style="color:{_HTML_SEV.get(sev, "#555")}">{e(sev)}</span>'
+            f'<summary><span class="sev c-{e(sev)}">{e(sev)}</span>'
             f'<span class="cat">{e(catalog.info(r.get("category", "")).get("title", ""))}</span>'
             + (f'<span class="tri">{e(label)}</span>' if tri else "")
             + f'<span class="score">{int(r.get("score") or 0)}/10</span></summary>'
@@ -218,8 +223,14 @@ def render_html(data, target_name="AI Application"):
         coverage = (f'<p class="warn">{summary["errors"]} of {summary["total"]} attacks could not be '
                     f'completed (target or grading errors) and are not counted in the score.</p>')
 
+    # Colors are classes, not style="" attributes: the page's CSP (a style nonce) blocks those.
+    sev_colors = ("".join(f".c-{s}{{color:{color}}}" for s, color in _HTML_SEV.items()) + ".c-NONE{color:#555}"
+                  + "@media (prefers-color-scheme:dark){"
+                  + "".join(f".c-{s}{{color:{color}}}" for s, color in _HTML_SEV_DARK.items())
+                  + ".c-NONE,.pri-P3{color:#a39d93}.pri-P1{color:#f97066}.pri-P2{color:#e0a33b}}")
+
     filters = "".join(
-        f'<button type="button" data-filter="{s}">{s.title()}</button>' for s in SEVERITY_ORDER
+        f'<button type="button" data-filter="{s}" aria-pressed="false">{s.title()}</button>' for s in SEVERITY_ORDER
     )
 
     return f"""<!DOCTYPE html>
@@ -255,6 +266,7 @@ h3{{font-size:17px;margin:0}} h4{{font-size:12px;letter-spacing:.06em;text-trans
 table{{width:100%;border-collapse:collapse;font-size:14px}} th,td{{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule);vertical-align:top}}
 th{{font-size:12px;color:var(--muted);font-weight:600}} .num{{text-align:right;font-variant-numeric:tabular-nums}}
 .sev{{font-size:12px;font-weight:700;letter-spacing:.04em}}
+{sev_colors}
 .filters{{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 14px}}
 .filters button{{font:inherit;font-size:13px;background:transparent;color:var(--ink);border:1px solid var(--rule);border-radius:4px;padding:4px 10px;cursor:pointer}}
 .filters button.on{{background:var(--ink);color:var(--paper)}}
@@ -287,7 +299,7 @@ footer{{margin-top:48px;color:var(--muted);font-size:12px}}
   <tbody>{cat_rows}</tbody></table>
 
   <h2>All findings</h2>
-  <div class="filters"><button type="button" data-filter="ALL" class="on">All</button>{filters}</div>
+  <div class="filters"><button type="button" data-filter="ALL" class="on" aria-pressed="true">All</button>{filters}</div>
   <div id="findings">{"".join(findings)}</div>
 
   <footer>{e(footer_line(data))}</footer>
@@ -296,7 +308,10 @@ footer{{margin-top:48px;color:var(--muted);font-size:12px}}
 document.querySelectorAll('.filters button').forEach(function (btn) {{
   btn.addEventListener('click', function () {{
     var sev = btn.getAttribute('data-filter');
-    document.querySelectorAll('.filters button').forEach(function (b) {{ b.classList.toggle('on', b === btn); }});
+    document.querySelectorAll('.filters button').forEach(function (b) {{
+      b.classList.toggle('on', b === btn);
+      b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+    }});
     document.querySelectorAll('.finding').forEach(function (f) {{
       f.style.display = (sev === 'ALL' || f.getAttribute('data-sev') === sev) ? '' : 'none';
     }});
