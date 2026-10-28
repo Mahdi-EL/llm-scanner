@@ -90,7 +90,7 @@ MAX_CONSECUTIVE_ERRORS = _int("MAX_CONSECUTIVE_ERRORS", 25)
 # A scan where more than this share of attacks couldn't be completed fails instead of
 # reporting a score built from the few that worked.
 MAX_ERROR_PERCENT    = _int("MAX_ERROR_PERCENT", 50)
-# A quick scan runs this many attacks per category, spread from basic to advanced (22 x 5 = 110).
+# A quick scan runs this many attacks per category, spread from basic to advanced.
 QUICK_SCAN_PER_CATEGORY = _int("QUICK_SCAN_PER_CATEGORY", 5)
 # Free accounts run quick scans only (full scans cost ~10x the model calls). Off by default.
 FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", False)
@@ -100,7 +100,7 @@ SCAN_RETENTION_DAYS  = _int("SCAN_RETENTION_DAYS", 0)
 
 # People per workspace on Pro, owner included (Free: 1, Enterprise: no limit).
 PRO_SEATS            = _int("PRO_SEATS", 5)
-# Free no-signup leak checks (20 attacks each on the server's model key) across all visitors per day.
+# Free no-signup leak checks (a fixed sample of attacks each, on the server's model key) across all visitors per day.
 LEAK_CHECKS_PER_DAY  = _int("LEAK_CHECKS_PER_DAY", 300)
 
 # ── Firewall gateway (/gateway/<target id>/v1) ────────────────

@@ -16,6 +16,7 @@ import time
 from typing import Optional
 
 import config
+from attacks.prompts import ATTACK_PROMPTS
 from db import transaction, utcnow
 
 log = logging.getLogger("llmscanner.billing")
@@ -54,8 +55,8 @@ PLANS = {
         "scan_limit"    : _FREE_SCANS,
         "firewall_daily": _FREE_FIREWALL,
         "features"      : [f"{_FREE_SCANS:,} scans per month",
-                           "Quick scans across all 22 attack categories" if config.FREE_QUICK_SCANS_ONLY
-                           else "All 22 attack categories",
+                           f"{'Quick scans across all' if config.FREE_QUICK_SCANS_ONLY else 'All'} "
+                           f"{len(ATTACK_PROMPTS)} attack categories",
                            "PDF, HTML and Markdown reports", "API keys for CI, the SDK and VS Code",
                            *_firewall_feature(_FREE_FIREWALL, "Try the AI firewall")],
     },

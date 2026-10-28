@@ -61,7 +61,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/auth/resend-verification` | yes | Sends a new email confirmation link. |
 | POST | `/auth/reset-password` |  | Sets a new password with a reset token and signs out every session. |
 | POST | `/auth/verify-email` |  | Confirms an email address with the token from the confirmation email. |
-| GET | `/categories` |  | The built-in attack categories, with what they test and their OWASP mapping. The *_without_history counts are what runs against a target that doesn't keep the conversation (a custom REST endpoint): multi-turn attacks are left out there. |
+| GET | `/categories` |  | The built-in attack categories, with what they test and their OWASP mapping. The *_without_history counts are what runs against a target that doesn't keep the conversation (a custom REST endpoint): multi-turn attacks are left out there. The totals (`total_attacks`, `total_categories`, `total_quick_attacks`, `quick_per_category`, `leak_check_attacks`) are what copy quotes, so it never goes stale. |
 | GET | `/download/evidence/{scan_id}` | yes | A testing-evidence PDF for audits and security reviews: scope, method, OWASP LLM Top 10 coverage, results before and after triage, triage decisions, re-test evidence and a sign-off block. Paid plans. |
 | GET | `/download/html/{scan_id}` | yes | Downloads the HTML report (rebuilt from the stored results if the file is gone). |
 | GET | `/download/json/{scan_id}` | yes | Downloads the raw results as JSON. |
@@ -70,7 +70,7 @@ _This page lists the FastAPI routes in `backend/api.py`; a test fails when a rou
 | POST | `/gateway/{target_id}/v1/chat/completions` | yes | OpenAI-compatible chat completions through the AI firewall. Set your OpenAI client's base_url to /gateway/{target_id}/v1 and its api_key to an LLM Scanner API key. |
 | GET | `/health` |  | Liveness check, plus whether storage, email and billing are configured. |
 | GET | `/models` | yes | Groq models this server can use for simulated and Groq targets, and the defaults in use. |
-| POST | `/public/leak-check` |  | Free, no account: sends 20 extraction and override attacks at a system prompt on the demo model and says how many got it out. Graded by rules (the canary, verbatim copies, a password or code the prompt states); replies are never returned or stored. |
+| POST | `/public/leak-check` |  | Free, no account: sends a fixed sample of extraction and override attacks (`leak_check_attacks` in /categories) at a system prompt on the demo model and says how many got it out. Graded by rules (the canary, verbatim copies, a password or code the prompt states); replies are never returned or stored. |
 | GET | `/results/{scan_id}` | yes | The full report data (summary + every finding) of a finished scan. |
 | POST | `/scan` | yes | Queues a scan. Poll GET /scan/{id} for progress. |
 | GET | `/scan/compare/{base_id}/{head_id}` | yes | What got worse or better between two finished scans. |

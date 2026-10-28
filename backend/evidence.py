@@ -90,7 +90,7 @@ def build(scan: dict, data: dict, *, triaged_results: list, retests: list,
     doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=1.8 * cm, leftMargin=1.8 * cm, topMargin=1.8 * cm,
                             bottomMargin=2 * cm, title=f"Security testing evidence: {scan['target_name']}")
     W = doc.width - 12
-    depth = "Quick (about 5 attacks per category)" if data.get("scan_depth") == "quick" else "Full"
+    depth = "Quick (a sample of each category's attacks)" if data.get("scan_depth") == "quick" else "Full"
     story = [
         Paragraph(_p(f"{brand_of(data)[0].upper()} · SECURITY TESTING EVIDENCE"), S["kicker"]),
         Paragraph(_p(scan["target_name"]), S["title"]),

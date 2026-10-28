@@ -550,10 +550,18 @@ def test_export_and_delete_account(client):
 
 # ── Public info ───────────────────────────────────────────────
 def test_categories_and_plans_are_public(client):
+    import leakcheck
+    from attacks.prompts import ATTACK_PROMPTS
     cats = client.get("/categories").json()
-    assert cats["total_attacks"] > 1000 and cats["categories"][0]["owasp"]
+    assert cats["total_attacks"] == sum(len(p) for p in ATTACK_PROMPTS.values()) and cats["categories"][0]["owasp"]
+    # the totals the web app quotes come from the library, never from a number typed into copy
+    assert cats["total_categories"] == len(ATTACK_PROMPTS) == len(cats["categories"])
+    assert cats["total_quick_attacks"] == sum(c["quick_attacks"] for c in cats["categories"])
+    assert cats["quick_per_category"] == api.config.QUICK_SCAN_PER_CATEGORY
+    assert cats["leak_check_attacks"] == len(leakcheck.attacks())
     plans = client.get("/api/plans").json()["plans"]
     assert plans["free"]["scan_limit"] == 2 and plans["pro"]["purchasable"] is False
+    assert f"All {len(ATTACK_PROMPTS)} attack categories" in plans["free"]["features"]
 
 
 def test_waitlist_join_never_lists_entries(client):
@@ -1435,7 +1443,9 @@ def test_quick_scans_sample_every_category_and_can_be_required_on_free(client, m
     monkeypatch.setattr(config, "FREE_QUICK_SCANS_ONLY", True)
     assert client.get("/auth/me", headers=headers).json()["full_scans"] is False
     r = client.post("/scan", headers=headers, json={"target_name": "full"})
-    assert r.status_code == 402 and "quick scan" in r.json()["detail"]
+    total = sum(c["attacks"] for c in cats)
+    assert r.status_code == 402 and f"quick scan (about {expected:,} attacks)" in r.json()["detail"]
+    assert f"run all {total:,}." in r.json()["detail"]
 
 
 class _FakeStripeAccount:
