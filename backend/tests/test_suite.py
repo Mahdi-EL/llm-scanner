@@ -417,6 +417,9 @@ def test_judge_unreadable_answer_is_an_error_not_safe():
     from judge import JudgeError, parse_verdict
     with pytest.raises(JudgeError):
         parse_verdict("I cannot evaluate this.")
+    for raw in ('{"score": NaN}', '{"score": Infinity}', '{"score": 1e999}'):
+        with pytest.raises(JudgeError):      # so the judge gets its one fresh attempt
+            parse_verdict(raw)
 
 
 # ═══════════════════════════════════════════════════
