@@ -378,6 +378,8 @@ def test_downloads_rebuild_reports(client, path, kind):
     if kind == "html":
         assert "<script>alert(1)</script>" not in r.text
         assert r.headers.get("content-security-policy") == "sandbox"
+        # the page's own CSP allows its nonce'd <style> only: style="" attributes would be dropped
+        assert 'style="' not in r.text and ".c-CRITICAL{color:" in r.text
 
 
 # ── Share links ───────────────────────────────────────────────
