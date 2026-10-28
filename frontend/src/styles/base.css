@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Fonts are loaded once, from index.html. */
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    DESIGN TOKENS
@@ -21,7 +21,7 @@
   /* Text */
   --t1        : #14161c;   /* headings / primary */
   --t2        : #545b68;   /* secondary */
-  --t3        : #8b93a3;   /* muted / labels */
+  --t3        : #646b78;   /* muted / labels (4.8:1 or better on every light surface) */
 
   /* Accents — primary blue (#2563EB, Vercel-ish) */
   --blue      : #2563eb;
@@ -82,8 +82,15 @@ button { cursor:pointer; }
   line-height  : 1.2;
   color        : var(--t1);
   margin-bottom: 6px;
+  overflow-wrap: anywhere;      /* target names can be one long word */
 }
 .page-subtitle { font-size:14px; color:var(--t2); margin-bottom:40px; }
+
+/* Read by screen readers, not shown (status messages that sighted users see elsewhere) */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    BUTTONS
@@ -91,6 +98,7 @@ button { cursor:pointer; }
 .btn-primary {
   display      : inline-flex;
   align-items  : center;
+  justify-content: center;
   gap          : 6px;
   background   : var(--blue);
   color        : #fff;
@@ -116,6 +124,7 @@ button { cursor:pointer; }
 .btn-outline {
   display      : inline-flex;
   align-items  : center;
+  justify-content: center;
   gap          : 6px;
   background   : transparent;
   color        : var(--t2);
@@ -129,6 +138,10 @@ button { cursor:pointer; }
   white-space  : nowrap;
 }
 .btn-outline:hover { border-color:var(--b3); color:var(--t1); background:var(--s2); }
+/* On phones a long label wraps instead of running past its card */
+@media (max-width: 480px) {
+  .btn-primary, .btn-outline { white-space: normal; text-align: center; }
+}
 
 .btn-ghost {
   background  : transparent;
@@ -240,11 +253,12 @@ button { cursor:pointer; }
   letter-spacing: 0.3px;
   text-transform: uppercase;
 }
-.badge-critical { background:rgba(240,68,56,0.12);  color:#dc2626; border:1px solid rgba(240,68,56,0.2); }
-.badge-high     { background:rgba(251,146,60,0.12); color:#ea580c; border:1px solid rgba(251,146,60,0.2); }
+/* small text on a tint: the -700 shades keep 4.5:1 */
+.badge-critical { background:rgba(240,68,56,0.12);  color:#b91c1c; border:1px solid rgba(240,68,56,0.2); }
+.badge-high     { background:rgba(251,146,60,0.12); color:#c2410c; border:1px solid rgba(251,146,60,0.2); }
 .badge-medium   { background:rgba(250,204,21,0.10); color:#b45309; border:1px solid rgba(250,204,21,0.2); }
-.badge-low      { background:rgba(34,197,94,0.10);  color:#16a34a; border:1px solid rgba(34,197,94,0.2); }
-.badge-safe     { background:rgba(34,197,94,0.10);  color:#16a34a; border:1px solid rgba(34,197,94,0.2); }
+.badge-low      { background:rgba(34,197,94,0.10);  color:#15803d; border:1px solid rgba(34,197,94,0.2); }
+.badge-safe     { background:rgba(34,197,94,0.10);  color:#15803d; border:1px solid rgba(34,197,94,0.2); }
 .badge-running  { background:var(--blue-soft);      color:var(--blue); border:1px solid rgba(37,99,235,0.2); }
 .badge-pending  { background:rgba(17,24,39,0.04);color:var(--t3);   border:1px solid var(--b1); }
 
@@ -268,7 +282,7 @@ button { cursor:pointer; }
   color        : var(--t3);
   margin-bottom: 8px;
 }
-.form-group input,
+.form-group input:not([type=checkbox]):not([type=radio]),
 .form-group select,
 .form-group textarea {
   width       : 100%;
@@ -283,6 +297,11 @@ button { cursor:pointer; }
   transition  : border-color 0.15s, box-shadow 0.15s;
   appearance  : none;
   -webkit-appearance: none;
+}
+/* a checkbox with its sentence, inside a form group (not the small uppercase field label) */
+.form-group .check-label {
+  display: flex; align-items: center; gap: 6px; margin: 6px 0 0;
+  font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--t2);
 }
 .form-group input::placeholder,
 .form-group textarea::placeholder { color:var(--t3); }
@@ -306,14 +325,16 @@ button { cursor:pointer; }
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 .alert-error {
   background:rgba(240,68,56,0.08); border:1px solid rgba(240,68,56,0.2);
-  border-radius:var(--r-sm); padding:12px 16px; color:#fca5a5;
+  border-radius:var(--r-sm); padding:12px 16px; color:#b42318;
   font-size:14px; margin-bottom:20px; line-height:1.5;
 }
 .alert-success {
   background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2);
-  border-radius:var(--r-sm); padding:12px 16px; color:#86efac;
+  border-radius:var(--r-sm); padding:12px 16px; color:#166534;
   font-size:14px; margin-bottom:20px; line-height:1.5;
 }
+
+.alert-error a, .alert-success a { color:inherit; font-weight:600; text-decoration:underline; }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    TABLE
@@ -360,7 +381,7 @@ button { cursor:pointer; }
   text-transform:uppercase; transition:all 0.12s;
 }
 .filter-btn:hover { border-color:var(--b2); color:var(--t2); }
-.filter-btn.active { background:var(--blue-soft); border-color:rgba(37,99,235,0.3); color:var(--blue); }
+.filter-btn.active { background:var(--blue-soft); border-color:rgba(37,99,235,0.3); color:#1d4ed8; }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    PAGINATION
@@ -458,7 +479,7 @@ button { cursor:pointer; }
   flex-shrink:0;
   box-shadow:0 0 6px rgba(37,99,235,0.5);
 }
-.auth-left-feat-text { font-size:14px; color:rgba(255,255,255,0.45); line-height:1.5; }
+.auth-left-feat-text { font-size:14px; color:var(--t2); line-height:1.5; }
 
 /* Right – clean form */
 .auth-right {
@@ -547,3 +568,31 @@ button { cursor:pointer; }
 
 .theme-toggle { display:none; }
 
+
+/* Default look for any input in the app (and on public pages) that isn't inside a .form-group.
+   :where() keeps specificity at zero, so .form-group rules and inline styles still win. */
+:where(.main-content, #main) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), select, textarea) {
+  padding      : 10px 12px;
+  background   : var(--s2);
+  border       : 1px solid var(--b1);
+  border-radius: var(--r-sm);
+  color        : var(--t1);
+  font-size    : 14px;
+  font-family  : inherit;
+  outline      : none;
+  transition   : border-color 0.15s, box-shadow 0.15s;
+}
+:where(.main-content, #main) :where(input, select, textarea):focus-visible {
+  border-color: var(--blue);
+  box-shadow  : 0 0 0 3px var(--blue-soft);
+}
+:where(.main-content, #main) :where(input, textarea)::placeholder { color: var(--t3); }
+
+/* Keyboard users can jump past the navigation */
+.skip-link {
+  position:absolute; left:12px; top:-48px; z-index:1000;
+  padding:8px 14px; border-radius:6px; background:var(--t1, #111827); color:#fff;
+  font-size:13px; font-weight:600; text-decoration:none;
+}
+.skip-link:focus { top:12px; }
+#main:focus { outline:none; }

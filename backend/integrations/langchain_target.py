@@ -1,6 +1,3 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
 import os
 from dotenv import load_dotenv
 
@@ -66,7 +63,7 @@ class LangChainTarget:
             if isinstance(result, dict):
                 return str(result.get("output", result.get("text", str(result))))
             return str(result)
-        except:
+        except Exception:
             # Fallback to run (older LangChain)
             return str(self.chain.run(message))
 
@@ -92,7 +89,7 @@ class LangChainTarget:
 
         llm = ChatGroq(
             groq_api_key=os.getenv("GROQ_API_KEY"),
-            model_name  ="llama-3.3-70b-versatile"
+            model_name  ="qwen/qwen3.8-27b"
         )
 
         messages = []
@@ -127,9 +124,9 @@ class LangChainScanner:
         """
         from scanner import run_full_scan
 
-        print(f"\n🔗 LangChain Scanner")
+        print("\n🔗 LangChain Scanner")
         print(f"   Target : {self.target_name}")
-        print(f"   Scanning for vulnerabilities...\n")
+        print("   Scanning for vulnerabilities...\n")
 
         report = run_full_scan(
             target     =self.target,

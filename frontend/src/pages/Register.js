@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { safeNext } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/Logo';
+import { errorMessage } from '../services/api';
 
 /* ── Password strength meter ─────────────────────────────── */
 function PasswordStrength({ pwd }) {
@@ -12,7 +14,7 @@ function PasswordStrength({ pwd }) {
     special: /[^A-Za-z0-9]/.test(pwd),
   };
   const score = Object.values(checks).filter(Boolean).length;
-  const SEG_COLORS = ['', '#dc2626', '#b45309', '#16a34a', '#16a34a'];
+  const SEG_COLORS = ['', '#b91c1c', '#92400e', '#15803d', '#15803d'];
   const LABELS     = ['', 'Weak', 'Fair', 'Good', 'Strong'];
   if (!pwd) return null;
 
@@ -50,16 +52,17 @@ function PasswordStrength({ pwd }) {
 
 /* ── Left panel live scan preview ────────────────────────── */
 const SCAN_ATTACKS = [
-  { name:'Prompt Injection', val:24, color:'#dc2626' },
-  { name:'Jailbreak',        val:18, color:'#ea580c' },
-  { name:'Data Exfiltration',val:15, color:'#b45309' },
-  { name:'Policy Bypass',    val:12, color:'#16a34a' },
+  { name:'Instruction override', val:24, color:'#b91c1c' },
+  { name:'Jailbreak templates',  val:18, color:'#c2410c' },
+  { name:'Data exfiltration',    val:15, color:'#92400e' },
+  { name:'Prompt extraction',    val:12, color:'#15803d' },
 ];
 
 /* ── Main ─────────────────────────────────────────────────── */
 export default function Register() {
   const { register } = useAuth();
   const navigate     = useNavigate();
+  const [params]     = useSearchParams();
   const [form, setForm] = useState({ username:'', email:'', password:'', confirm:'' });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -74,9 +77,9 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form.username, form.email, form.password);
-      navigate('/');
+      navigate(safeNext(params.get('next')), { replace: true });
     } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed. Please try again.');
+      setError(errorMessage(err, 'Registration failed. Please try again.'));
     } finally { setLoading(false); }
   };
 
@@ -98,8 +101,8 @@ export default function Register() {
             <h2 className="auth-left-headline">
               Start Securing<br /><span>Your AI Today.</span>
             </h2>
-            <p style={{ fontSize:'14px', color:'rgba(17,24,39,0.35)', lineHeight:'1.6', marginTop:'16px', maxWidth:'340px' }}>
-              Free forever. No credit card. Get your first full security report in under 15 minutes.
+            <p style={{ fontSize:'14px', color:'var(--t3)', lineHeight:'1.6', marginTop:'16px', maxWidth:'340px' }}>
+              Free plan, no credit card. Your first full security report on the same day.
             </p>
           </div>
 
@@ -109,15 +112,15 @@ export default function Register() {
               <div className="auth-scan-dot" style={{ background:'#ef4444' }} />
               <div className="auth-scan-dot" style={{ background:'#f59e0b' }} />
               <div className="auth-scan-dot" style={{ background:'#22c55e' }} />
-              <span className="auth-scan-title">Live Scan — Banking AI Chatbot</span>
+              <span className="auth-scan-title">Example scan — banking chatbot</span>
               <span style={{ display:'flex', alignItems:'center', gap:'5px' }}>
                 <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:'var(--blue)', animation:'pulse-glow 1.8s ease-in-out infinite' }} />
-                <span style={{ fontSize:'10px', color:'rgba(37,99,235,0.9)', fontWeight:'700' }}>Running</span>
+                <span style={{ fontSize:'10px', color:'#1d4ed8', fontWeight:'700' }}>Running</span>
               </span>
             </div>
             <div className="auth-scan-body">
               <div>
-                <div className="auth-scan-prog-label">820 / 1010 prompts tested</div>
+                <div className="auth-scan-prog-label">820 / 1,090 prompts tested</div>
                 <div className="auth-scan-prog-track">
                   <div className="auth-scan-prog-fill" />
                 </div>
@@ -135,10 +138,10 @@ export default function Register() {
 
           <div className="auth-left-features">
             {[
-              '1000+ attack prompts across 21 vulnerability categories',
+              '1,000+ attack prompts across 22 vulnerability categories',
               'Free plan — no credit card required to start',
-              'Detailed PDF reports in under 15 minutes',
-              'Works with OpenAI, Groq, and any custom API',
+              'PDF, HTML, Markdown and JSON reports',
+              'Works with any OpenAI-compatible API or your own REST endpoint',
             ].map(f => (
               <div key={f} className="auth-left-feat">
                 <div className="auth-left-feat-dot" />
@@ -153,33 +156,33 @@ export default function Register() {
       <div className="auth-right">
         <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px' }}>
           <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:'var(--green)', boxShadow:'0 0 6px var(--green)' }} />
-          <span style={{ fontSize:'11px', fontWeight:'600', color:'var(--green)', letterSpacing:'0.3px' }}>Free plan — no credit card needed</span>
+          <span style={{ fontSize:'11px', fontWeight:'600', color:'#15803d', letterSpacing:'0.3px' }}>Free plan — no credit card needed</span>
         </div>
         <h1 className="auth-right-title">Create account</h1>
         <p className="auth-right-sub">Start scanning AI applications for free</p>
 
-        {error && <div className="alert-error">{error}</div>}
+        {error && <div className="alert-error" role="alert">{error}</div>}
 
         <form onSubmit={submit} autoComplete="on">
           <div className="form-group">
-            <label>Username</label>
-            <input name="username" autoComplete="username"
+            <label htmlFor="reg-username">Username</label>
+            <input id="reg-username" name="username" autoComplete="username"
               value={form.username} onChange={handle} placeholder="johndoe" />
           </div>
           <div className="form-group">
-            <label>Email address</label>
-            <input name="email" type="email" autoComplete="email"
+            <label htmlFor="reg-email-address">Email address</label>
+            <input id="reg-email-address" name="email" type="email" autoComplete="email"
               value={form.email} onChange={handle} placeholder="you@company.com" />
           </div>
           <div className="form-group">
-            <label>Password</label>
-            <input name="password" type="password" autoComplete="new-password"
+            <label htmlFor="reg-password">Password</label>
+            <input id="reg-password" name="password" type="password" autoComplete="new-password"
               value={form.password} onChange={handle} placeholder="Min. 8 characters" />
           </div>
           <PasswordStrength pwd={form.password} />
           <div className="form-group">
-            <label>Confirm password</label>
-            <input name="confirm" type="password" autoComplete="new-password"
+            <label htmlFor="reg-confirm-password">Confirm password</label>
+            <input id="reg-confirm-password" name="confirm" type="password" autoComplete="new-password"
               value={form.confirm} onChange={handle} placeholder="••••••••"
               style={{ borderColor: form.confirm && form.confirm !== form.password ? 'rgba(240,68,56,0.5)' : undefined }} />
           </div>

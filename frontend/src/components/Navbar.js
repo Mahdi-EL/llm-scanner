@@ -44,7 +44,7 @@ export default function Navbar() {
   });
 
   return (
-    <nav style={{
+    <nav className="site-nav" style={{
       height       : '60px',
       position     : 'sticky',
       top          : 0,
@@ -61,15 +61,16 @@ export default function Navbar() {
     }}>
 
       {/* Logo */}
-      <Link to={user ? '/' : '/landing'} style={{ display:'flex', alignItems:'center', gap:'10px', textDecoration:'none', flexShrink:0 }}>
+      <Link to={user ? '/' : '/landing'} aria-label="LLM Scanner home"
+        style={{ display:'flex', alignItems:'center', gap:'10px', textDecoration:'none', flexShrink:0 }}>
         <Logo size={28} />
-        <span style={{ fontSize:'14px', fontWeight:'800', color:ink, letterSpacing:'-0.3px' }}>
+        <span className="site-nav-wordmark" style={{ fontSize:'14px', fontWeight:'800', color:ink, letterSpacing:'-0.3px' }}>
           LLM<span style={{ color:accent }}>Scanner</span>
         </span>
       </Link>
 
       {/* Nav links */}
-      <div style={{ display:'flex', gap:'32px', alignItems:'center' }}>
+      <div className="site-nav-links" style={{ display:'flex', gap:'32px', alignItems:'center' }}>
         {user ? (
           <>
             <Link to="/"         style={link('/')}>Dashboard</Link>
@@ -79,6 +80,7 @@ export default function Navbar() {
         ) : (
           <>
             <Link to="/landing" style={link('/landing')}>Product</Link>
+            <Link to="/check"   style={link('/check')}>Free check</Link>
             <Link to="/pricing" style={link('/pricing')}>Pricing</Link>
           </>
         )}
@@ -131,7 +133,7 @@ export default function Navbar() {
                   boxShadow   : '0 12px 40px rgba(16,24,40,0.14), 0 0 0 1px rgba(17,24,39,0.05)',
                 }}>
                   <div style={{ padding:'9px 12px 10px', borderBottom:'1px solid rgba(17,24,39,0.07)', marginBottom:'4px' }}>
-                    <div style={{ fontSize:'11px', color:'#8b93a3', marginBottom:'1px', textTransform:'uppercase', letterSpacing:'0.5px' }}>Signed in as</div>
+                    <div style={{ fontSize:'11px', color:'var(--t3)', marginBottom:'1px', textTransform:'uppercase', letterSpacing:'0.5px' }}>Signed in as</div>
                     <div style={{ fontSize:'13px', color:'#14161c', fontWeight:'600' }}>{user.email || user.username}</div>
                   </div>
                   {[

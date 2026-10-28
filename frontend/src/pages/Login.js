@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { safeNext } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/Logo';
+import { errorMessage } from '../services/api';
 
 const SCAN_ATTACKS = [
   { name:'Prompt Injection',  val:24, accent:'#dc2626' },
@@ -11,9 +13,9 @@ const SCAN_ATTACKS = [
 ];
 
 const TRUST = [
-  { value:'1000+', label:'Attack prompts' },
-  { value:'21',    label:'Vuln categories' },
-  { value:'<15m',  label:'Per scan' },
+  { value:'1,000+', label:'Attack prompts' },
+  { value:'22',    label:'Attack categories' },
+  { value:'OWASP', label:'LLM Top 10 mapped' },
 ];
 
 const IcoEyeOff = () => (
@@ -30,6 +32,7 @@ export default function Login() {
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
+  const [params] = useSearchParams();
 
   const handle = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -38,9 +41,9 @@ export default function Login() {
     setError(''); setLoading(true);
     try {
       await login(form.username, form.password);
-      navigate('/');
+      navigate(safeNext(params.get('next')), { replace: true });
     } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid credentials. Please try again.');
+      setError(errorMessage(err, 'Invalid credentials. Please try again.'));
     } finally { setLoading(false); }
   };
 
@@ -57,7 +60,7 @@ export default function Login() {
         <div className="pw-aside-mid">
           <h2 className="pw-aside-title">Security testing for your AI, on autopilot.</h2>
           <p className="pw-aside-sub">
-            Fire 1000+ adversarial prompts across 21 attack categories and get a full
+            Fire 1,000+ adversarial prompts across 22 attack categories and get a full
             security report in minutes.
           </p>
 
@@ -99,7 +102,7 @@ export default function Login() {
       </aside>
 
       {/* ═══════════ RIGHT · sign-in form ═══════════ */}
-      <main className="pw-main">
+      <div className="pw-main">
         <div className="pw-form">
           <Link to="/landing" className="pw-brand pw-brand-mobile">
             <Logo size={26} />
@@ -109,13 +112,13 @@ export default function Login() {
           <h1 className="pw-title">Sign in</h1>
           <p className="pw-subtitle">Welcome back — sign in to your security dashboard.</p>
 
-          {error && <div className="pw-error">{error}</div>}
+          {error && <div className="pw-error" role="alert">{error}</div>}
 
           <form onSubmit={submit} autoComplete="on">
             <div className="pw-field">
-              <label htmlFor="pw-user">Username</label>
+              <label htmlFor="pw-user">Username or email</label>
               <input id="pw-user" name="username" autoComplete="username"
-                value={form.username} onChange={handle} placeholder="Enter your username" />
+                value={form.username} onChange={handle} placeholder="you@company.com or your username" />
             </div>
 
             <div className="pw-field">
@@ -149,10 +152,10 @@ export default function Login() {
 
           <div className="pw-secure">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Encrypted connection · SOC 2-ready
+            Encrypted connection · passwords stored with bcrypt
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

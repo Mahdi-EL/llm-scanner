@@ -1,0 +1,147 @@
+name: LLM Scanner security scan
+description: >
+  Scan an AI application with LLM Scanner and fail the job when the scan
+  finds problems at or above a chosen severity.
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  api-key:
+    description: LLM Scanner API key (llmsk_...). Store it as a secret.
+    required: true
+  api-url:
+    description: URL of your LLM Scanner API.
+    required: true
+  target-name:
+    description: Name of the target, used in reports and to compare scans.
+    required: true
+  target-type:
+    description: simulation, groq, openai_compatible or custom_rest.
+    default: openai_compatible
+  target-url:
+    description: The target's API URL (openai_compatible and custom_rest).
+    required: false
+  target-key:
+    description: The target's own API key. Store it as a secret.
+    required: false
+  target-id:
+    description: Use a saved target (its settings and key) instead of the target-* inputs.
+    required: false
+  model:
+    description: Model name sent to the target.
+    required: false
+  system-prompt-file:
+    description: File holding the system prompt (sent to simulation, groq and openai_compatible targets; used only for leak detection with custom_rest).
+    required: false
+  input-field:
+    description: custom_rest only. JSON field the attack message is sent in (default message).
+    required: false
+  output-field:
+    description: custom_rest only. JSON field the reply is read from (default response).
+    required: false
+  baseline-question:
+    description: A harmless question for this app, used as the normal-behavior baseline.
+    required: false
+  categories:
+    description: Space-separated attack categories. Empty means all 22.
+    required: false
+  quick:
+    description: "true runs about 5 attacks per category (~110) instead of all ~1,090: faster and cheaper, for pull requests."
+    default: "false"
+  fail-on:
+    description: Fail when any finding is at or above this severity (low, medium, high, critical); findings marked as false positives or accepted risks don't count. Empty disables.
+    default: high
+  min-score:
+    description: Fail when the score after triage is below this value. Empty disables.
+    required: false
+  report-format:
+    description: Report to upload as an artifact (pdf, html, md, json, or evidence for the audit evidence PDF on paid plans). Empty disables.
+    default: html
+  timeout:
+    description: Seconds to wait for the scan before failing.
+    default: "5400"
+
+outputs:
+  scan-id:
+    description: ID of the scan.
+    value: ${{ steps.scan.outputs.scan-id }}
+  score:
+    description: Security score from 0 to 100.
+    value: ${{ steps.scan.outputs.score }}
+  score-after-triage:
+    description: The score with findings marked as false positives or accepted risks counted as safe (what min-score checks).
+    value: ${{ steps.scan.outputs.score-after-triage }}
+  grade:
+    description: Letter grade (A to F).
+    value: ${{ steps.scan.outputs.grade }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install the LLM Scanner CLI
+      shell: bash
+      run: pip install --quiet "${{ github.action_path }}/../../../sdk"
+
+    - name: Run the scan
+      id: scan
+      shell: bash
+      # Inputs reach the script only as environment variables, never spliced into it,
+      # so a workflow that passes untrusted text (a PR title...) can't inject commands.
+      env:
+        LLMSCANNER_API_KEY: ${{ inputs.api-key }}
+        LLMSCANNER_API_URL: ${{ inputs.api-url }}
+        LLMSCANNER_TARGET_KEY: ${{ inputs.target-key }}
+        IN_NAME: ${{ inputs.target-name }}
+        IN_TYPE: ${{ inputs.target-type }}
+        IN_URL: ${{ inputs.target-url }}
+        IN_TARGET_ID: ${{ inputs.target-id }}
+        IN_MODEL: ${{ inputs.model }}
+        IN_PROMPT_FILE: ${{ inputs.system-prompt-file }}
+        IN_INPUT_FIELD: ${{ inputs.input-field }}
+        IN_OUTPUT_FIELD: ${{ inputs.output-field }}
+        IN_BASELINE: ${{ inputs.baseline-question }}
+        IN_CATEGORIES: ${{ inputs.categories }}
+        IN_QUICK: ${{ inputs.quick }}
+        IN_FAIL_ON: ${{ inputs.fail-on }}
+        IN_MIN_SCORE: ${{ inputs.min-score }}
+        IN_FORMAT: ${{ inputs.report-format }}
+        IN_TIMEOUT: ${{ inputs.timeout }}
+      run: |
+        args=(scan --name "$IN_NAME" --wait --poll 15 --timeout "$IN_TIMEOUT")
+        if [ -n "$IN_TARGET_ID" ]; then
+          args+=(--target-id "$IN_TARGET_ID")
+        else
+          args+=(--type "$IN_TYPE")
+          [ -n "$IN_URL" ] && args+=(--url "$IN_URL")
+          [ -n "$IN_MODEL" ] && args+=(--model "$IN_MODEL")
+          [ -n "$IN_PROMPT_FILE" ] && args+=(--prompt-file "$IN_PROMPT_FILE")
+          [ -n "$IN_INPUT_FIELD" ] && args+=(--input-field "$IN_INPUT_FIELD")
+          [ -n "$IN_OUTPUT_FIELD" ] && args+=(--output-field "$IN_OUTPUT_FIELD")
+        fi
+        [ -n "$IN_BASELINE" ] && args+=(--baseline "$IN_BASELINE")
+        if [ -n "$IN_CATEGORIES" ]; then
+          read -ra categories <<< "$IN_CATEGORIES"
+          args+=(--categories "${categories[@]}")
+        fi
+        [ "$IN_QUICK" = "true" ] && args+=(--quick)
+        [ -n "$IN_FAIL_ON" ] && args+=(--fail-on "$IN_FAIL_ON")
+        [ -n "$IN_MIN_SCORE" ] && args+=(--min-score "$IN_MIN_SCORE")
+        if [ -n "$IN_FORMAT" ]; then
+          ext="$IN_FORMAT"; [ "$IN_FORMAT" = "evidence" ] && ext="evidence.pdf"
+          args+=(--download "$IN_FORMAT" --out "llm-scanner-report.$ext")
+        fi
+        # exec: a cancelled job's signal reaches the CLI itself, which then cancels the scan
+        exec llmscanner "${args[@]}"
+
+    - name: Upload the report
+      if: always() && inputs.report-format != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: llm-scanner-report
+        path: llm-scanner-report.*
+        if-no-files-found: ignore

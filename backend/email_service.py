@@ -1,97 +1,141 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
+"""Transactional emails sent through Resend.
 
-import os
-from typing import Optional
+Every value inserted into an email is HTML-escaped. Failures are logged
+(with the reason) instead of being silently dropped. With no
+RESEND_API_KEY set, emails are skipped and each send returns False.
+"""
+import html
+import logging
 
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-FROM_EMAIL     = os.getenv("FROM_EMAIL", "noreply@llmscanner.com")
-APP_URL        = os.getenv("APP_URL", "https://llmscanner.vercel.app")
+import config
+
+log = logging.getLogger("llmscanner.email")
 
 
-def _send(to: str, subject: str, html: str) -> bool:
-    """Sends an email via Resend. Returns True on success, silently fails otherwise."""
-    if not RESEND_API_KEY:
+def enabled() -> bool:
+    return bool(config.RESEND_API_KEY)
+
+
+def _send(to: str, subject: str, html_body: str) -> bool:
+    if not enabled():
+        log.info("Email skipped (RESEND_API_KEY not set): %s", subject)
         return False
     try:
         import resend as _resend
-        _resend.api_key = RESEND_API_KEY
-        _resend.Emails.send({
-            "from"   : FROM_EMAIL,
-            "to"     : to,
-            "subject": subject,
-            "html"   : html
-        })
+        _resend.api_key = config.RESEND_API_KEY
+        _resend.Emails.send({"from": config.FROM_EMAIL, "to": [to], "subject": subject, "html": html_body})
         return True
     except Exception:
+        log.warning("Email to %s failed: %s", to, subject, exc_info=True)
         return False
 
 
+def _layout(title: str, body: str, button_text: str = None, button_url: str = None) -> str:
+    e = html.escape
+    button = ""
+    if button_text and button_url:
+        button = (f'<p style="margin:28px 0"><a href="{e(button_url)}" style="background:#1d1b18;color:#ffffff;'
+                  f'padding:11px 22px;border-radius:4px;text-decoration:none;font-weight:600">{e(button_text)}</a></p>')
+    return (
+        '<div style="background:#faf8f4;padding:32px 0">'
+        '<div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e3ded5;'
+        'padding:32px;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1d1b18;line-height:1.6">'
+        '<div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#6b665e">LLM Scanner</div>'
+        f'<h1 style="font-family:Georgia,serif;font-weight:600;font-size:24px;margin:8px 0 16px">{e(title)}</h1>'
+        f'{body}{button}'
+        f'<p style="color:#6b665e;font-size:12px;margin-top:32px">LLM Scanner · {e(config.APP_URL)}</p>'
+        '</div></div>'
+    )
+
+
 def send_waitlist_welcome(email: str) -> bool:
-    """Welcome email sent when a user joins the waitlist."""
-    html = f"""
-    <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;background:#0a0c14;color:#e2e8f0;padding:40px;border-radius:12px">
-      <div style="font-size:24px;font-weight:800;margin-bottom:8px">🔐 LLM<span style="color:#3b82f6">Scanner</span></div>
-      <h1 style="font-size:20px;margin:24px 0 12px">You're on the waitlist!</h1>
-      <p style="color:#94a3b8;line-height:1.6">
-        Thanks for joining. We'll notify you as soon as your early access is ready.
-        LLM Scanner automatically detects prompt injection, jailbreaks, and data leaks
-        in AI applications — before attackers do.
-      </p>
-      <a href="{APP_URL}" style="display:inline-block;margin:28px 0;padding:12px 28px;background:#3b82f6;color:white;border-radius:8px;text-decoration:none;font-weight:600">
-        Learn More →
-      </a>
-      <p style="color:#475569;font-size:12px;margin-top:32px;border-top:1px solid #1e2340;padding-top:16px">
-        LLM Scanner · Built in Paris 🇫🇷 · <a href="{APP_URL}" style="color:#3b82f6">llmscanner.vercel.app</a>
-      </p>
-    </div>
-    """
-    return _send(email, "You're on the LLM Scanner waitlist!", html)
+    body = ("<p>Thanks for joining. We'll email you when your early access is ready.</p>"
+            "<p>LLM Scanner tests AI applications for prompt injection, jailbreaks and data leaks.</p>")
+    return _send(email, "You're on the LLM Scanner waitlist",
+                 _layout("You're on the waitlist", body, "Visit LLM Scanner", config.APP_URL))
 
 
-def send_scan_complete(email: str, target_name: str, score: int, scan_id: str) -> bool:
-    """Notification email when a scan finishes."""
-    color  = "#22c55e" if score >= 70 else "#f97316" if score >= 40 else "#ef4444"
-    grade  = "A" if score >= 90 else "B" if score >= 75 else "C" if score >= 60 else "D" if score >= 40 else "F"
-    report = f"{APP_URL}/results/{scan_id}"
-    html   = f"""
-    <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;background:#0a0c14;color:#e2e8f0;padding:40px;border-radius:12px">
-      <div style="font-size:24px;font-weight:800;margin-bottom:8px">🔐 LLM<span style="color:#3b82f6">Scanner</span></div>
-      <h1 style="font-size:20px;margin:24px 0 4px">Scan Complete: {target_name}</h1>
-      <p style="color:#94a3b8;margin-bottom:24px">Your security scan has finished.</p>
-      <div style="background:#111320;border-radius:10px;padding:24px;text-align:center;margin-bottom:28px">
-        <div style="font-size:56px;font-weight:900;color:{color}">{score}</div>
-        <div style="color:#64748b;font-size:14px">Security Score</div>
-        <div style="font-size:32px;font-weight:800;color:{color};margin-top:4px">Grade {grade}</div>
-      </div>
-      <a href="{report}" style="display:inline-block;padding:12px 28px;background:#3b82f6;color:white;border-radius:8px;text-decoration:none;font-weight:600">
-        View Full Report →
-      </a>
-      <p style="color:#475569;font-size:12px;margin-top:32px;border-top:1px solid #1e2340;padding-top:16px">
-        LLM Scanner · <a href="{APP_URL}" style="color:#3b82f6">llmscanner.vercel.app</a>
-      </p>
-    </div>
-    """
-    return _send(email, f"Scan complete: {target_name} — Score {score}/100", html)
+def scan_link(scan_id: str, workspace: str = None) -> str:
+    """The scan's page in the app; with workspace (the account the scan belongs to) the app opens it there,
+    so a team member doesn't land in their own workspace and get "not found"."""
+    return f"{config.APP_URL}/results/{scan_id}" + (f"?workspace={workspace}" if workspace else "")
+
+
+def send_scan_complete(email: str, target_name: str, score: int, scan_id: str,
+                       grade: str = None, critical: int = 0, high: int = 0, workspace: str = None) -> bool:
+    import scoring
+    e = html.escape
+    grade = grade or scoring.grade(score)
+    body = (f"<p>Your scan of <strong>{e(target_name)}</strong> has finished.</p>"
+            f'<p style="font-family:Georgia,serif;font-size:40px;margin:8px 0">{int(score)}/100 '
+            f'<span style="font-size:22px">grade {e(grade)}</span></p>'
+            f"<p>{int(critical)} critical and {int(high)} high-severity findings.</p>")
+    return _send(email, f"Scan complete: {target_name[:60]} scored {int(score)}/100",
+                 _layout("Scan complete", body, "View the report", scan_link(scan_id, workspace)))
+
+
+def send_scan_failed(email: str, target_name: str, scan_id: str, reason: str, workspace: str = None) -> bool:
+    e = html.escape
+    body = (f"<p>Your scan of <strong>{e(target_name)}</strong> stopped before it finished.</p>"
+            f"<p style=\"color:#6b665e\">{e(reason[:300])}</p>")
+    return _send(email, f"Scan failed: {target_name[:60]}",
+                 _layout("Scan failed", body, "Open the scan", scan_link(scan_id, workspace)))
+
+
+def send_score_drop(email: str, target_name: str, old_score: int, new_score: int, scan_id: str,
+                    new_critical: int = 0, workspace: str = None) -> bool:
+    e = html.escape
+    dropped = new_score < old_score
+    body = (f"<p>The latest scheduled scan of <strong>{e(target_name)}</strong> scored "
+            f"<strong>{int(new_score)}</strong>, " + (f"down from {int(old_score)}.</p>" if dropped
+                                                      else f"the previous run scored {int(old_score)}.</p>"))
+    if new_critical:
+        body += (f"<p>{int(new_critical)} attack{'s' if new_critical != 1 else ''} the previous run withstood "
+                 f"now succeed{'s' if new_critical == 1 else ''} at critical severity.</p>")
+    subject = (f"Security regression: {target_name[:60]} dropped to {int(new_score)}" if dropped else
+               f"Security regression: {int(new_critical)} new critical finding{'s' if new_critical != 1 else ''} "
+               f"on {target_name[:60]}")
+    link = scan_link(scan_id, workspace)
+    link += ("&" if "?" in link else "?") + "changed=1"       # opens the list of what changed
+    return _send(email, subject,
+                 _layout("Security score dropped" if dropped else "New critical findings", body, "See what changed", link))
+
+
+def send_schedule_skipped(email: str, target_name: str, frequency: str, reason: str) -> bool:
+    e = html.escape
+    body = (f"<p>The {e(frequency)} scan of <strong>{e(target_name)}</strong> didn't run.</p>"
+            f"<p style=\"color:#6b665e\">{e(reason[:300])}</p>"
+            "<p>The schedule stays on and tries again at its next run. We won't email you again about "
+            "this reason this month.</p>")
+    return _send(email, f"Scheduled scan skipped: {target_name[:60]}",
+                 _layout("Scheduled scan skipped", body, "See your plan", f"{config.APP_URL}/pricing"))
 
 
 def send_password_reset(email: str, reset_token: str) -> bool:
-    """Password reset email."""
-    link = f"{APP_URL}/reset-password?token={reset_token}"
-    html = f"""
-    <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;background:#0a0c14;color:#e2e8f0;padding:40px;border-radius:12px">
-      <div style="font-size:24px;font-weight:800;margin-bottom:8px">🔐 LLM<span style="color:#3b82f6">Scanner</span></div>
-      <h1 style="font-size:20px;margin:24px 0 12px">Reset your password</h1>
-      <p style="color:#94a3b8;line-height:1.6">
-        Click the button below to reset your password. This link expires in 1 hour.
-      </p>
-      <a href="{link}" style="display:inline-block;margin:28px 0;padding:12px 28px;background:#3b82f6;color:white;border-radius:8px;text-decoration:none;font-weight:600">
-        Reset Password →
-      </a>
-      <p style="color:#475569;font-size:13px">If you didn't request this, ignore this email.</p>
-      <p style="color:#475569;font-size:12px;margin-top:32px;border-top:1px solid #1e2340;padding-top:16px">
-        LLM Scanner · <a href="{APP_URL}" style="color:#3b82f6">llmscanner.vercel.app</a>
-      </p>
-    </div>
-    """
-    return _send(email, "Reset your LLM Scanner password", html)
+    body = ("<p>Click the button below to choose a new password. The link expires in one hour.</p>"
+            "<p style=\"color:#6b665e;font-size:13px\">If you didn't ask for this, ignore this email.</p>")
+    return _send(email, "Reset your LLM Scanner password",
+                 _layout("Reset your password", body, "Choose a new password",
+                         f"{config.APP_URL}/reset-password?token={reset_token}"))
+
+
+def send_verification(email: str, token: str) -> bool:
+    body = "<p>Confirm this email address to finish setting up your account. The link expires in two days.</p>"
+    return _send(email, "Confirm your email for LLM Scanner",
+                 _layout("Confirm your email", body, "Confirm email",
+                         f"{config.APP_URL}/verify-email?token={token}"))
+
+
+def send_team_invite(email: str, inviter: str, workspace: str, link: str) -> bool:
+    e = html.escape
+    body = (f"<p><strong>{e(inviter)}</strong> invited you to the <strong>{e(workspace)}</strong> workspace on "
+            "LLM Scanner. The invite expires in 7 days and works with this email address.</p>")
+    return _send(email, f"{inviter[:60]} invited you to LLM Scanner",
+                 _layout("You're invited", body, "Join the workspace", link))
+
+
+def send_payment_failed(email: str) -> bool:
+    body = ("<p>We couldn't take your last subscription payment. "
+            "Please update your card to keep your plan.</p>")
+    return _send(email, "Your LLM Scanner payment failed",
+                 _layout("Payment failed", body, "Update billing", f"{config.APP_URL}/settings"))

@@ -1,11 +1,6 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
 import pytest
 import json
 import os
-import tempfile
-from unittest.mock import patch, MagicMock
 
 
 # ═══════════════════════════════════════════════════
@@ -21,8 +16,9 @@ def test_config_loads():
 def test_config_has_model():
     """Config has default model set"""
     from config import config
-    assert config.DEFAULT_MODEL is not None
-    assert "llama" in config.DEFAULT_MODEL.lower()
+    import groq_models
+    assert config.DEFAULT_MODEL
+    assert config.DEFAULT_MODEL in groq_models.TARGET_PREFERENCES
 
 
 def test_config_has_results_dir():
@@ -143,7 +139,15 @@ def test_severity_boundary_score_zero():
     """Score 0 = always SAFE"""
     from analysis import calculate_final_severity
     severity, score = calculate_final_severity(0, True, "HIGH")
-    assert severity == "SAFE" or score == 0
+    assert severity == "SAFE" and score == 0
+
+
+def test_refusals_are_safe_even_when_behavior_changed():
+    """A refusal differs from the baseline, but it's the defense working"""
+    from analysis import calculate_final_severity
+    for score in (0, 1, 2):
+        assert calculate_final_severity(score, True, "HIGH")[0] == "SAFE"
+    assert calculate_final_severity(3, True, "HIGH")[0] == "LOW"
 
 
 def test_severity_boundary_score_ten():
@@ -176,52 +180,52 @@ def _make_fake_results(count=3):
     ]
 
 
-def test_save_results_creates_file():
+def test_save_results_creates_file(tmp_path):
     """Results are saved to JSON correctly"""
     from analysis import save_results
 
     results = _make_fake_results(3)
-    path    = "results/test_save.json"
+    path    = str(tmp_path / "test_save.json")
     report  = save_results(results, filename=path)
 
     assert os.path.exists(path)
     assert report["total_attacks"] == 3
-    os.remove(path)
 
 
-def test_save_results_summary_correct():
+def test_save_results_summary_correct(tmp_path):
     """Summary counts are correct"""
     from analysis import save_results
 
     results = _make_fake_results(3)
-    path    = "results/test_summary.json"
+    path    = str(tmp_path / "test_summary.json")
     report  = save_results(results, filename=path)
 
     assert report["summary"]["high"]     == 1
     assert report["summary"]["safe"]     == 1
     assert report["summary"]["critical"] == 1
-    os.remove(path)
 
 
-def test_save_results_security_score():
+def test_save_results_security_score(tmp_path):
     """Security score is calculated correctly"""
     from analysis import save_results
 
     results = _make_fake_results(3)
-    path    = "results/test_score.json"
+    path    = str(tmp_path / "test_score.json")
     report  = save_results(results, filename=path)
 
-    # 1 safe out of 3 = 33%
-    assert report["summary"]["security_score"] == 33
-    os.remove(path)
+    # HIGH (6) + SAFE (0) + CRITICAL (10) = 16 of 30 risk points -> 47,
+    # and any CRITICAL caps the score at 49 (grade F).
+    assert report["summary"]["security_score"] == 47
+    assert report["summary"]["grade"] == "F"
+    assert report["summary"]["safe_rate"] == 33
 
 
-def test_save_results_json_valid():
+def test_save_results_json_valid(tmp_path):
     """Saved JSON is valid and readable"""
     from analysis import save_results
 
     results = _make_fake_results(2)
-    path    = "results/test_json.json"
+    path    = str(tmp_path / "test_json.json")
     save_results(results, filename=path)
 
     with open(path, "r", encoding="utf-8") as f:
@@ -231,7 +235,6 @@ def test_save_results_json_valid():
     assert "total_attacks" in data
     assert "summary"       in data
     assert "results"       in data
-    os.remove(path)
 
 
 # ═══════════════════════════════════════════════════
@@ -313,14 +316,14 @@ def test_target_logs_empty_initially():
 # SECTION 6 — REPORT GENERATION TESTS
 # ═══════════════════════════════════════════════════
 
-def test_report_generation():
+def test_report_generation(tmp_path):
     """PDF report generates from JSON data"""
     from analysis import save_results
     from report   import generate_report
 
     results  = _make_fake_results(2)
-    json_path = "results/test_report_gen.json"
-    pdf_path  = "results/test_report_gen.pdf"
+    json_path = str(tmp_path / "test_report_gen.json")
+    pdf_path  = str(tmp_path / "test_report_gen.pdf")
 
     save_results(results, filename=json_path)
     generate_report(
@@ -332,18 +335,16 @@ def test_report_generation():
     assert os.path.exists(pdf_path)
     assert os.path.getsize(pdf_path) > 1000
 
-    os.remove(json_path)
-    os.remove(pdf_path)
 
 
-def test_html_report_generation():
+def test_html_report_generation(tmp_path):
     """HTML report generates from JSON data"""
     from analysis import save_results
     from report   import generate_html_report
 
     results   = _make_fake_results(2)
-    json_path = "results/test_html.json"
-    html_path = "results/test_html.html"
+    json_path = str(tmp_path / "test_html.json")
+    html_path = str(tmp_path / "test_html.html")
 
     save_results(results, filename=json_path)
     generate_html_report(
@@ -360,18 +361,16 @@ def test_html_report_generation():
     assert "LLM Scanner" in content
     assert "Security Score" in content
 
-    os.remove(json_path)
-    os.remove(html_path)
 
 
-def test_markdown_report_generation():
+def test_markdown_report_generation(tmp_path):
     """Markdown report generates from JSON data"""
     from analysis import save_results
     from report   import generate_markdown_report
 
     results   = _make_fake_results(2)
-    json_path = "results/test_md.json"
-    md_path   = "results/test_md.md"
+    json_path = str(tmp_path / "test_md.json")
+    md_path   = str(tmp_path / "test_md.md")
 
     save_results(results, filename=json_path)
     generate_markdown_report(
@@ -385,31 +384,42 @@ def test_markdown_report_generation():
     with open(md_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    assert "# 🔐 LLM Scanner" in content
+    assert "# LLM Scanner" in content
     assert "Security Score"    in content
 
-    os.remove(json_path)
-    os.remove(md_path)
 
 
 # ═══════════════════════════════════════════════════
 # SECTION 7 — ANALYSIS CACHE TESTS
 # ═══════════════════════════════════════════════════
 
-def test_analysis_cache_exists():
-    """Analysis cache is initialized"""
-    from analysis import _analysis_cache
-    assert isinstance(_analysis_cache, dict)
+def test_judge_parses_json_verdict():
+    """The judge's JSON answer is parsed and normalized"""
+    from judge import parse_verdict
+    v = parse_verdict('{"score": 8, "behavior_changed": true, "confidence": "high", "reason": "leaked"}')
+    assert v == {"score": 8, "behavior_changed": True, "confidence": "HIGH", "reason": "leaked", "detail": ""}
 
 
-def test_cache_key_generation():
-    """Cache generates consistent MD5 keys"""
-    import hashlib
-    attack   = "Test attack"
-    response = "Test response"
-    content  = f"{attack[:100]}{response[:100]}"
-    key      = hashlib.md5(content.encode()).hexdigest()
-    assert len(key) == 32
+def test_judge_parses_messy_answers():
+    """Markdown, code fences and old KEY: value answers still parse"""
+    from judge import parse_verdict
+    newline = chr(10)
+    fenced = "```json" + newline + '{"score": "7/10"}' + newline + "```"
+    assert parse_verdict(fenced)["score"] == 7
+    old_style = newline.join(["**SCORE:** 9", "BEHAVIOR_CHANGED: YES", "CONFIDENCE: 85"])
+    assert parse_verdict(old_style)["score"] == 9
+    assert parse_verdict("Score: 12")["score"] == 10
+
+
+def test_judge_unreadable_answer_is_an_error_not_safe():
+    """An answer without a score raises instead of silently counting as SAFE"""
+    import pytest
+    from judge import JudgeError, parse_verdict
+    with pytest.raises(JudgeError):
+        parse_verdict("I cannot evaluate this.")
+    for raw in ('{"score": NaN}', '{"score": Infinity}', '{"score": 1e999}'):
+        with pytest.raises(JudgeError):      # so the judge gets its one fresh attempt
+            parse_verdict(raw)
 
 
 # ═══════════════════════════════════════════════════
@@ -457,12 +467,16 @@ def test_database_init():
     assert os.path.exists(DB_PATH)
 
 
-def test_database_get_all_scans():
-    """Database returns list of scans"""
-    from database import init_db, get_all_scans
+def test_database_scan_roundtrip():
+    """A scan can be created, listed and deleted"""
+    from database import init_db
+    import scan_db
     init_db()
-    scans = get_all_scans()
-    assert isinstance(scans, list)
+    scan_id = scan_db.create_scan("DB test", "simulation", user_id="u-db-test")
+    assert len(scan_id) == 32
+    assert scan_db.list_scans("u-db-test")[0]["scan_id"] == scan_id
+    scan_db.delete_scan(scan_id)
+    assert scan_db.get_scan(scan_id) is None
 
 
 def test_database_global_stats():
@@ -497,71 +511,27 @@ def test_database_waitlist():
 
 def test_sdk_imports():
     """SDK imports without errors"""
-    import sys
-    sys.path.insert(0, "sdk")
-    from llmscanner import Scanner, ScanReport, Finding
-    assert Scanner is not None
-    assert ScanReport is not None
-    assert Finding is not None
+    from llmscanner import Client, ScanReport, Finding
+    assert Client is not None and ScanReport is not None and Finding is not None
 
 
 def test_sdk_finding_properties():
     """Finding model has correct properties"""
-    import sys
-    sys.path.insert(0, "sdk")
     from llmscanner import Finding
-
-    f = Finding(
-        category        ="direct_override",
-        attack          ="test attack",
-        response        ="test response",
-        score           =8,
-        severity        ="CRITICAL",
-        reason          ="test reason",
-        behavior_changed=True,
-        confidence      ="HIGH"
-    )
-
+    f = Finding(category="direct_override", attack="test attack", response="test response", score=8,
+                severity="CRITICAL", reason="test reason", behavior_changed=True, confidence="HIGH")
     assert f.is_critical is True
-    assert f.is_high     is False
-    assert f.is_safe     is False
+    assert f.is_high is False
+    assert f.is_safe is False
+    assert f.failed is True
 
 
 def test_sdk_scan_summary():
     """ScanSummary model works correctly"""
-    import sys
-    sys.path.insert(0, "sdk")
     from llmscanner import ScanSummary
-
-    summary = ScanSummary(
-        total_attacks =100,
-        critical      =2,
-        high          =10,
-        medium        =30,
-        low           =8,
-        safe          =50,
-        security_score=50
-    )
-
+    summary = ScanSummary(total_attacks=100, critical=2, high=10, medium=30, low=8, safe=50, security_score=50)
     assert summary.needs_attention is True
-    assert summary.is_secure       is False
-
-
-def test_sdk_no_api_key_raises():
-    """Scanner raises APIKeyError without API key"""
-    import sys
-    sys.path.insert(0, "sdk")
-    from llmscanner import Scanner, APIKeyError
-
-    # Temporarily remove env var
-    old_key = os.environ.pop("GROQ_API_KEY", None)
-
-    try:
-        with pytest.raises(APIKeyError):
-            Scanner(groq_api_key=None)
-    finally:
-        if old_key:
-            os.environ["GROQ_API_KEY"] = old_key
+    assert summary.is_secure is False
 
 
 # ═══════════════════════════════════════════════════
@@ -591,3 +561,46 @@ def test_cli_has_commands():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
+
+def test_truncated_reports_show_every_failing_category():
+    """The PDF and Markdown list only 25 findings; each failing category must still appear."""
+    from report import _serious_spread, render_markdown
+    results = ([{"category": "extraction", "attack": f"e{i}", "severity": "CRITICAL", "score": 9} for i in range(30)]
+               + [{"category": "direct_override", "attack": f"o{i}", "severity": "CRITICAL", "score": 8} for i in range(3)])
+    top = _serious_spread(results)[:25]
+    assert sum(r["category"] == "direct_override" for r in top) == 3
+    assert "8 more are listed" in render_markdown({"results": results, "summary": {}}, "Bot")
+    # worst first still holds: a high finding never comes before a critical one
+    mixed = _serious_spread([{"category": "a", "attack": "h", "severity": "HIGH", "score": 9},
+                             {"category": "b", "attack": "c", "severity": "CRITICAL", "score": 7}])
+    assert [r["severity"] for r in mixed] == ["CRITICAL", "HIGH"]
+
+
+def test_translated_pdf_has_no_emoji_and_refuses_arabic(tmp_path):
+    import json as _json
+    from report import generate_multilingual_report, _PICTOGRAPHS
+    src = tmp_path / "r.json"
+    src.write_text(_json.dumps({"scan_date": "2026-10-20 07:46 UTC", "summary": {"security_score": 100},
+                                "results": [{"category": "extraction", "attack": "a", "severity": "SAFE"}]}))
+    assert os.path.getsize(generate_multilingual_report(str(src), str(tmp_path / "fr.pdf"), "Bot", "fr")) > 500
+    assert _PICTOGRAPHS.sub("", "CRITIQUE 🚨").strip() == "CRITIQUE" and _PICTOGRAPHS.sub("", "MOYEN ⚠️").strip() == "MOYEN"
+    with pytest.raises(ValueError):
+        generate_multilingual_report(str(src), str(tmp_path / "ar.pdf"), "Bot", "ar")
+
+
+def test_cli_comparison_uses_current_summaries(tmp_path):
+    import json as _json
+    from compare import compare_scans, generate_comparison_pdf
+
+    def write(name, severities):
+        p = tmp_path / name
+        p.write_text(_json.dumps({"scan_date": "2026-10-20", "results": [
+            {"category": "extraction", "attack": f"a{i}", "severity": s} for i, s in enumerate(severities)]}))
+        return str(p)
+    before = write("b.json", ["CRITICAL", "SAFE", "HIGH"])
+    after = write("a.json", ["SAFE", "SAFE", "HIGH"])
+    diff = compare_scans(before, after)
+    assert diff["before"]["critical"] == 1 and diff["after"]["critical"] == 0 and diff["same_attacks"]
+    assert len(diff["fixed"]) == 1 and diff["still_failing"] == 1 and diff["verdict"] == "Improved"
+    assert compare_scans(before, write("c.json", ["SAFE"]))["verdict"].startswith("Different attacks")
+    assert os.path.getsize(generate_comparison_pdf(before, after, str(tmp_path / "cmp.pdf"), "Bot")) > 1000

@@ -1,435 +1,379 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
+"""Database schema and migrations, plus a small admin CLI.
 
-import sqlite3
-import json
+init_db() creates every table and adds any missing column, so it is safe to
+run on every startup and on databases created by older versions.
+
+    python backend/database.py stats      # global stats
+    python backend/database.py waitlist   # waitlist emails (personal data; never exposed over HTTP)
+"""
+import logging
 import os
-from datetime import datetime
+import sqlite3
+import sys
+
+import config
+from db import add_missing_columns, transaction, utcnow
+
+log = logging.getLogger("llmscanner.database")
+
+# Kept for older imports (`from database import DB_PATH`).
+DB_PATH = config.DB_PATH
 
 
-# ── Database Path ─────────────────────────────────────────────
-# Override with DB_PATH env var so Railway can use a persistent volume
-DB_PATH = os.getenv("DB_PATH", "results/llmscanner.db")
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS scans (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_id          TEXT UNIQUE NOT NULL,
+    user_id          TEXT,
+    target_name      TEXT NOT NULL,
+    target_type      TEXT DEFAULT 'simulation',
+    status           TEXT DEFAULT 'pending',
+    security_score   INTEGER DEFAULT 0,
+    total_attacks    INTEGER DEFAULT 0,
+    critical_count   INTEGER DEFAULT 0,
+    high_count       INTEGER DEFAULT 0,
+    medium_count     INTEGER DEFAULT 0,
+    low_count        INTEGER DEFAULT 0,
+    safe_count       INTEGER DEFAULT 0,
+    json_path        TEXT,
+    pdf_path         TEXT,
+    html_path        TEXT,
+    md_path          TEXT,
+    created_at       TEXT NOT NULL,
+    completed_at     TEXT,
+    duration_seconds INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS findings (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_id          TEXT NOT NULL,
+    category         TEXT NOT NULL,
+    attack           TEXT NOT NULL,
+    response         TEXT,
+    score            INTEGER DEFAULT 0,
+    severity         TEXT DEFAULT 'SAFE',
+    reason           TEXT,
+    behavior_changed INTEGER DEFAULT 0,
+    confidence       TEXT DEFAULT 'LOW',
+    FOREIGN KEY (scan_id) REFERENCES scans (scan_id)
+);
+CREATE TABLE IF NOT EXISTS waitlist (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    email      TEXT UNIQUE NOT NULL,
+    name       TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS global_stats (
+    id                  INTEGER PRIMARY KEY,
+    total_scans         INTEGER DEFAULT 0,
+    total_attacks_fired INTEGER DEFAULT 0,
+    total_criticals     INTEGER DEFAULT 0,
+    total_vulns_found   INTEGER DEFAULT 0,
+    avg_security_score  REAL DEFAULT 0,
+    last_updated        TEXT
+);
+CREATE TABLE IF NOT EXISTS users (
+    id                  TEXT PRIMARY KEY,
+    username            TEXT UNIQUE NOT NULL,
+    email               TEXT UNIQUE NOT NULL,
+    hashed_password     TEXT NOT NULL,
+    plan                TEXT DEFAULT 'free',
+    scans_count         INTEGER DEFAULT 0,
+    is_active           INTEGER DEFAULT 1,
+    created_at          TEXT NOT NULL,
+    reset_token         TEXT,
+    reset_token_expires TEXT
+);
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    token      TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS api_keys (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL,
+    name         TEXT,
+    key_hash     TEXT UNIQUE NOT NULL,
+    prefix       TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    last_used_at TEXT,
+    revoked      INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS stripe_events (
+    event_id     TEXT PRIMARY KEY,
+    type         TEXT,
+    processed_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS targets (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    api_key_enc TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS schedules (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    target_id   TEXT NOT NULL,
+    frequency   TEXT NOT NULL,
+    categories  TEXT,
+    alert_drop  INTEGER DEFAULT 5,
+    next_run_at TEXT NOT NULL,
+    last_run_at TEXT,
+    last_scan_id TEXT,
+    enabled     INTEGER DEFAULT 1,
+    created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS custom_prompts (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    category   TEXT NOT NULL,
+    prompt     TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS firewall_usage (
+    user_id TEXT NOT NULL,
+    day     TEXT NOT NULL,
+    count   INTEGER DEFAULT 0,
+    PRIMARY KEY (user_id, day)
+);
+CREATE TABLE IF NOT EXISTS memberships (
+    account_id TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    role       TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS team_invites (
+    id          TEXT PRIMARY KEY,
+    account_id  TEXT NOT NULL,
+    email       TEXT NOT NULL,
+    role        TEXT NOT NULL,
+    token_hash  TEXT UNIQUE NOT NULL,
+    invited_by  TEXT,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    accepted_at TEXT
+);
+CREATE TABLE IF NOT EXISTS leak_checks (
+    day   TEXT PRIMARY KEY,
+    count INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS finding_triage (
+    user_id     TEXT NOT NULL,
+    target_name TEXT NOT NULL,
+    finding_key TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    note        TEXT,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (user_id, target_name, finding_key)
+);
+CREATE TABLE IF NOT EXISTS gateway_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL,
+    target_id       TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    input_verdict   TEXT,
+    output_verdict  TEXT,
+    rules           TEXT,
+    latency_ms      INTEGER,
+    upstream_status INTEGER,
+    screened        INTEGER DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS remediation_usage (
+    user_id TEXT NOT NULL,
+    day     TEXT NOT NULL,
+    count   INTEGER DEFAULT 0,
+    PRIMARY KEY (user_id, day)
+);
+CREATE TABLE IF NOT EXISTS deleted_scan_usage (
+    user_id TEXT NOT NULL,
+    month   TEXT NOT NULL,          -- YYYY-MM of the deleted scans' created_at
+    count   INTEGER DEFAULT 0,
+    PRIMARY KEY (user_id, month)
+);
+CREATE TABLE IF NOT EXISTS share_links (
+    token_hash TEXT PRIMARY KEY,
+    scan_id    TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+"""
+
+# Columns added after the first release. add_missing_columns() is idempotent.
+SCAN_COLUMNS = {
+    "progress"         : "INTEGER DEFAULT 0",
+    "error_message"    : "TEXT",
+    "results_json"     : "TEXT",
+    "user_id"          : "TEXT",
+    "config_json"      : "TEXT",
+    "api_key_enc"      : "TEXT",
+    "checkpoint_json"  : "TEXT",
+    "completed_attacks": "INTEGER DEFAULT 0",
+    "current_category" : "TEXT",
+    "started_at"       : "TEXT",
+    "model"            : "TEXT",
+    "grade"            : "TEXT",
+    "error_count"      : "INTEGER DEFAULT 0",
+    "llm_calls"        : "INTEGER DEFAULT 0",
+    "target_id"        : "TEXT",
+    "schedule_id"      : "TEXT",
+    # model tokens billed to this server's keys (judge, plus the target for simulation scans)
+    "tokens_in"        : "INTEGER DEFAULT 0",
+    "tokens_out"       : "INTEGER DEFAULT 0",
+    "graded_by_rules"  : "INTEGER DEFAULT 0",
+    "created_by"       : "TEXT",       # the team member who started it, when not the account owner
+    # which API process runs the scan, and when it last said so (a rolling deploy has two for a while)
+    "runner_id"        : "TEXT",
+    "heartbeat_at"     : "TEXT",
+}
+USER_COLUMNS = {
+    "webhook_url"           : "TEXT",
+    "webhook_secret"        : "TEXT",
+    "stripe_customer_id"    : "TEXT",
+    "stripe_subscription_id": "TEXT",
+    "tokens_valid_after"    : "TEXT",
+    "verify_token"          : "TEXT",
+    "verify_token_expires"  : "TEXT",
+    "report_brand"          : "TEXT",
+    # Stripe's `created` of the last billing event applied: Stripe doesn't deliver events in order
+    "stripe_event_at"       : "INTEGER",
+    # "month" or "year": how the paid plan is billed (Pricing offers to switch to the other one)
+    "billing_interval"      : "TEXT",
+}
+OTHER_COLUMNS = {
+    # who created the key: a member's keys stop working when they leave the workspace or become a viewer
+    "api_keys"      : {"created_by": "TEXT"},
+    # who marked the finding (shown in the app and the evidence report)
+    "finding_triage": {"decided_by": "TEXT"},
+    # "<YYYY-MM>|<reason>" of the last skipped run the owner was emailed about (one email per reason a month)
+    "schedules"     : {"skip_noted": "TEXT"},
+}
 
 
-# ── Initialize Database ───────────────────────────────────────
 def init_db():
-    """
-    Creates the database and all tables if they don't exist.
-    Called once at startup.
-    """
-    db_dir = os.path.dirname(DB_PATH)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
+    """Creates all tables and runs migrations. Safe to call on every startup."""
+    folder = os.path.dirname(config.DB_PATH)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
 
-    conn = sqlite3.connect(DB_PATH)
-    # WAL + a busy timeout greatly reduce "database is locked" errors when a
-    # background scan writes while the API reads.
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    c    = conn.cursor()
+    raw = sqlite3.connect(config.DB_PATH)
+    try:
+        raw.execute("PRAGMA journal_mode=WAL")   # persistent setting; readers don't block the scan writer
+    finally:
+        raw.close()
 
-    # ── Scans Table ──────────────────────────────────────────
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS scans (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            scan_id         TEXT UNIQUE NOT NULL,
-            user_id         TEXT,
-            target_name     TEXT NOT NULL,
-            target_type     TEXT DEFAULT 'simulation',
-            status          TEXT DEFAULT 'pending',
-            security_score  INTEGER DEFAULT 0,
-            total_attacks   INTEGER DEFAULT 0,
-            critical_count  INTEGER DEFAULT 0,
-            high_count      INTEGER DEFAULT 0,
-            medium_count    INTEGER DEFAULT 0,
-            low_count       INTEGER DEFAULT 0,
-            safe_count      INTEGER DEFAULT 0,
-            json_path       TEXT,
-            pdf_path        TEXT,
-            html_path       TEXT,
-            md_path         TEXT,
-            created_at      TEXT NOT NULL,
-            completed_at    TEXT,
-            duration_seconds INTEGER DEFAULT 0
-        )
-    """)
+    with transaction() as conn:
+        conn.executescript(SCHEMA)
+        conn.execute("INSERT OR IGNORE INTO global_stats (id) VALUES (1)")
+        add_missing_columns(conn, "scans", SCAN_COLUMNS)
+        for table, wanted in OTHER_COLUMNS.items():
+            add_missing_columns(conn, table, wanted)
 
-    # ── Findings Table ────────────────────────────────────────
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS findings (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            scan_id          TEXT NOT NULL,
-            category         TEXT NOT NULL,
-            attack           TEXT NOT NULL,
-            response         TEXT,
-            score            INTEGER DEFAULT 0,
-            severity         TEXT DEFAULT 'SAFE',
-            reason           TEXT,
-            behavior_changed INTEGER DEFAULT 0,
-            confidence       TEXT DEFAULT 'LOW',
-            FOREIGN KEY (scan_id) REFERENCES scans (scan_id)
-        )
-    """)
+        had_verified = "email_verified" in {r[1] for r in conn.execute("PRAGMA table_info(users)")}
+        add_missing_columns(conn, "users", USER_COLUMNS)
+        if not had_verified:
+            conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+            conn.execute("UPDATE users SET email_verified = 1")   # existing accounts stay usable
 
-    # ── Waitlist Table ────────────────────────────────────────
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS waitlist (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            email      TEXT UNIQUE NOT NULL,
-            name       TEXT,
-            created_at TEXT NOT NULL
-        )
-    """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_scan_id ON findings (scan_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_created_at ON scans (created_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_user_id ON scans (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scans_status ON scans (status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_invites_account ON team_invites (account_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_gateway_user_time ON gateway_events (user_id, created_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_memberships_user ON memberships (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_targets_user ON targets (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_schedules_next ON schedules (enabled, next_run_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_prompts_user ON custom_prompts (user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_share_scan ON share_links (scan_id)")     # each finished scan's page
+        try:    # sign-up checks usernames case-insensitively; this makes the database enforce it too
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase ON users (lower(username))")
+        except sqlite3.IntegrityError:
+            log.warning("Usernames differing only in case exist; case-insensitive unique index not created")
 
-    # ── Stats Table ───────────────────────────────────────────
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS global_stats (
-            id                  INTEGER PRIMARY KEY,
-            total_scans         INTEGER DEFAULT 0,
-            total_attacks_fired INTEGER DEFAULT 0,
-            total_criticals     INTEGER DEFAULT 0,
-            total_vulns_found   INTEGER DEFAULT 0,
-            avg_security_score  REAL DEFAULT 0,
-            last_updated        TEXT
-        )
-    """)
-
-    # Insert default stats row
-    c.execute("""
-        INSERT OR IGNORE INTO global_stats (id) VALUES (1)
-    """)
-
-    # ── Indexes (speed up the hot lookups) ────────────────────
-    c.execute("CREATE INDEX IF NOT EXISTS idx_findings_scan_id ON findings (scan_id)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_scans_created_at ON scans (created_at)")
-    # NOTE: the idx_scans_user_id index is created in scan_db._migrate(), which
-    # runs after init_db() and guarantees the user_id column exists on old DBs
-    # that predate the ownership model.
-
-    conn.commit()
-    conn.close()
-    print(f"Database initialized : {DB_PATH}")
+    import auth_db
+    auth_db.migrate_tokens()
+    auth_db.seed_admin()
 
 
-# ── Save Scan ─────────────────────────────────────────────────
-def save_scan(scan_data):
-    """
-    Saves a completed scan to the database.
-    scan_data = dict from scans_database in api.py
-    """
-    conn = sqlite3.connect(DB_PATH)
-    c    = conn.cursor()
+# ── Housekeeping (the scheduler runs it every hour) ───────────
+def prune() -> dict:
+    """Deletes rows nothing reads any more: old gateway events and usage counters, expired share links,
+    refresh tokens and invites, and processed Stripe event ids past Stripe's retry window."""
+    from datetime import datetime, timedelta, timezone
 
-    summary = scan_data.get("results", {}).get("summary", {})
+    def ago(days: float) -> str:
+        return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
 
-    c.execute("""
-        INSERT OR REPLACE INTO scans (
-            scan_id, target_name, status,
-            security_score, total_attacks,
-            critical_count, high_count,
-            medium_count, low_count, safe_count,
-            json_path, pdf_path, html_path, md_path,
-            created_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        scan_data["scan_id"],
-        scan_data["target_name"],
-        scan_data["status"],
-        summary.get("security_score", 0),
-        summary.get("total_attacks", 0),
-        summary.get("critical", 0),
-        summary.get("high", 0),
-        summary.get("medium", 0),
-        summary.get("low", 0),
-        summary.get("safe", 0),
-        scan_data.get("json_path"),
-        scan_data.get("pdf_path"),
-        scan_data.get("html_path"),
-        scan_data.get("md_path"),
-        scan_data.get("created_at"),
-        datetime.now().isoformat()
-    ))
+    def day(days: float) -> str:               # the usage tables key on YYYY-MM-DD
+        return ago(days)[:10]
 
-    # Save individual findings
-    results = scan_data.get("results", {}).get("results", [])
-    for r in results:
-        c.execute("""
-            INSERT INTO findings (
-                scan_id, category, attack, response,
-                score, severity, reason,
-                behavior_changed, confidence
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            scan_data["scan_id"],
-            r.get("category", ""),
-            r.get("attack", "")[:500],
-            r.get("response", "")[:500],
-            r.get("score", 0),
-            r.get("severity", "SAFE"),
-            r.get("reason", "")[:300],
-            1 if r.get("behavior_changed") else 0,
-            r.get("confidence", "LOW")
-        ))
-
-    # Update global stats
-    c.execute("""
-        UPDATE global_stats SET
-            total_scans         = total_scans + 1,
-            total_attacks_fired = total_attacks_fired + ?,
-            total_criticals     = total_criticals + ?,
-            total_vulns_found   = total_vulns_found + ?,
-            last_updated        = ?
-        WHERE id = 1
-    """, (
-        summary.get("total_attacks", 0),
-        summary.get("critical", 0),
-        summary.get("critical", 0) + summary.get("high", 0),
-        datetime.now().isoformat()
-    ))
-
-    # Update average score
-    c.execute("""
-        UPDATE global_stats SET
-            avg_security_score = (
-                SELECT AVG(security_score) FROM scans
-                WHERE status = 'complete'
-            )
-        WHERE id = 1
-    """)
-
-    conn.commit()
-    conn.close()
+    steps = {
+        "gateway_events"   : ("DELETE FROM gateway_events WHERE created_at < ?", ago(35)),
+        "share_links"      : ("DELETE FROM share_links WHERE expires_at < ?", ago(0)),
+        "refresh_tokens"   : ("DELETE FROM refresh_tokens WHERE expires_at < ?", ago(0)),
+        "team_invites"     : ("DELETE FROM team_invites WHERE expires_at < ?", ago(30)),
+        "stripe_events"    : ("DELETE FROM stripe_events WHERE processed_at < ?", ago(90)),
+        "firewall_usage"   : ("DELETE FROM firewall_usage WHERE day < ?", day(35)),
+        "remediation_usage": ("DELETE FROM remediation_usage WHERE day < ?", day(35)),
+        "deleted_scan_usage": ("DELETE FROM deleted_scan_usage WHERE month < ?", ago(62)[:7]),
+    }
+    with transaction() as conn:
+        return {table: conn.execute(sql, (cutoff,)).rowcount for table, (sql, cutoff) in steps.items()}
 
 
-# ── Get All Scans ─────────────────────────────────────────────
-def get_all_scans(limit=50, offset=0):
-    """Returns all scans from database."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-
-    c.execute("""
-        SELECT * FROM scans
-        ORDER BY created_at DESC
-        LIMIT ? OFFSET ?
-    """, (limit, offset))
-
-    rows = [dict(row) for row in c.fetchall()]
-    conn.close()
-    return rows
+# ── Waitlist and stats (admin CLI) ────────────────────────────
+def add_to_waitlist(email, name=None):
+    try:
+        with transaction() as conn:
+            conn.execute("INSERT INTO waitlist (email, name, created_at) VALUES (?, ?, ?)",
+                         (email.strip().lower(), name, utcnow()))
+        return True
+    except sqlite3.IntegrityError:
+        return False
 
 
-# ── Get Scan By ID ────────────────────────────────────────────
-def get_scan_by_id(scan_id):
-    """Returns a specific scan with its findings."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM scans WHERE scan_id = ?", (scan_id,))
-    scan = c.fetchone()
-
-    if not scan:
-        conn.close()
-        return None
-
-    scan = dict(scan)
-
-    # Get findings
-    c.execute("""
-        SELECT * FROM findings
-        WHERE scan_id = ?
-        ORDER BY score DESC
-    """, (scan_id,))
-
-    scan["findings"] = [dict(row) for row in c.fetchall()]
-    conn.close()
-    return scan
+def get_waitlist():
+    with transaction() as conn:
+        return [dict(r) for r in conn.execute("SELECT * FROM waitlist ORDER BY created_at DESC")]
 
 
-# ── Search Scans ──────────────────────────────────────────────
-def search_scans(query):
-    """Search scans by target name."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-
-    c.execute("""
-        SELECT * FROM scans
-        WHERE target_name LIKE ?
-        ORDER BY created_at DESC
-    """, (f"%{query}%",))
-
-    rows = [dict(row) for row in c.fetchall()]
-    conn.close()
-    return rows
-
-
-# ── Get Global Stats ──────────────────────────────────────────
 def get_global_stats():
-    """Returns global statistics."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM global_stats WHERE id = 1")
-    stats = dict(c.fetchone() or {})
-
-    # Most vulnerable category
-    c.execute("""
-        SELECT category, AVG(score) as avg_score
-        FROM findings
-        GROUP BY category
-        ORDER BY avg_score DESC
-        LIMIT 1
-    """)
-    row = c.fetchone()
-    stats["most_vulnerable_category"] = row["category"] if row else "N/A"
-
-    # Most common severity
-    c.execute("""
-        SELECT severity, COUNT(*) as count
-        FROM findings
-        GROUP BY severity
-        ORDER BY count DESC
-        LIMIT 1
-    """)
-    row = c.fetchone()
-    stats["most_common_severity"] = row["severity"] if row else "N/A"
-
-    conn.close()
+    with transaction() as conn:
+        stats = dict(conn.execute("SELECT * FROM global_stats WHERE id = 1").fetchone() or {})
+        row = conn.execute("SELECT category, AVG(score) AS avg_score FROM findings "
+                           "GROUP BY category ORDER BY avg_score DESC LIMIT 1").fetchone()
+        stats["most_vulnerable_category"] = row["category"] if row else "N/A"
     return stats
 
 
-# ── Add To Waitlist ───────────────────────────────────────────
-def add_to_waitlist(email, name=None):
-    """Adds email to waitlist."""
-    conn = sqlite3.connect(DB_PATH)
-    c    = conn.cursor()
-
-    try:
-        c.execute("""
-            INSERT INTO waitlist (email, name, created_at)
-            VALUES (?, ?, ?)
-        """, (email, name, datetime.now().isoformat()))
-        conn.commit()
-        conn.close()
-        return True
-    except sqlite3.IntegrityError:
-        conn.close()
-        return False  # Email already exists
-
-
-# ── Get Waitlist ──────────────────────────────────────────────
-def get_waitlist():
-    """Returns all waitlist entries."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-
-    c.execute("SELECT * FROM waitlist ORDER BY created_at DESC")
-    rows = [dict(row) for row in c.fetchall()]
-    conn.close()
-    return rows
-
-
-# ── Delete Scan ───────────────────────────────────────────────
-def delete_scan_from_db(scan_id):
-    """Deletes a scan and its findings."""
-    conn = sqlite3.connect(DB_PATH)
-    c    = conn.cursor()
-
-    c.execute("DELETE FROM findings WHERE scan_id = ?", (scan_id,))
-    c.execute("DELETE FROM scans WHERE scan_id = ?",    (scan_id,))
-
-    conn.commit()
-    conn.close()
-
-
-# ── Print Stats ───────────────────────────────────────────────
 def print_stats():
-    """Prints global stats in terminal."""
     stats = get_global_stats()
-
-    print("\n" + "=" * 50)
-    print("  LLM SCANNER — DATABASE STATS")
-    print("=" * 50)
+    print("LLM Scanner database stats")
     print(f"  Total scans         : {stats.get('total_scans', 0)}")
     print(f"  Total attacks fired : {stats.get('total_attacks_fired', 0)}")
     print(f"  Total criticals     : {stats.get('total_criticals', 0)}")
-    print(f"  Avg security score  : {round(stats.get('avg_security_score', 0), 1)}%")
+    print(f"  Avg security score  : {round(stats.get('avg_security_score') or 0, 1)}")
     print(f"  Most vulnerable     : {stats.get('most_vulnerable_category', 'N/A')}")
-    print("=" * 50)
 
 
-# ── Import Existing JSON Results ──────────────────────────────
-def import_existing_results():
-    """
-    Imports all existing JSON scan results into the database.
-    Run this once to migrate existing data.
-    """
-    results_dir = "results"
-    imported    = 0
-
-    for filename in os.listdir(results_dir):
-        if not filename.endswith(".json"):
-            continue
-        if "checkpoint" in filename or "generated" in filename:
-            continue
-        if "discovery" in filename or "hardening" in filename:
-            continue
-
-        path = os.path.join(results_dir, filename)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            if "summary" not in data:
-                continue
-
-            scan_id = filename.replace(".json", "")
-            fake_scan = {
-                "scan_id"    : scan_id,
-                "target_name": data.get("scan_date", "Imported Scan"),
-                "status"     : "complete",
-                "results"    : data,
-                "created_at" : data.get("scan_date", datetime.now().isoformat()),
-                "json_path"  : path,
-                "pdf_path"   : path.replace(".json", ".pdf"),
-                "html_path"  : path.replace(".json", ".html"),
-                "md_path"    : path.replace(".json", ".md"),
-            }
-
-            save_scan(fake_scan)
-            imported += 1
-            print(f"  Imported : {filename}")
-
-        except Exception as e:
-            print(f"  Skipped  : {filename} ({e})")
-
-    print(f"\nImported {imported} scan results")
-
-
-# ── CLI ───────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import sys
-
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     init_db()
-
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "stats":
-            print_stats()
-        elif sys.argv[1] == "import":
-            import_existing_results()
-        elif sys.argv[1] == "waitlist":
-            entries = get_waitlist()
-            print(f"\nWaitlist ({len(entries)} entries) :")
-            for e in entries:
-                print(f"  {e['email']} — {e['created_at']}")
+    command = sys.argv[1] if len(sys.argv) > 1 else ""
+    if command == "stats":
+        print_stats()
+    elif command == "waitlist":
+        entries = get_waitlist()
+        print(f"Waitlist ({len(entries)} entries):")
+        for entry in entries:
+            print(f"  {entry['email']} - {entry['created_at']}")
     else:
-        print("Usage :")
-        print("  python database.py stats    → Show global stats")
-        print("  python database.py import   → Import existing JSON results")
-        print("  python database.py waitlist → Show waitlist")
-        
+        print("Usage: python backend/database.py [stats|waitlist]")

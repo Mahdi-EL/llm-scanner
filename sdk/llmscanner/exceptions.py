@@ -1,33 +1,37 @@
-"""
-LLM Scanner SDK — Custom Exceptions
-"""
+"""LLM Scanner SDK: exceptions."""
 
 
 class LLMScannerError(Exception):
-    """Base exception for LLM Scanner SDK."""
-    pass
+    """Base class for every SDK error. `status` is the HTTP status, if any."""
+
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
 
 
 class APIKeyError(LLMScannerError):
-    """Raised when API key is missing or invalid."""
-    pass
+    """The API key is missing, invalid or revoked."""
 
 
-class ScanError(LLMScannerError):
-    """Raised when a scan fails."""
-    pass
+class QuotaError(LLMScannerError):
+    """The plan's monthly scan limit is used up."""
 
 
 class RateLimitError(LLMScannerError):
-    """Raised when Groq rate limit is hit."""
-    pass
+    """Too many requests, or the scanner is at capacity. Retry later."""
+
+
+class ScanError(LLMScannerError):
+    """The scan failed or was cancelled."""
+
+
+class WaitTimeout(ScanError):
+    """wait() gave up before the scan finished; the scan itself is still running."""
 
 
 class TargetError(LLMScannerError):
-    """Raised when target connection fails."""
-    pass
+    """The target was rejected (bad URL, blocked address) or couldn't be reached."""
 
 
 class ReportError(LLMScannerError):
-    """Raised when report generation fails."""
-    pass
+    """A report couldn't be downloaded."""

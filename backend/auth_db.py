@@ -1,290 +1,360 @@
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
+"""Users, passwords, sessions, API keys and webhooks.
 
-import sqlite3
+Security notes:
+- Passwords use bcrypt (legacy SHA-256 hashes are upgraded at login).
+- Refresh, reset and email-verification tokens are stored as SHA-256 hashes,
+  so a leaked database doesn't hand out working sessions.
+- Changing or resetting a password revokes every refresh token and sets
+  tokens_valid_after, which makes older access tokens invalid at once.
+- Emails are stored lower-case and compared case-insensitively.
+"""
 import hashlib
+import hmac
 import secrets
+import sqlite3
 import uuid
-import bcrypt as _bcrypt
-from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from database import DB_PATH
+
+import bcrypt as _bcrypt
+
+import config
+from db import parse_ts, transaction, utcnow
+
+API_KEY_PREFIX = "llmsk_"
 
 
-# ── Password hashing (bcrypt direct — passlib dropped for bcrypt 4+/5+ compat) ─
+# ── Hashing ───────────────────────────────────────────────────
 def _hash(password: str) -> str:
     return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
+
 
 def verify_password(plain: str, hashed: str) -> bool:
     # Transparent migration: legacy SHA-256 hashes are 64-char hex strings
     if len(hashed) == 64 and not hashed.startswith("$"):
-        return hashlib.sha256(plain.encode()).hexdigest() == hashed
-    return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+        return hmac.compare_digest(hashlib.sha256(plain.encode()).hexdigest(), hashed)
+    encoded = plain.encode("utf-8")
+    if len(encoded) > 72:      # bcrypt>=5 raises instead of truncating
+        return False
+    return _bcrypt.checkpw(encoded, hashed.encode("utf-8"))
+
 
 def needs_rehash(hashed: str) -> bool:
     """True if password was stored as SHA-256 and should be upgraded to bcrypt."""
     return len(hashed) == 64 and not hashed.startswith("$")
 
 
-# ── Connection factory ─────────────────────────────────────────
-@contextmanager
-def _db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-# ── Schema ────────────────────────────────────────────────────
+def _expired(stamp: Optional[str]) -> bool:
+    return not stamp or parse_ts(stamp) < datetime.now(timezone.utc)
+
+
+def _in(hours: float = 0, days: float = 0) -> str:
+    return (datetime.now(timezone.utc) + timedelta(hours=hours, days=days)).isoformat(timespec="seconds")
+
+
+# ── Startup tasks (called from database.init_db) ──────────────
 def init_users_table():
-    with _db() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id                  TEXT PRIMARY KEY,
-                username            TEXT UNIQUE NOT NULL,
-                email               TEXT UNIQUE NOT NULL,
-                hashed_password     TEXT NOT NULL,
-                plan                TEXT DEFAULT 'free',
-                scans_count         INTEGER DEFAULT 0,
-                is_active           INTEGER DEFAULT 1,
-                created_at          TEXT NOT NULL,
-                reset_token         TEXT,
-                reset_token_expires TEXT
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS refresh_tokens (
-                token      TEXT PRIMARY KEY,
-                user_id    TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        """)
-        # API keys for programmatic / CI access (store only the hash)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS api_keys (
-                id           TEXT PRIMARY KEY,
-                user_id      TEXT NOT NULL,
-                name         TEXT,
-                key_hash     TEXT UNIQUE NOT NULL,
-                prefix       TEXT NOT NULL,
-                created_at   TEXT NOT NULL,
-                last_used_at TEXT,
-                revoked      INTEGER DEFAULT 0
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys (user_id)")
-
-        # Migration: per-user webhook URL (notifications)
-        ucols = {row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
-        if "webhook_url" not in ucols:
-            conn.execute("ALTER TABLE users ADD COLUMN webhook_url TEXT")
-
-        # Seed default admin if absent — password from env or secure default
-        import os as _os
-        admin_pwd = _os.getenv("ADMIN_PASSWORD", "")
-        if not admin_pwd:
-            return  # No admin seeded unless ADMIN_PASSWORD env var is set
-        exists = conn.execute(
-            "SELECT id FROM users WHERE username = ?", ("admin",)
-        ).fetchone()
-        if not exists:
-            conn.execute("""
-                INSERT INTO users (id, username, email, hashed_password, plan, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (
-                str(uuid.uuid4()),
-                "admin",
-                _os.getenv("ADMIN_EMAIL", "admin@llmscanner.com"),
-                _hash(admin_pwd),
-                "enterprise",
-                datetime.now().isoformat(),
-            ))
+    """Kept for older callers: the schema now lives in database.init_db()."""
+    import database
+    database.init_db()
 
 
-# ── User CRUD ─────────────────────────────────────────────────
-def create_user(username: str, email: str, password: str) -> dict:
-    uid = str(uuid.uuid4())
-    try:
-        with _db() as conn:
-            conn.execute("""
-                INSERT INTO users (id, username, email, hashed_password, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (uid, username, email, _hash(password), datetime.now().isoformat()))
-        return {"success": True, "user_id": uid}
-    except sqlite3.IntegrityError as e:
-        field = "username" if "username" in str(e) else "email"
-        return {"success": False, "error": f"This {field} is already taken"}
+def migrate_tokens():
+    """Hashes refresh tokens saved in plain text by older versions (no one is logged out)."""
+    with transaction() as conn:
+        rows = conn.execute("SELECT token FROM refresh_tokens").fetchall()
+        for row in rows:
+            raw = row["token"]
+            if len(raw) != 64 or any(c not in "0123456789abcdef" for c in raw):
+                conn.execute("UPDATE OR IGNORE refresh_tokens SET token = ? WHERE token = ?",
+                             (token_hash(raw), raw))
+        # Plain-text reset tokens can't be migrated safely; they expire within an hour anyway.
+        conn.execute("UPDATE users SET reset_token = NULL, reset_token_expires = NULL "
+                     "WHERE reset_token IS NOT NULL AND length(reset_token) != 64")
+
+
+def seed_admin():
+    """Creates the 'admin' user once, only when ADMIN_PASSWORD is set."""
+    import os
+    password = os.getenv("ADMIN_PASSWORD", "")
+    if not password:
+        return
+    with transaction() as conn:
+        if conn.execute("SELECT 1 FROM users WHERE username = 'admin'").fetchone():
+            return
+        conn.execute(
+            "INSERT INTO users (id, username, email, hashed_password, plan, created_at, email_verified) "
+            "VALUES (?, 'admin', ?, ?, 'enterprise', ?, 1)",
+            (str(uuid.uuid4()), os.getenv("ADMIN_EMAIL", "admin@llmscanner.com").lower(),
+             _hash(password), utcnow()))
+
+
+# ── Users ─────────────────────────────────────────────────────
+def create_user(username: str, email: str, password: str, verified: bool = False) -> dict:
+    username, email = username.strip(), email.strip().lower()
+    with transaction() as conn:
+        if conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?)", (username,)).fetchone():
+            return {"success": False, "error": "This username is already taken"}
+        if conn.execute("SELECT 1 FROM users WHERE lower(email) = ?", (email,)).fetchone():
+            return {"success": False, "error": "This email is already registered"}
+        uid = str(uuid.uuid4())
+        try:
+            conn.execute(
+                "INSERT INTO users (id, username, email, hashed_password, created_at, email_verified) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (uid, username, email, _hash(password), utcnow(), 1 if verified else 0))
+        except sqlite3.IntegrityError:      # lost a race with a simultaneous sign-up
+            return {"success": False, "error": "This username or email is already registered"}
+    return {"success": True, "user_id": uid}
 
 
 def _get_user(where: str, value: str) -> Optional[dict]:
-    with _db() as conn:
-        row = conn.execute(
-            f"SELECT * FROM users WHERE {where} = ? AND is_active = 1", (value,)
-        ).fetchone()
+    with transaction() as conn:
+        row = conn.execute(f"SELECT * FROM users WHERE {where} AND is_active = 1", (value,)).fetchone()
         return dict(row) if row else None
 
 
 def get_user_by_username(username: str) -> Optional[dict]:
-    return _get_user("username", username)
+    return _get_user("username = ?", username) or _get_user("lower(username) = lower(?)", username)
+
 
 def get_user_by_id(user_id: str) -> Optional[dict]:
-    return _get_user("id", user_id)
+    return _get_user("id = ?", user_id) if user_id else None
+
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    return _get_user("email", email)
+    return _get_user("lower(email) = lower(?)", email.strip())
+
+
+def get_user_for_login(identifier: str) -> Optional[dict]:
+    """Login accepts a username or an email address."""
+    identifier = identifier.strip()
+    if "@" in identifier:
+        return get_user_by_email(identifier)
+    return get_user_by_username(identifier)
+
+
+def usernames(user_ids) -> dict:
+    """{user id: username} for the ids that still exist."""
+    ids = [i for i in set(user_ids) if i][:500]
+    if not ids:
+        return {}
+    with transaction() as conn:
+        rows = conn.execute(f"SELECT id, username FROM users WHERE id IN ({','.join('?' * len(ids))})", ids)
+        return {r["id"]: r["username"] for r in rows}
+
+
+def get_user_by_stripe_customer(customer_id: str) -> Optional[dict]:
+    return _get_user("stripe_customer_id = ?", customer_id) if customer_id else None
 
 
 def upgrade_password(user_id: str, new_bcrypt_hash: str):
-    """Replaces a legacy SHA-256 hash with a bcrypt one (called after successful login)."""
-    with _db() as conn:
-        conn.execute(
-            "UPDATE users SET hashed_password = ? WHERE id = ?",
-            (new_bcrypt_hash, user_id)
-        )
+    """Stores a new hash without ending sessions (used for the SHA-256 → bcrypt upgrade)."""
+    with transaction() as conn:
+        conn.execute("UPDATE users SET hashed_password = ? WHERE id = ?", (new_bcrypt_hash, user_id))
+
+
+def set_password(user_id: str, new_password: str):
+    """Changes a password and signs the user out everywhere."""
+    with transaction() as conn:
+        conn.execute("UPDATE users SET hashed_password = ?, reset_token = NULL, "
+                     "reset_token_expires = NULL, tokens_valid_after = ? WHERE id = ?",
+                     (_hash(new_password), utcnow(), user_id))
+        conn.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (user_id,))
 
 
 def increment_scan_count(user_id: str):
-    with _db() as conn:
-        conn.execute(
-            "UPDATE users SET scans_count = scans_count + 1 WHERE id = ?", (user_id,)
-        )
+    with transaction() as conn:
+        conn.execute("UPDATE users SET scans_count = scans_count + 1 WHERE id = ?", (user_id,))
 
 
-def update_plan(user_id: str, plan: str):
-    with _db() as conn:
-        conn.execute(
-            "UPDATE users SET plan = ? WHERE id = ?", (plan, user_id)
-        )
+def update_plan(user_id: str, plan: str, interval: Optional[str] = None):
+    """interval: "month" or "year" for a paid plan (kept as it was when not given); Free clears it."""
+    with transaction() as conn:
+        conn.execute("UPDATE users SET plan = ? WHERE id = ?", (plan, user_id))
+        if plan == "free" or interval:
+            conn.execute("UPDATE users SET billing_interval = ? WHERE id = ?",
+                         (None if plan == "free" else interval, user_id))
 
 
-# ── Password Reset ────────────────────────────────────────────
+def set_stripe_ids(user_id: str, customer_id: Optional[str] = None,
+                   subscription_id: Optional[str] = None, event_at: Optional[int] = None):
+    """event_at: Stripe's `created` of the event being applied (later events are compared with it)."""
+    with transaction() as conn:
+        if customer_id:
+            conn.execute("UPDATE users SET stripe_customer_id = ? WHERE id = ?", (customer_id, user_id))
+        if subscription_id is not None:
+            conn.execute("UPDATE users SET stripe_subscription_id = ? WHERE id = ?",
+                         (subscription_id or None, user_id))
+        if event_at:
+            conn.execute("UPDATE users SET stripe_event_at = MAX(COALESCE(stripe_event_at, 0), ?) WHERE id = ?",
+                         (int(event_at), user_id))
+
+
+def mark_email_verified(user_id: str):
+    with transaction() as conn:
+        conn.execute("UPDATE users SET email_verified = 1, verify_token = NULL, "
+                     "verify_token_expires = NULL WHERE id = ?", (user_id,))
+
+
+def delete_user(user_id: str):
+    """Removes the account and everything attached to it except scans (deleted by the caller)."""
+    with transaction() as conn:
+        for table in ("api_keys", "refresh_tokens", "targets", "schedules", "custom_prompts", "share_links",
+                      "firewall_usage", "remediation_usage", "gateway_events", "finding_triage",
+                      "deleted_scan_usage"):
+            conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
+# ── Password reset ────────────────────────────────────────────
 def create_reset_token(email: str) -> Optional[str]:
     user = get_user_by_email(email)
     if not user:
         return None
-    token   = secrets.token_urlsafe(32)
-    expires = (datetime.now() + timedelta(hours=1)).isoformat()
-    with _db() as conn:
-        conn.execute("""
-            UPDATE users SET reset_token = ?, reset_token_expires = ?
-            WHERE email = ?
-        """, (token, expires, email))
+    token = secrets.token_urlsafe(32)
+    with transaction() as conn:
+        conn.execute("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?",
+                     (token_hash(token), _in(hours=1), user["id"]))
     return token
 
 
 def consume_reset_token(token: str, new_password: str) -> bool:
-    with _db() as conn:
-        row = conn.execute("""
-            SELECT id, reset_token_expires FROM users WHERE reset_token = ?
-        """, (token,)).fetchone()
-        if not row:
-            return False
-        if datetime.fromisoformat(row["reset_token_expires"]) < datetime.now():
-            return False
-        conn.execute("""
-            UPDATE users
-            SET hashed_password = ?, reset_token = NULL, reset_token_expires = NULL
-            WHERE id = ?
-        """, (_hash(new_password), row["id"]))
+    with transaction() as conn:
+        row = conn.execute("SELECT id, reset_token_expires FROM users WHERE reset_token = ?",
+                           (token_hash(token),)).fetchone()
+    if not row or _expired(row["reset_token_expires"]):
+        return False
+    set_password(row["id"], new_password)
+    mark_email_verified(row["id"])      # the link came by email, so the address is theirs
     return True
 
 
-# ── Refresh Tokens ────────────────────────────────────────────
+# ── Email verification ────────────────────────────────────────
+def create_verify_token(user_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    with transaction() as conn:
+        conn.execute("UPDATE users SET verify_token = ?, verify_token_expires = ? WHERE id = ?",
+                     (token_hash(token), _in(days=2), user_id))
+    return token
+
+
+def consume_verify_token(token: str) -> Optional[str]:
+    with transaction() as conn:
+        row = conn.execute("SELECT id, verify_token_expires FROM users WHERE verify_token = ?",
+                           (token_hash(token),)).fetchone()
+    if not row or _expired(row["verify_token_expires"]):
+        return None
+    mark_email_verified(row["id"])
+    return row["id"]
+
+
+# ── Refresh tokens (rotated on every use) ─────────────────────
 def create_refresh_token(user_id: str) -> str:
-    token   = secrets.token_urlsafe(64)
-    expires = (datetime.now() + timedelta(days=30)).isoformat()
-    with _db() as conn:
-        conn.execute("""
-            INSERT INTO refresh_tokens (token, user_id, expires_at, created_at)
-            VALUES (?, ?, ?, ?)
-        """, (token, user_id, expires, datetime.now().isoformat()))
+    token = secrets.token_urlsafe(48)
+    with transaction() as conn:
+        conn.execute("INSERT INTO refresh_tokens (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+                     (token_hash(token), user_id, _in(days=config.REFRESH_TOKEN_DAYS), utcnow()))
+        # Housekeeping: drop this user's expired tokens.
+        conn.execute("DELETE FROM refresh_tokens WHERE user_id = ? AND expires_at < ?", (user_id, utcnow()))
     return token
 
 
 def consume_refresh_token(token: str) -> Optional[str]:
-    """Validates + deletes refresh token, returns user_id or None."""
-    with _db() as conn:
-        row = conn.execute("""
-            SELECT user_id, expires_at FROM refresh_tokens WHERE token = ?
-        """, (token,)).fetchone()
+    """Validates and deletes a refresh token; returns its user_id or None."""
+    hashed = token_hash(token)
+    with transaction() as conn:
+        row = conn.execute("SELECT user_id, expires_at FROM refresh_tokens WHERE token = ?",
+                           (hashed,)).fetchone()
         if not row:
             return None
-        if datetime.fromisoformat(row["expires_at"]) < datetime.now():
-            return None
-        conn.execute("DELETE FROM refresh_tokens WHERE token = ?", (token,))
-        return row["user_id"]
+        conn.execute("DELETE FROM refresh_tokens WHERE token = ?", (hashed,))
+    if _expired(row["expires_at"]):
+        return None
+    return row["user_id"]
 
 
-# ── API Keys (programmatic / CI access) ───────────────────────
-API_KEY_PREFIX = "llmsk_"
-
-def _hash_api_key(key: str) -> str:
-    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+def revoke_refresh_token(token: str):
+    with transaction() as conn:
+        conn.execute("DELETE FROM refresh_tokens WHERE token = ?", (token_hash(token),))
 
 
-def create_api_key(user_id: str, name: str = "") -> dict:
-    """Generates a new API key. Returns the FULL key once (never stored)."""
+def revoke_all_sessions(user_id: str):
+    with transaction() as conn:
+        conn.execute("DELETE FROM refresh_tokens WHERE user_id = ?", (user_id,))
+        conn.execute("UPDATE users SET tokens_valid_after = ? WHERE id = ?", (utcnow(), user_id))
+
+
+# ── API keys (programmatic / CI access) ───────────────────────
+def create_api_key(user_id: str, name: str = "", created_by: Optional[str] = None) -> dict:
+    """Generates a new API key for an account. Returns the FULL key once (only its hash is stored).
+    created_by: the person who made it (an admin of a team workspace, or the owner)."""
     raw    = API_KEY_PREFIX + secrets.token_urlsafe(32)
     key_id = str(uuid.uuid4())
-    with _db() as conn:
-        conn.execute("""
-            INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (key_id, user_id, name or "API key", _hash_api_key(raw),
-              raw[:14], datetime.now().isoformat()))
-    return {"id": key_id, "name": name or "API key", "key": raw, "prefix": raw[:14]}
+    label  = (name or "API key").strip()[:60] or "API key"
+    with transaction() as conn:
+        conn.execute("INSERT INTO api_keys (id, user_id, name, key_hash, prefix, created_at, created_by) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                     (key_id, user_id, label, token_hash(raw), raw[:14], utcnow(), created_by or user_id))
+    return {"id": key_id, "name": label, "key": raw, "prefix": raw[:14]}
 
 
 def get_user_by_api_key(key: str) -> Optional[str]:
     """Returns the owning user_id for a valid, non-revoked key (and stamps usage)."""
     if not key or not key.startswith(API_KEY_PREFIX):
         return None
-    with _db() as conn:
-        row = conn.execute(
-            "SELECT id, user_id FROM api_keys WHERE key_hash = ? AND revoked = 0",
-            (_hash_api_key(key),),
-        ).fetchone()
+    with transaction() as conn:
+        row = conn.execute("SELECT id, user_id, last_used_at FROM api_keys "
+                           "WHERE key_hash = ? AND revoked = 0", (token_hash(key),)).fetchone()
         if not row:
             return None
-        conn.execute("UPDATE api_keys SET last_used_at = ? WHERE id = ?",
-                     (datetime.now().isoformat(), row["id"]))
+        # Update the timestamp at most once a minute to avoid a write per request.
+        if not row["last_used_at"] or \
+                (datetime.now(timezone.utc) - parse_ts(row["last_used_at"])).total_seconds() > 60:
+            conn.execute("UPDATE api_keys SET last_used_at = ? WHERE id = ?", (utcnow(), row["id"]))
         return row["user_id"]
 
 
 def list_api_keys(user_id: str) -> list:
-    """Lists the user's keys WITHOUT the secret (prefix only)."""
-    with _db() as conn:
-        rows = conn.execute("""
-            SELECT id, name, prefix, created_at, last_used_at, revoked
-            FROM api_keys WHERE user_id = ? ORDER BY created_at DESC
-        """, (user_id,)).fetchall()
+    """Lists the user's keys WITHOUT the secret (prefix only), with who created each one."""
+    with transaction() as conn:
+        rows = conn.execute("SELECT k.id, k.name, k.prefix, k.created_at, k.last_used_at, k.revoked, "
+                            "COALESCE(k.created_by, k.user_id) AS created_by, u.username AS created_by_name "
+                            "FROM api_keys k LEFT JOIN users u ON u.id = COALESCE(k.created_by, k.user_id) "
+                            "WHERE k.user_id = ? ORDER BY k.created_at DESC", (user_id,)).fetchall()
     return [dict(r) for r in rows]
 
 
 def revoke_api_key(user_id: str, key_id: str) -> bool:
-    with _db() as conn:
-        cur = conn.execute(
-            "UPDATE api_keys SET revoked = 1 WHERE id = ? AND user_id = ?",
-            (key_id, user_id),
-        )
+    with transaction() as conn:
+        cur = conn.execute("UPDATE api_keys SET revoked = 1 WHERE id = ? AND user_id = ?", (key_id, user_id))
         return cur.rowcount > 0
 
 
+def set_report_brand(user_id: str, brand: Optional[str]):
+    with transaction() as conn:
+        conn.execute("UPDATE users SET report_brand = ? WHERE id = ?", (brand or None, user_id))
+
+
 # ── Per-user webhook ──────────────────────────────────────────
-def update_webhook(user_id: str, url: Optional[str]):
-    with _db() as conn:
-        conn.execute("UPDATE users SET webhook_url = ? WHERE id = ?", (url, user_id))
+def update_webhook(user_id: str, url: Optional[str]) -> Optional[str]:
+    """Sets or clears the webhook URL. Returns the signing secret (created on first use)."""
+    with transaction() as conn:
+        row = conn.execute("SELECT webhook_secret FROM users WHERE id = ?", (user_id,)).fetchone()
+        secret = row["webhook_secret"] if row and row["webhook_secret"] else None
+        if url and not secret:
+            secret = "whsec_" + secrets.token_urlsafe(24)
+        conn.execute("UPDATE users SET webhook_url = ?, webhook_secret = ? WHERE id = ?",
+                     (url, secret, user_id))
+    return secret
 
 
-# ── Init on import ────────────────────────────────────────────
-init_users_table()
+def rotate_webhook_secret(user_id: str) -> str:
+    secret = "whsec_" + secrets.token_urlsafe(24)
+    with transaction() as conn:
+        conn.execute("UPDATE users SET webhook_secret = ? WHERE id = ?", (secret, user_id))
+    return secret

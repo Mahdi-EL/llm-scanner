@@ -312,7 +312,7 @@
 .ed-scan-stat b { display:block; font-size:22px; font-weight:800; letter-spacing:-0.03em; }
 .ed-scan-stat span { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-3); }
 .ed-scan-stat.ed-accent { background:var(--blue); border-color:var(--blue); color:#fff; }
-.ed-scan-stat.ed-accent span { color:rgba(17,24,39,0.7); }
+.ed-scan-stat.ed-accent span { color:rgba(255,255,255,0.8); }
 
 /* MARQUEE */
 .ed-marquee-wrap { border-top:1px solid var(--edge); border-bottom:1px solid var(--edge); background:var(--ink); padding:18px 0; }
@@ -515,7 +515,7 @@ body:has(.landing-editorial)::before {
   --paper-2 : #f5f6f9;
   --ink     : #14161c;
   --ink-2   : #545b68;
-  --ink-3   : #8b93a3;
+  --ink-3   : #646b78;
   --line    : rgba(17,24,39,0.09);
   --edge    : rgba(37,99,235,0.22);
   --blue    : #2563eb;
@@ -567,14 +567,14 @@ body:has(.landing-editorial)::before {
   color: var(--ink); border-color: rgba(17,24,39,0.24); background: transparent;
 }
 .landing-editorial .ed-btn-line:hover {
-  background: rgba(17,24,39,0.07); color:#fff; border-color: rgba(37,99,235,0.6);
+  background: rgba(17,24,39,0.05); color:var(--ink); border-color: rgba(37,99,235,0.6);
 }
-.landing-editorial .ed-btn-line-invert { border-color: rgba(17,24,39,0.4); color:#fff; }
-.landing-editorial .ed-btn-line-invert:hover { background: rgba(17,24,39,0.1); color:#fff; border-color:#fff; }
+.landing-editorial .ed-btn-line-invert { border-color: rgba(255,255,255,0.4); color:#fff; }
+.landing-editorial .ed-btn-line-invert:hover { background: rgba(255,255,255,0.1); color:#fff; border-color:#fff; }
 
 /* ── Headlines + accent marks glow ───────────────────────── */
-.landing-editorial .ed-display { color:#f5f7ff; }
-.landing-editorial .ed-mark { color:#3b82f6; text-shadow: 0 0 26px rgba(37,99,235,0.55); }
+.landing-editorial .ed-display { color:var(--ink); isolation:isolate; }
+.landing-editorial .ed-mark { color:#2563eb; text-shadow: 0 0 26px rgba(37,99,235,0.55); }
 .landing-editorial .ed-ul::after {
   background: linear-gradient(90deg, #2563eb, #6366f1);
   height: 0.3em; border-radius: 3px;
@@ -602,7 +602,7 @@ body:has(.landing-editorial)::before {
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   border-color: rgba(17,24,39,0.08);
 }
-.landing-editorial .ed-pill { color:#ced4e8; border-color: rgba(17,24,39,0.14); }
+.landing-editorial .ed-pill { color:var(--ink-3); border-color: rgba(17,24,39,0.14); }
 
 /* ── Feature hover accent glow ───────────────────────────── */
 .landing-editorial .ed-feature:hover::before { box-shadow: 0 0 14px rgba(37,99,235,0.85); }
@@ -610,11 +610,11 @@ body:has(.landing-editorial)::before {
 
 /* ── Chips / logos ───────────────────────────────────────── */
 .landing-editorial .ed-chip { border-color: rgba(17,24,39,0.12); color: var(--ink-2); }
-.landing-editorial .ed-chip:hover { border-color: rgba(37,99,235,0.6); color:#fff; }
+.landing-editorial .ed-chip:hover { border-color: rgba(37,99,235,0.6); color:var(--blue); }
 
 /* ── Compare table ───────────────────────────────────────── */
 .landing-editorial .ed-compare { border-color: rgba(17,24,39,0.1); border-radius:14px; overflow:hidden; }
-.landing-editorial .ed-compare-head { background: rgba(37,99,235,0.14); color:#fff; }
+.landing-editorial .ed-compare-head { background: rgba(37,99,235,0.08); color:var(--ink-2); }
 .landing-editorial .ed-compare-win-col { color:#3b82f6; }
 .landing-editorial .ed-compare-win { background: rgba(37,99,235,0.08); border-left-color:#2563eb; color: var(--ink); }
 .landing-editorial .ed-compare-manual { color: var(--ink-3); }
@@ -734,3 +734,15 @@ body:has(.landing-editorial)::before {
   }
 }
 
+
+/* Public navbar on phones: tighter gutters, drop the middle links (the hero repeats them). */
+@media (max-width: 640px) {
+  .site-nav { padding: 0 16px !important; }
+  .site-nav-links { display: none !important; }
+  .ed-hero-rule { margin-bottom: 40px; }
+  .ed-kicker { letter-spacing: 1.2px; font-size: 11px; }
+}
+/* The smallest phones (and 400% zoom): the logo alone, so Sign In and Get Started stay on screen */
+@media (max-width: 380px) {
+  .site-nav-wordmark { display: none; }
+}

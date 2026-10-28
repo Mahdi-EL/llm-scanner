@@ -1,542 +1,311 @@
+// LLM Scanner for VS Code: finds the system prompt in the open file, scans it
+// with your LLM Scanner API, and shows the result next to the code.
+//
+// Setup: run "LLM Scanner: Set API Key" (the key is kept in VS Code's encrypted
+// secret storage) and set llmscanner.apiUrl to your API.
 const vscode = require('vscode');
-const https  = require('http');
 const path   = require('path');
 
-// ── Vulnerability decorations ─────────────────────────────────
-const criticalDecoration = vscode.window.createTextEditorDecorationType({
-    backgroundColor : 'rgba(192, 57, 43, 0.2)',
-    border          : '1px solid rgba(192, 57, 43, 0.8)',
-    borderRadius    : '3px',
-    overviewRulerColor: 'rgba(192, 57, 43, 0.8)',
-    overviewRulerLane : vscode.OverviewRulerLane.Right,
-    after: {
-        contentText : ' 🚨 CRITICAL',
-        color       : 'rgba(192, 57, 43, 1)',
-        fontWeight  : 'bold',
-        fontSize    : '11px'
-    }
-});
+const SECRET_KEY = 'llmscanner.apiKey';
+let lastScanId = null;
 
-const highDecoration = vscode.window.createTextEditorDecorationType({
-    backgroundColor : 'rgba(230, 126, 34, 0.2)',
-    border          : '1px solid rgba(230, 126, 34, 0.8)',
-    borderRadius    : '3px',
-    after: {
-        contentText : ' 🔴 HIGH',
-        color       : 'rgba(230, 126, 34, 1)',
-        fontWeight  : 'bold',
-        fontSize    : '11px'
-    }
-});
+// ── Decorations ───────────────────────────────────────────────
+const decorations = {
+    CRITICAL: vscode.window.createTextEditorDecorationType({
+        backgroundColor: 'rgba(180, 35, 24, 0.15)', border: '1px solid rgba(180, 35, 24, 0.7)',
+        overviewRulerColor: 'rgba(180, 35, 24, 0.8)', overviewRulerLane: vscode.OverviewRulerLane.Right,
+        after: { contentText: '  LLM Scanner: critical findings', color: 'rgba(180, 35, 24, 1)', fontWeight: 'bold' },
+    }),
+    HIGH: vscode.window.createTextEditorDecorationType({
+        backgroundColor: 'rgba(196, 50, 10, 0.12)', border: '1px solid rgba(196, 50, 10, 0.6)',
+        after: { contentText: '  LLM Scanner: high findings', color: 'rgba(196, 50, 10, 1)' },
+    }),
+    MEDIUM: vscode.window.createTextEditorDecorationType({
+        backgroundColor: 'rgba(161, 92, 7, 0.1)', border: '1px solid rgba(161, 92, 7, 0.5)',
+        after: { contentText: '  LLM Scanner: medium findings', color: 'rgba(161, 92, 7, 1)' },
+    }),
+};
 
-const mediumDecoration = vscode.window.createTextEditorDecorationType({
-    backgroundColor : 'rgba(241, 196, 15, 0.15)',
-    border          : '1px solid rgba(241, 196, 15, 0.8)',
-    borderRadius    : '3px',
-    after: {
-        contentText : ' ⚠️ MEDIUM',
-        color       : 'rgba(241, 196, 15, 1)',
-        fontWeight  : 'bold',
-        fontSize    : '11px'
-    }
-});
-
-
-// ── Extract System Prompts From File ──────────────────────────
+// ── Find system prompts in a file ─────────────────────────────
 function extractSystemPrompts(text) {
-    const prompts = [];
-    const lines   = text.split('\n');
-
-    // Build full text for multi-line detection
-    const fullText = text;
-
-    // Pattern 1 : system_prompt = """...""" (multi-line)
-    const multiLine = fullText.match(
-        /system_prompt\s*=\s*"""([\s\S]*?)"""/i
-    );
-    if (multiLine) {
-        prompts.push({
-            text     : multiLine[1].trim().substring(0, 200),
-            line     : 0,
-            character: 0
-        });
-    }
-
-    // Pattern 2 : system_prompt = '''...''' (multi-line)
-    const multiLine2 = fullText.match(
-        /system_prompt\s*=\s*'''([\s\S]*?)'''/i
-    );
-    if (multiLine2) {
-        prompts.push({
-            text     : multiLine2[1].trim().substring(0, 200),
-            line     : 0,
-            character: 0
-        });
-    }
-
-    // Pattern 3 : single line variants
-    lines.forEach((line, lineNum) => {
-        const patterns = [
-            /system_prompt\s*=\s*"([^"]+)"/i,
-            /system_prompt\s*=\s*'([^']+)'/i,
-            /SYSTEM_PROMPT\s*=\s*"([^"]+)"/i,
-            /SYSTEM_PROMPT\s*=\s*'([^']+)'/i,
-            /"role"\s*:\s*"system"\s*,\s*"content"\s*:\s*"([^"]+)"/,
-        ];
-
-        patterns.forEach(pattern => {
-            const match = line.match(pattern);
-            if (match && match[1].length > 10) {
-                prompts.push({
-                    text     : match[1].substring(0, 200),
-                    line     : lineNum,
-                    character: 0
-                });
-            }
-        });
-    });
-
-    // Remove duplicates
-    const unique = [];
-    const seen   = new Set();
-    for (const p of prompts) {
-        if (!seen.has(p.text)) {
-            seen.add(p.text);
-            unique.push(p);
+    const found = [];
+    const add = (value, index) => {
+        const clean = value.trim();
+        if (clean.length > 10 && !found.some(p => p.text === clean)) {
+            found.push({ text: clean, line: text.slice(0, index).split('\n').length - 1 });
         }
+    };
+    const patterns = [
+        /system_prompt\s*=\s*"""([\s\S]*?)"""/gi,
+        /system_prompt\s*=\s*'''([\s\S]*?)'''/gi,
+        /system_?prompt\s*[=:]\s*`([\s\S]*?)`/gi,
+        /system_?prompt\s*[=:]\s*"([^"\n]+)"/gi,
+        /system_?prompt\s*[=:]\s*'([^'\n]+)'/gi,
+        /"role"\s*:\s*"system"\s*,\s*"content"\s*:\s*"([^"]+)"/g,
+        /role\s*:\s*['"]system['"]\s*,\s*content\s*:\s*['"`]([^'"`]+)['"`]/g,
+    ];
+    for (const pattern of patterns) {
+        for (const match of text.matchAll(pattern)) add(match[1], match.index);
     }
-
-    return unique;
+    return found;
 }
 
-
-
-// ── Call LLM Scanner API ──────────────────────────────────────
-async function callScannerAPI(targetName, systemPrompt) {
+// ── API ───────────────────────────────────────────────────────
+function settings() {
     const config = vscode.workspace.getConfiguration('llmscanner');
-    const apiUrl = config.get('apiUrl') || 'http://localhost:8000';
+    return {
+        apiUrl    : (config.get('apiUrl') || 'http://localhost:8000').replace(/\/+$/, ''),
+        appUrl    : (config.get('appUrl') || '').replace(/\/+$/, ''),
+        categories: config.get('categories') || [],
+        quickScan : config.get('quickScan') !== false,
+    };
+}
 
-    return new Promise((resolve, reject) => {
-        const data = JSON.stringify({
-            target_name  : targetName,
-            target_type  : 'simulation',
-            system_prompt: systemPrompt,
-            categories   : [
-                'direct_override',
-                'extraction',
-                'social_engineering',
-                'boundary_testing'
-            ]
+const MAX_PROMPT = 20000;   // the API's limit for system_prompt
+
+// FastAPI sends a string for most errors and a list of {loc, msg} for invalid input.
+function errorDetail(data, status) {
+    if (typeof data.detail === 'string') return data.detail;
+    if (Array.isArray(data.detail) && data.detail.length) {
+        return data.detail.map(d => d.msg || String(d)).join('; ');
+    }
+    return `HTTP ${status}`;
+}
+
+async function api(context, method, route, body) {
+    const key = await context.secrets.get(SECRET_KEY);
+    if (!key) throw new Error('No API key. Run "LLM Scanner: Set API Key" first.');
+    const { apiUrl } = settings();
+    let response;
+    try {
+        response = await fetch(`${apiUrl}${route}`, {
+            method,
+            headers: { 'Content-Type': 'application/json', 'X-API-Key': key },
+            body: body ? JSON.stringify(body) : undefined,
         });
+    } catch (e) {
+        throw apiError(`Can't reach ${apiUrl} (${e.message}). Check llmscanner.apiUrl.`, 0);
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        if (response.status === 401) throw apiError('API key rejected. Run "LLM Scanner: Set API Key".', 401);
+        const detail = errorDetail(data, response.status);
+        throw apiError(response.status === 402 && /quick scan/i.test(detail)
+            ? `${detail} (turn on the llmscanner.quickScan setting)` : detail, response.status);
+    }
+    return data;
+}
 
-        const url     = new URL(`${apiUrl}/scan`);
-        const options = {
-            hostname: url.hostname,
-            port    : url.port || 8000,
-            path    : url.pathname,
-            method  : 'POST',
-            headers : {
-                'Content-Type'  : 'application/json',
-                'Content-Length': Buffer.byteLength(data)
-            }
-        };
+// status 0: the API couldn't be reached
+function apiError(message, status) {
+    return Object.assign(new Error(message), { status });
+}
 
-        const req = https.request(options, res => {
-            let body = '';
-            res.on('data', chunk => body += chunk);
-            res.on('end',  () => {
-                try {
-                    resolve(JSON.parse(body));
-                } catch (e) {
-                    reject(new Error('Invalid API response'));
-                }
-            });
+// A poll may fail this many times in a row (the API restarting, a 502 from its proxy) before the
+// scan is reported as failed: the scan itself resumes after a restart.
+const POLL_RETRIES = 6;
+const passing = e => e.status === 0 || e.status === 429 || e.status >= 500;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function waitForScan(context, scanId, progress, token, delay = 3000) {
+    let lastPct = 0, failures = 0;
+    for (;;) {
+        if (token.isCancellationRequested) {
+            await api(context, 'POST', `/scan/${scanId}/cancel`).catch(() => {});
+            throw new Error('Scan cancelled');
+        }
+        let scan;
+        try {
+            scan = await api(context, 'GET', `/scan/${scanId}`);
+            failures = 0;
+        } catch (e) {
+            if (!passing(e) || ++failures > POLL_RETRIES) throw e;
+            progress.report({ message: 'waiting for the API…' });
+            await sleep(delay * failures);
+            continue;
+        }
+        if (scan.status === 'complete') return scan;
+        if (scan.status === 'failed' || scan.status === 'cancelled') {
+            throw new Error(scan.error_message || `Scan ${scan.status}`);
+        }
+        const pct = scan.progress || 0;
+        progress.report({
+            increment: Math.max(0, pct - lastPct),
+            message: scan.status === 'pending' ? 'queued…' : `${scan.completed_attacks}/${scan.total_attacks} attacks`,
         });
-
-        req.on('error', reject);
-        req.write(data);
-        req.end();
-    });
+        lastPct = pct;
+        await sleep(delay);
+    }
 }
 
+// ── Results panel (no scripts; everything escaped) ────────────
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
-// ── Poll Scan Status ──────────────────────────────────────────
-async function pollScanStatus(scanId, apiUrl, maxWait = 60000) {
-    const start = Date.now();
-
-    return new Promise((resolve, reject) => {
-        const check = () => {
-            if (Date.now() - start > maxWait) {
-                reject(new Error('Scan timeout'));
-                return;
-            }
-
-            const url     = new URL(`${apiUrl}/scan/${scanId}`);
-            const options = {
-                hostname: url.hostname,
-                port    : url.port || 8000,
-                path    : url.pathname,
-                method  : 'GET'
-            };
-
-            const req = https.request(options, res => {
-                let body = '';
-                res.on('data', chunk => body += chunk);
-                res.on('end',  () => {
-                    try {
-                        const data = JSON.parse(body);
-                        if (data.status === 'complete') {
-                            resolve(data);
-                        } else if (data.status === 'failed') {
-                            reject(new Error(data.error || 'Scan failed'));
-                        } else {
-                            setTimeout(check, 3000);
-                        }
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            });
-
-            req.on('error', reject);
-            req.end();
-        };
-
-        check();
-    });
-}
-
-
-// ── Apply Decorations ─────────────────────────────────────────
-function applyDecorations(editor, results) {
-    const criticals = [];
-    const highs     = [];
-    const mediums   = [];
-
-    results.forEach(r => {
-        if (!r.behavior_changed) return;
-
-        const line  = Math.min(r.lineNum || 0, editor.document.lineCount - 1);
-        const range = new vscode.Range(
-            new vscode.Position(line, 0),
-            new vscode.Position(line, editor.document.lineAt(line).text.length)
-        );
-
-        const decoration = {
-            range,
-            hoverMessage: new vscode.MarkdownString(
-                `**LLM Scanner Finding**\n\n` +
-                `**Severity :** ${r.severity}\n\n` +
-                `**Score :** ${r.score}/10\n\n` +
-                `**Reason :** ${r.reason}`
-            )
-        };
-
-        if (r.severity === 'CRITICAL') criticals.push(decoration);
-        else if (r.severity === 'HIGH') highs.push(decoration);
-        else if (r.severity === 'MEDIUM') mediums.push(decoration);
-    });
-
-    editor.setDecorations(criticalDecoration, criticals);
-    editor.setDecorations(highDecoration,     highs);
-    editor.setDecorations(mediumDecoration,   mediums);
-}
-
-
-// ── Show Results Panel ────────────────────────────────────────
-function showResultsPanel(results, targetName) {
-    const panel = vscode.window.createWebviewPanel(
-        'llmScannerResults',
-        `🔐 LLM Scanner — ${targetName}`,
-        vscode.ViewColumn.Two,
-        { enableScripts: true }
-    );
-
-    const summary = results.results?.summary || {};
-    const findings = results.results?.results || [];
-
-    const findingsHtml = findings
-        .filter(r => r.severity !== 'SAFE')
-        .slice(0, 20)
-        .map(r => {
-            const colors = {
-                CRITICAL: '#C0392B',
-                HIGH    : '#E67E22',
-                MEDIUM  : '#F1C40F',
-                LOW     : '#27AE60'
-            };
-            const color = colors[r.severity] || '#888';
-            return `
-                <div style="border:1px solid ${color};border-radius:8px;
-                            margin-bottom:12px;overflow:hidden">
-                    <div style="background:${color}22;padding:10px 14px;
-                                border-left:4px solid ${color}">
-                        <strong style="color:${color}">${r.severity}</strong>
-                        <span style="color:#888;margin-left:12px;font-size:12px">
-                            ${r.category.replace(/_/g,' ').toUpperCase()}
-                        </span>
-                        <span style="float:right;color:#888;font-size:12px">
-                            Score: ${r.score}/10
-                        </span>
-                    </div>
-                    <div style="padding:12px 14px">
-                        <p style="font-size:13px;color:#ccc;margin-bottom:6px">
-                            <strong>Reason:</strong> ${r.reason}
-                        </p>
-                        <p style="font-size:12px;color:#888">
-                            <strong>Attack:</strong> ${r.attack.substring(0,100)}...
-                        </p>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-    const score      = summary.security_score || 0;
-    const scoreColor = score >= 70 ? '#27AE60' :
-                       score >= 40 ? '#F1C40F' : '#C0392B';
+function showResultsPanel(scan, title) {
+    const panel = vscode.window.createWebviewPanel('llmScannerResults', `LLM Scanner: ${title}`,
+        vscode.ViewColumn.Beside, { enableScripts: false });
+    const summary  = { ...(scan.summary || {}), ...(scan.results?.summary || {}) };
+    const findings = (scan.results?.results || []).filter(r => !['SAFE', 'ERROR'].includes(r.severity));
+    const colors   = { CRITICAL: '#b42318', HIGH: '#c4320a', MEDIUM: '#a15c07', LOW: '#4b6b2f' };
+    const rows = findings.slice(0, 50).map(r => `
+        <details>
+          <summary><b style="color:${colors[r.severity] || '#888'}">${escapeHtml(r.severity)}</b>
+            ${escapeHtml((r.category || '').replace(/_/g, ' '))} · ${escapeHtml(r.score)}/10</summary>
+          <p><b>Attack</b></p><pre>${escapeHtml(r.attack)}</pre>
+          <p><b>Reply</b></p><pre>${escapeHtml(r.response)}</pre>
+          <p>${escapeHtml(r.reason)}</p>
+        </details>`).join('');
+    const recs = (scan.recommendations || []).slice(0, 5).map(r =>
+        `<li><b>${escapeHtml(r.priority)} ${escapeHtml(r.title)}</b>: ${escapeHtml(r.fix[0] || '')}</li>`).join('');
 
     panel.webview.html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #1e1e1e;
-            color: #d4d4d4;
-            padding: 20px;
-            margin: 0;
-        }
-        h1 { color: white; font-size: 20px; }
-        .score {
-            text-align: center;
-            padding: 20px;
-            margin: 16px 0;
-            background: ${scoreColor}22;
-            border: 2px solid ${scoreColor};
-            border-radius: 12px;
-        }
-        .score-number {
-            font-size: 48px;
-            font-weight: 800;
-            color: ${scoreColor};
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-            margin: 16px 0;
-        }
-        .stat {
-            background: #2d2d2d;
-            border-radius: 8px;
-            padding: 14px;
-            text-align: center;
-        }
-        .stat-num { font-size: 28px; font-weight: 700; }
-        .stat-label { font-size: 12px; color: #888; margin-top: 4px; }
-    </style>
-</head>
+<html><head><meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+<style>
+  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 16px 20px; }
+  .score { font-size: 44px; font-family: Georgia, serif; }
+  pre { white-space: pre-wrap; word-break: break-word; background: var(--vscode-textCodeBlock-background); padding: 8px; }
+  details { border-bottom: 1px solid var(--vscode-panel-border); padding: 6px 0; }
+  summary { cursor: pointer; }
+</style></head>
 <body>
-    <h1>🔐 LLM Scanner Results</h1>
-    <p style="color:#888">Target : ${targetName}</p>
-
-    <div class="score">
-        <div class="score-number">${score}%</div>
-        <div style="color:${scoreColor};font-weight:600">Security Score</div>
-    </div>
-
-    <div class="stats">
-        <div class="stat">
-            <div class="stat-num" style="color:#C0392B">${summary.critical || 0}</div>
-            <div class="stat-label">Critical</div>
-        </div>
-        <div class="stat">
-            <div class="stat-num" style="color:#E67E22">${summary.high || 0}</div>
-            <div class="stat-label">High</div>
-        </div>
-        <div class="stat">
-            <div class="stat-num" style="color:#F1C40F">${summary.medium || 0}</div>
-            <div class="stat-label">Medium</div>
-        </div>
-        <div class="stat">
-            <div class="stat-num" style="color:#2ECC71">${summary.safe || 0}</div>
-            <div class="stat-label">Safe</div>
-        </div>
-    </div>
-
-    <h2 style="font-size:16px;margin-top:24px">Findings</h2>
-    ${findingsHtml || '<p style="color:#888">No vulnerabilities found.</p>'}
-</body>
-</html>`;
+  <h2>${escapeHtml(scan.target_name)}</h2>
+  <div class="score">${escapeHtml(summary.security_score ?? 0)}/100 · grade ${escapeHtml(summary.grade || '?')}</div>
+  <p>${escapeHtml(summary.critical || 0)} critical · ${escapeHtml(summary.high || 0)} high ·
+     ${escapeHtml(summary.medium || 0)} medium · ${escapeHtml(summary.low || 0)} low · ${escapeHtml(summary.safe || 0)} safe</p>
+  ${recs ? `<h3>What to fix first</h3><ul>${recs}</ul>` : ''}
+  <h3>Failed attacks (${findings.length})</h3>
+  ${rows || '<p>No attack succeeded.</p>'}
+</body></html>`;
 }
 
+function decorate(editor, prompt, summary) {
+    Object.values(decorations).forEach(d => editor.setDecorations(d, []));
+    const worst = summary.critical ? 'CRITICAL' : summary.high ? 'HIGH' : summary.medium ? 'MEDIUM' : null;
+    if (!worst) return;
+    const line = Math.min(prompt.line, editor.document.lineCount - 1);
+    editor.setDecorations(decorations[worst], [{
+        range: editor.document.lineAt(line).range,
+        hoverMessage: `LLM Scanner: ${summary.critical || 0} critical, ${summary.high || 0} high findings. ` +
+                      `Score ${summary.security_score}/100.`,
+    }]);
+}
 
-// ── Main Scan Function ────────────────────────────────────────
-async function scanFile(editor) {
-    if (!editor) {
-        vscode.window.showErrorMessage('No active editor found');
+// ── Auto-scan on save ─────────────────────────────────────────
+// Each scan counts toward the plan's monthly limit, so a save scans only a prompt that hasn't been scanned
+// yet, never while that file's last scan still runs, and a file without a prompt is skipped silently.
+const scannedPrompts = new Map();   // document URI -> Set of the prompt texts scanned
+const scanning = new Set();         // document URIs with a scan in flight
+
+function rememberScanned(uri, text) {
+    if (!scannedPrompts.has(uri)) scannedPrompts.set(uri, new Set());
+    scannedPrompts.get(uri).add(text.trim());
+}
+
+function promptsToAutoScan(uri, text) {
+    if (scanning.has(uri)) return [];
+    const done = scannedPrompts.get(uri) || new Set();
+    return extractSystemPrompts(text).filter(p => !done.has(p.text));
+}
+
+// ── Commands ──────────────────────────────────────────────────
+async function runScan(context, editor, promptText, promptInfo) {
+    const name = path.basename(editor.document.fileName);
+    const uri = editor.document.uri.toString();
+    const { categories, quickScan } = settings();
+    if (promptText.length > MAX_PROMPT) {
+        vscode.window.showErrorMessage(`LLM Scanner: this prompt has ${promptText.length.toLocaleString()} characters; ` +
+            `the limit is ${MAX_PROMPT.toLocaleString()}.`);
         return;
     }
-
-    const config     = vscode.workspace.getConfiguration('llmscanner');
-    const apiUrl     = config.get('apiUrl') || 'http://localhost:8000';
-    const text       = editor.document.getText();
-    const fileName   = path.basename(editor.document.fileName);
-    const prompts    = extractSystemPrompts(text);
-
-    if (prompts.length === 0) {
-        vscode.window.showInformationMessage(
-            '🔍 No system prompts found in this file. ' +
-            'Make sure you have a variable named system_prompt or SYSTEM_PROMPT.'
-        );
-        return;
-    }
-
-    vscode.window.showInformationMessage(
-        `🔐 LLM Scanner: Found ${prompts.length} system prompt(s). Scanning...`
-    );
-
+    scanning.add(uri);
     await vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title   : '🔐 LLM Scanner',
-        cancellable: false
-    }, async progress => {
+        location: vscode.ProgressLocation.Notification, title: `LLM Scanner: ${name}${quickScan ? ' (quick scan)' : ''}`, cancellable: true,
+    }, async (progress, token) => {
         try {
-            progress.report({ message: 'Launching scan...' });
-
-            const scanResponse = await callScannerAPI(
-                fileName,
-                prompts[0].text
-            );
-
-            if (!scanResponse.scan_id) {
-                throw new Error('Could not start scan. Is the API running?');
-            }
-
-            progress.report({
-                message: `Scan started (ID: ${scanResponse.scan_id}). Waiting for results...`
-            });
-
-            const results = await pollScanStatus(
-                scanResponse.scan_id, apiUrl, 300000
-            );
-
-            progress.report({ message: 'Applying results...' });
-
-            // Add line numbers to results
-            if (results.results?.results) {
-                results.results.results.forEach((r, i) => {
-                    r.lineNum = prompts[0].line;
-                });
-            }
-
-            // Apply decorations
-            applyDecorations(editor, results.results?.results || []);
-
-            // Show results panel
-            showResultsPanel(results, fileName);
-
-            const score = results.results?.summary?.security_score || 0;
-            const emoji = score >= 70 ? '✅' : score >= 40 ? '⚠️' : '🚨';
+            const body = { target_name: name, target_type: 'simulation', system_prompt: promptText, quick: quickScan };
+            if (categories.length) body.categories = categories;
+            const started = await api(context, 'POST', '/scan', body);
+            lastScanId = started.scan_id;
+            rememberScanned(uri, promptText);
+            const scan = await waitForScan(context, started.scan_id, progress, token);
+            const summary = { ...(scan.summary || {}), ...(scan.results?.summary || {}) };
+            if (promptInfo) decorate(editor, promptInfo, summary);
+            showResultsPanel(scan, name);
             vscode.window.showInformationMessage(
-                `${emoji} Scan complete — Security Score: ${score}%`
-            );
-
-        } catch (error) {
-            vscode.window.showErrorMessage(
-                `LLM Scanner error: ${error.message}. ` +
-                'Make sure the API is running: uvicorn api:app --reload'
-            );
+                `LLM Scanner: ${summary.security_score}/100 (grade ${summary.grade}) for ${name}`);
+        } catch (e) {
+            vscode.window.showErrorMessage(`LLM Scanner: ${e.message}`);
+        } finally {
+            scanning.delete(uri);
         }
     });
 }
 
+async function scanFile(context, editor) {
+    if (!editor) { vscode.window.showErrorMessage('Open a file first.'); return; }
+    const prompts = extractSystemPrompts(editor.document.getText());
+    if (!prompts.length) {
+        vscode.window.showInformationMessage('No system prompt found. Select the prompt text and run "Scan Selected Text".');
+        return;
+    }
+    await scanOneOf(context, editor, prompts);
+}
 
-// ── Activate Extension ────────────────────────────────────────
+async function scanOneOf(context, editor, prompts) {
+    let chosen = prompts[0];
+    if (prompts.length > 1) {
+        const pick = await vscode.window.showQuickPick(
+            prompts.map(p => ({ label: p.text.slice(0, 80), description: `line ${p.line + 1}`, prompt: p })),
+            { placeHolder: 'Which system prompt should be scanned?' });
+        if (!pick) return;
+        chosen = pick.prompt;
+    }
+    await runScan(context, editor, chosen.text, chosen);
+}
+
 function activate(context) {
-
-    console.log('LLM Scanner extension activated');
-
-    // Command : Scan File
-    const scanFileCmd = vscode.commands.registerCommand(
-        'llmscanner.scanFile',
-        () => scanFile(vscode.window.activeTextEditor)
-    );
-
-    // Command : Scan Selected Text
-    const scanPromptCmd = vscode.commands.registerCommand(
-        'llmscanner.scanPrompt',
-        async () => {
-            const editor    = vscode.window.activeTextEditor;
-            if (!editor) return;
-
-            const selection = editor.document.getText(editor.selection);
-            if (!selection) {
-                vscode.window.showErrorMessage('Please select some text first');
-                return;
-            }
-
-            const config  = vscode.workspace.getConfiguration('llmscanner');
-            const apiUrl  = config.get('apiUrl') || 'http://localhost:8000';
-
-            vscode.window.showInformationMessage(
-                '🔐 Scanning selected text...'
-            );
-
-            try {
-                const response = await callScannerAPI(
-                    'Selected Prompt', selection
-                );
-                vscode.window.showInformationMessage(
-                    `Scan started: ${response.scan_id}`
-                );
-            } catch (err) {
-                vscode.window.showErrorMessage(`Error: ${err.message}`);
-            }
-        }
-    );
-
-    // Command : Show Report
-    const showReportCmd = vscode.commands.registerCommand(
-        'llmscanner.showReport',
-        () => {
-            vscode.window.showInformationMessage(
-                'Open http://localhost:3000 to see your reports'
-            );
-        }
-    );
-
-    // Auto-scan on save (if enabled)
-    const onSave = vscode.workspace.onDidSaveTextDocument(doc => {
-        const config = vscode.workspace.getConfiguration('llmscanner');
-        if (config.get('autoScan')) {
-            const editor = vscode.window.activeTextEditor;
-            if (editor && editor.document === doc) {
-                scanFile(editor);
-            }
-        }
-    });
-
-    // Status bar item
-    const statusBar = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Right, 100
-    );
-    statusBar.text         = '$(shield) LLM Scanner';
-    statusBar.tooltip      = 'Click to scan this file for AI vulnerabilities';
-    statusBar.command      = 'llmscanner.scanFile';
-    statusBar.backgroundColor = new vscode.ThemeColor(
-        'statusBarItem.warningBackground'
-    );
-    statusBar.show();
-
     context.subscriptions.push(
-        scanFileCmd, scanPromptCmd, showReportCmd,
-        onSave, statusBar
+        vscode.commands.registerCommand('llmscanner.setApiKey', async () => {
+            const key = await vscode.window.showInputBox({
+                prompt: 'LLM Scanner API key (create one in Settings → API keys)', password: true,
+                ignoreFocusOut: true, validateInput: v => v && v.startsWith('llmsk_') ? null : 'Keys start with llmsk_',
+            });
+            if (key) { await context.secrets.store(SECRET_KEY, key); vscode.window.showInformationMessage('LLM Scanner: API key saved.'); }
+        }),
+        vscode.commands.registerCommand('llmscanner.scanFile', () => scanFile(context, vscode.window.activeTextEditor)),
+        vscode.commands.registerCommand('llmscanner.scanPrompt', async () => {
+            const editor = vscode.window.activeTextEditor;
+            const selection = editor && editor.document.getText(editor.selection);
+            if (!selection || selection.trim().length < 10) { vscode.window.showErrorMessage('Select the system prompt text first.'); return; }
+            await runScan(context, editor, selection, { line: editor.selection.start.line });
+        }),
+        vscode.commands.registerCommand('llmscanner.showReport', () => {
+            const { appUrl } = settings();
+            if (!lastScanId) { vscode.window.showInformationMessage('Run a scan first.'); return; }
+            if (!appUrl) { vscode.window.showInformationMessage(`Last scan: ${lastScanId}. Set llmscanner.appUrl to open it in the browser.`); return; }
+            vscode.env.openExternal(vscode.Uri.parse(`${appUrl}/results/${lastScanId}`));
+        }),
+        vscode.workspace.onDidSaveTextDocument(doc => {
+            const editor = vscode.window.activeTextEditor;
+            if (vscode.workspace.getConfiguration('llmscanner').get('autoScan') && editor && editor.document === doc) {
+                const changed = promptsToAutoScan(doc.uri.toString(), doc.getText());
+                if (changed.length) scanOneOf(context, editor, changed);
+            }
+        }),
     );
-}
 
+    const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBar.text = '$(shield) LLM Scanner';
+    statusBar.tooltip = 'Scan the system prompt in this file';
+    statusBar.command = 'llmscanner.scanFile';
+    statusBar.show();
+    context.subscriptions.push(statusBar);
+}
 
 function deactivate() {}
 
-module.exports = { activate, deactivate };
+module.exports = { activate, deactivate, extractSystemPrompts, escapeHtml, errorDetail, waitForScan,
+                   promptsToAutoScan, rememberScanned, scanning };

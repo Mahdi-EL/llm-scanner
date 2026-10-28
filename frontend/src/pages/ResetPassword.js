@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { authAPI } from '../services/api';
+import { authAPI, errorMessage } from '../services/api';
 import Logo from '../components/Logo';
 
 export default function ResetPassword() {
@@ -12,9 +12,10 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [done,    setDone]    = useState(false);
   const [error,   setError]   = useState('');
+  const [expired, setExpired] = useState(false);     // the link itself doesn't work: only a new one helps
 
   useEffect(() => {
-    if (!token) setError('Invalid or missing reset token.');
+    if (!token) { setError('This reset link is incomplete.'); setExpired(true); }
   }, [token]);
 
   const submit = async e => {
@@ -28,7 +29,8 @@ export default function ResetPassword() {
       setDone(true);
       setTimeout(() => navigate('/login'), 2500);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Reset link is invalid or has expired.');
+      setError(errorMessage(err, 'Reset link is invalid or has expired.'));
+      setExpired(err.response?.status === 400 && /token/i.test(err.response?.data?.detail || ''));
     } finally { setLoading(false); }
   };
 
@@ -63,17 +65,21 @@ export default function ResetPassword() {
           </div>
         ) : (
           <>
-            {error && <div className="alert-error" style={{ marginBottom:'20px' }}>{error}</div>}
-            {!error && (
+            {error && <div className="alert-error" role="alert" style={{ marginBottom:'20px' }}>{error}</div>}
+            {expired ? (
+              <Link to="/forgot-password" className="btn-primary" style={{ display:'flex', justifyContent:'center', padding:'13px', borderRadius:'8px' }}>
+                Get a new reset link
+              </Link>
+            ) : (
               <form onSubmit={submit}>
                 <div className="form-group">
-                  <label>New Password</label>
-                  <input type="password" placeholder="Min. 8 characters"
+                  <label htmlFor="rp-new-password">New Password</label>
+                  <input id="rp-new-password" type="password" autoComplete="new-password" placeholder="Min. 8 characters"
                     value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label>Confirm Password</label>
-                  <input type="password" placeholder="••••••••"
+                  <label htmlFor="rp-confirm-password">Confirm Password</label>
+                  <input id="rp-confirm-password" type="password" autoComplete="new-password" placeholder="••••••••"
                     value={form.confirm} onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))}
                     style={{ borderColor: form.confirm && form.confirm !== form.password ? 'rgba(240,68,56,0.5)' : undefined }} />
                 </div>

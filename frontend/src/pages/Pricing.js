@@ -1,249 +1,174 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { plansAPI, errorMessage } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
-const PLANS = [
-  {
-    id      : 'starter',
-    name    : 'Starter',
-    price   : 49,
-    scans   : '5 scans / month',
-    desc    : 'Perfect for individual developers validating AI security.',
-    color   : 'var(--t2)',
-    features: [
-      '1000+ attack prompts per scan',
-      '21 vulnerability categories',
-      'Full PDF security report',
-      'JSON results export',
-      'Email support',
-    ],
-    cta : 'Get Started',
-  },
-  {
-    id      : 'pro',
-    name    : 'Pro',
-    price   : 99,
-    scans   : '50 scans / month',
-    desc    : 'For teams shipping AI products that need continuous assurance.',
-    color   : 'var(--blue)',
-    popular : true,
-    features: [
-      'Everything in Starter',
-      'Custom system prompts',
-      'AI attack generator',
-      'Priority scan queue',
-      'REST API access',
-      'Priority support',
-    ],
-    cta : 'Start Free Trial',
-  },
-  {
-    id      : 'agency',
-    name    : 'Agency',
-    price   : 299,
-    scans   : 'Unlimited scans',
-    desc    : 'For security teams and agencies running assessments at scale.',
-    color   : 'var(--purple)',
-    features: [
-      'Everything in Pro',
-      'White-label PDF reports',
-      'Team member seats',
-      'Custom branding',
-      'Webhook integrations',
-      'Dedicated support',
-    ],
-    cta : 'Contact Sales',
-  },
-];
+const ORDER = ['free', 'pro', 'enterprise'];
+const RANK = { free: 0, pro: 1, enterprise: 2 };
+
+const DESCRIPTIONS = {
+  free      : 'Try the scanner on your own AI apps.',
+  pro       : 'For teams that ship AI features and re-test every change.',
+  enterprise: 'For security teams scanning many applications.',
+};
 
 const FAQS = [
-  { q:'Is there a free trial?',           a:'Yes — all paid plans come with a 7-day free trial. No credit card required to start.' },
-  { q:'What counts as one scan?',          a:'One scan fires 1000+ adversarial prompts across 21 attack categories at a single AI target and generates a full security report. Partial scans are never counted.' },
-  { q:'Can I scan production AI apps?',    a:'Yes, with explicit written authorization from the owner. We include a legal compliance guide with every plan.' },
-  { q:'How long does a scan take?',        a:'Typically 10–15 minutes for a complete assessment across all 21 attack categories.' },
-  { q:'What LLMs are supported?',          a:'Any OpenAI-compatible API, Groq, custom REST endpoints, and our built-in simulation mode for safe development testing.' },
-  { q:'Can I cancel anytime?',             a:'Absolutely. No long-term contracts. Cancel from your dashboard — your access continues until the end of the billing period.' },
+  { q:'What counts as one scan?', a:'One scan sends every selected attack prompt (about 1,090 when you pick all 22 categories) to one target and produces a full report. A scan that fails or is cancelled before its first attack doesn’t count toward your monthly limit. A quick scan (about 110 attacks) and a re-test of the failed attacks also count as one scan each, and deleting a scan doesn’t give it back.' },
+  { q:'How long does a scan take?', a:'It depends on how fast your target answers. Each attack is one call to your target plus one grading call. A quick scan (about 110 attacks) takes a few minutes; you can also pick fewer categories.' },
+  { q:'Which AI apps can I scan?', a:'Any OpenAI-compatible API (OpenAI, Azure OpenAI, Together, Groq and others), your own Groq models, custom REST endpoints, and a simulation mode that tests a system prompt without a live API.' },
+  { q:'Can I scan production apps?', a:'Only apps you own or are explicitly authorized to test. Scans send real adversarial prompts and use your target’s API quota.' },
+  { q:'How do I cancel?', a:'From Settings → Manage billing. Stripe handles the subscription; your plan returns to Free when it ends.' },
 ];
+
+function money(amount, currency) {
+  return new Intl.NumberFormat('en', { style:'currency', currency: currency || 'eur', maximumFractionDigits: amount % 100 ? 2 : 0 }).format(amount / 100);
+}
 
 function FAQ({ q, a }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{
-      borderBottom:'1px solid var(--b1)',
-      transition:'border-color 0.15s',
-    }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width:'100%', padding:'20px 0',
-          display:'flex', alignItems:'center', justifyContent:'space-between', gap:'16px',
-          background:'none', border:'none', cursor:'pointer', textAlign:'left',
-        }}
-      >
-        <span style={{ fontSize:'15px', fontWeight:'600', color:'var(--t1)', lineHeight:'1.4' }}>{q}</span>
-        <div style={{
-          width:'24px', height:'24px', flexShrink:0,
-          background:'var(--s2)', border:'1px solid var(--b1)',
-          borderRadius:'6px', display:'flex', alignItems:'center', justifyContent:'center',
-          transition:'background 0.15s',
-        }}>
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform:open?'rotate(45deg)':'none', transition:'transform 0.2s' }}>
-            <path d="M6 2v8M2 6h8" stroke="var(--t2)" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        </div>
+    <div style={{ borderBottom:'1px solid var(--b1)' }}>
+      <button onClick={() => setOpen(o => !o)} aria-expanded={open}
+        style={{ width:'100%', padding:'18px 0', display:'flex', justifyContent:'space-between', gap:'16px', background:'none', border:'none', cursor:'pointer', textAlign:'left', fontFamily:'inherit' }}>
+        <span style={{ fontSize:'15px', fontWeight:'600', color:'var(--t1)' }}>{q}</span>
+        <span style={{ color:'var(--t3)' }}>{open ? '−' : '+'}</span>
       </button>
-      {open && (
-        <p style={{ color:'var(--t2)', fontSize:'14px', lineHeight:'1.7', paddingBottom:'20px' }}>{a}</p>
-      )}
+      {open && <p style={{ color:'var(--t2)', fontSize:'14px', lineHeight:1.7, paddingBottom:'18px' }}>{a}</p>}
     </div>
   );
 }
 
 export default function Pricing() {
+  const { user, role } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const [plans, setPlans] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [yearly, setYearly] = useState(false);
+
+  // a yearly subscriber sees yearly prices first
+  useEffect(() => { if (user?.billing_interval === 'year') setYearly(true); }, [user?.billing_interval]);
+
+  useEffect(() => {
+    plansAPI.list().then(r => setPlans(r.data.plans)).catch(() => setPlans({}));
+    if (params.get('payment') === 'cancelled') toast('Checkout cancelled. You haven’t been charged.', 'info');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const choose = async key => {
+    if (!user) { navigate('/register'); return; }
+    setBusy(key);
+    try {
+      const { data } = await plansAPI.checkout(key, yearly && plans[key]?.yearly ? 'year' : 'month');
+      window.location.assign(data.url);
+    } catch (e) {
+      toast(errorMessage(e, 'Checkout is unavailable right now.'), 'error');
+      setBusy('');
+    }
+  };
+
+  const cta = (key, plan) => {
+    if (user?.plan === key) {
+      // the same plan, billed the other way: the subscription moves to that price (prorated)
+      const interval = yearly && plan.yearly ? 'year' : 'month';
+      const other = key !== 'free' && plan.purchasable && plan.yearly && user.billing_interval
+        && user.billing_interval !== interval;
+      if (!other) return { label:'Your current plan', disabled:true };
+      if (role !== 'owner') return { label:'Only the workspace’s owner can change the plan', disabled:true };
+      return { label: interval === 'year' ? 'Switch to yearly billing' : 'Switch to monthly billing', onClick: () => choose(key) };
+    }
+    if (key === 'free') return user ? null : { label:'Start free', onClick: () => navigate('/register') };
+    if (!plan.purchasable) return { label:'Not available yet', disabled:true };
+    if (!user) return { label:`Start with ${plan.name}`, onClick: () => choose(key) };
+    if (role !== 'owner') return { label:'Only the workspace’s owner can change the plan', disabled:true };
+    // A paying customer moves their subscription to the other plan (prorated) rather than buying a second one
+    const up = (RANK[key] ?? 0) > (RANK[user.plan] ?? 0);
+    return { label: `${up ? 'Upgrade' : 'Switch'} to ${plan.name}`, onClick: () => choose(key) };
+  };
+
+  const list = plans ? ORDER.filter(k => plans[k]).map(k => [k, plans[k]]) : [];
+  const hasYearly = list.some(([, p]) => p.yearly);
+  // Stripe gives one trial per customer: someone who has paid before doesn't get another
+  const trialEligible = !user?.has_billing;
+  const shown = plan => (yearly && plan.yearly ? plan.yearly : plan);
+  const yearlySaving = plan => plan.yearly && plan.amount
+    ? Math.round(100 - (plan.yearly.amount / (plan.amount * 12)) * 100) : 0;
+
   return (
-    <div style={{ maxWidth:'1200px', margin:'0 auto' }}>
-
-      {/* ── Header ──────────────────────────────── */}
-      <div style={{ textAlign:'center', padding:'56px 24px 72px' }}>
-        <div style={{ display:'inline-flex', alignItems:'center', gap:'8px', border:'1px solid var(--b2)', borderRadius:'20px', padding:'5px 14px', fontSize:'11px', fontWeight:'600', textTransform:'uppercase', letterSpacing:'1px', color:'var(--blue)', marginBottom:'24px', background:'var(--blue-soft)' }}>
-          Simple pricing
-        </div>
-        <h1 style={{ fontSize:'56px', fontWeight:'900', letterSpacing:'-3px', lineHeight:'1.05', marginBottom:'18px' }}>
-          Start free.<br />
-          <span style={{ background:'linear-gradient(135deg, var(--blue), var(--purple))', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>
-            Scale with confidence.
-          </span>
+    <div style={{ maxWidth:'1080px', margin:'0 auto', padding:'0 16px' }}>
+      <div style={{ textAlign:'center', padding:'56px 0 48px' }}>
+        <h1 style={{ fontFamily:'Georgia, serif', fontSize:'48px', fontWeight:600, letterSpacing:'-1px', lineHeight:1.1, marginBottom:'14px' }}>
+          {hasYearly ? 'Simple pricing' : 'Simple, monthly pricing'}
         </h1>
-        <p style={{ fontSize:'17px', color:'var(--t2)', maxWidth:'460px', margin:'0 auto', lineHeight:'1.65' }}>
-          No hidden fees. No complex tiers. Cancel anytime.
+        <p style={{ fontSize:'16px', color:'var(--t2)', maxWidth:'520px', margin:'0 auto', lineHeight:1.6 }}>
+          Every plan tests all 22 attack categories and produces PDF, HTML and Markdown reports. Paid plans add more scans, team seats, scheduled scans, evidence reports, your brand on reports and the AI firewall.
         </p>
-      </div>
-
-      {/* ── Plans ───────────────────────────────── */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'16px', marginBottom:'96px', padding:'0 16px' }}>
-        {PLANS.map(plan => (
-          <div key={plan.id} style={{
-            background   : plan.popular ? 'var(--s2)' : 'var(--s1)',
-            border       : `1px solid ${plan.popular ? 'rgba(37,99,235,0.35)' : 'var(--b1)'}`,
-            borderRadius : '16px',
-            padding      : '32px',
-            position     : 'relative',
-            overflow     : 'hidden',
-            transform    : plan.popular ? 'scale(1.03)' : 'scale(1)',
-            boxShadow    : plan.popular ? '0 8px 40px rgba(37,99,235,0.12)' : 'none',
-            transition   : 'transform 0.2s, box-shadow 0.2s',
-          }}
-            onMouseEnter={e => { if (!plan.popular) { e.currentTarget.style.transform='translateY(-4px)'; e.currentTarget.style.borderColor='var(--b2)'; e.currentTarget.style.boxShadow='var(--sh)'; } }}
-            onMouseLeave={e => { if (!plan.popular) { e.currentTarget.style.transform='none'; e.currentTarget.style.borderColor='var(--b1)'; e.currentTarget.style.boxShadow='none'; } }}
-          >
-            {/* Top gradient line */}
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:'2px', background:`linear-gradient(90deg, transparent, ${plan.color}, transparent)` }} />
-
-            {plan.popular && (
-              <div style={{
-                position:'absolute', top:'18px', right:'18px',
-                background:'var(--blue-soft)', border:'1px solid rgba(37,99,235,0.3)',
-                color:'var(--blue)', padding:'3px 10px', borderRadius:'20px',
-                fontSize:'10px', fontWeight:'700', letterSpacing:'0.5px', textTransform:'uppercase',
-              }}>Most Popular</div>
-            )}
-
-            {/* Plan name */}
-            <div style={{ fontSize:'13px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.8px', color:plan.color, marginBottom:'12px' }}>
-              {plan.name}
-            </div>
-
-            {/* Price */}
-            <div style={{ display:'flex', alignItems:'baseline', gap:'4px', marginBottom:'6px' }}>
-              <span style={{ fontSize:'52px', fontWeight:'900', letterSpacing:'-3px', lineHeight:'1', color:'var(--t1)' }}>€{plan.price}</span>
-              <span style={{ fontSize:'14px', color:'var(--t3)', fontWeight:'500' }}>/mo</span>
-            </div>
-
-            <div style={{ fontSize:'13px', color:plan.color, fontWeight:'600', marginBottom:'8px' }}>{plan.scans}</div>
-            <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:'1.5', marginBottom:'28px', paddingBottom:'24px', borderBottom:'1px solid var(--b1)' }}>
-              {plan.desc}
-            </p>
-
-            {/* Features */}
-            <ul style={{ listStyle:'none', marginBottom:'32px', display:'flex', flexDirection:'column', gap:'10px' }}>
-              {plan.features.map((f, i) => (
-                <li key={i} style={{ display:'flex', alignItems:'flex-start', gap:'10px', fontSize:'14px', color:'var(--t2)' }}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink:0, marginTop:'2px' }}>
-                    <circle cx="8" cy="8" r="7" fill={`${plan.color}20`} />
-                    <path d="M5 8l2 2 4-4" stroke={plan.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  {f}
-                </li>
-              ))}
-            </ul>
-
-            {/* CTA */}
-            <Link to="/register" style={{
-              display      : 'block',
-              textAlign    : 'center',
-              padding      : '13px',
-              borderRadius : '8px',
-              fontSize     : '14px',
-              fontWeight   : '700',
-              transition   : 'all 0.15s',
-              textDecoration: 'none',
-              background   : plan.popular ? 'var(--blue)' : 'transparent',
-              color        : plan.popular ? '#fff' : 'var(--t1)',
-              border       : `1px solid ${plan.popular ? 'rgba(37,99,235,0.5)' : 'var(--b2)'}`,
-              boxShadow    : plan.popular ? '0 2px 12px rgba(37,99,235,0.3)' : 'none',
-            }}
-              onMouseEnter={e => { e.target.style.opacity='0.85'; e.target.style.transform='translateY(-1px)'; }}
-              onMouseLeave={e => { e.target.style.opacity='1';    e.target.style.transform='none'; }}
-            >
-              {plan.cta} →
-            </Link>
+        {hasYearly && (
+          <div role="group" aria-label="Billing period" style={{ display:'inline-flex', marginTop:'24px', border:'1px solid var(--b1)', borderRadius:'8px', padding:'3px' }}>
+            {[['Monthly', false], ['Yearly', true]].map(([label, value]) => (
+              <button key={label} type="button" aria-pressed={yearly === value} onClick={() => setYearly(value)}
+                style={{ padding:'7px 16px', border:'none', borderRadius:'6px', cursor:'pointer', fontFamily:'inherit', fontSize:'13px',
+                         background: yearly === value ? 'var(--t1)' : 'transparent', color: yearly === value ? 'var(--s1)' : 'var(--t2)' }}>
+                {label}
+              </button>
+            ))}
           </div>
-        ))}
+        )}
       </div>
 
-      {/* ── Comparison note ─────────────────────── */}
-      <div style={{ textAlign:'center', marginBottom:'80px', padding:'0 16px' }}>
-        <p style={{ fontSize:'13px', color:'var(--t3)' }}>
-          All plans include a 7-day free trial · No credit card required · Cancel anytime
-        </p>
-      </div>
-
-      {/* ── FAQ ─────────────────────────────────── */}
-      <div style={{ maxWidth:'680px', margin:'0 auto', padding:'0 16px', marginBottom:'80px' }}>
-        <div style={{ textAlign:'center', marginBottom:'48px' }}>
-          <div style={{ fontSize:'11px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'1.5px', color:'var(--blue)', marginBottom:'14px' }}>FAQ</div>
-          <h2 style={{ fontSize:'36px', fontWeight:'900', letterSpacing:'-1.5px' }}>Common questions.</h2>
+      {!plans ? (
+        <p style={{ textAlign:'center', color:'var(--t3)' }}>Loading plans…</p>
+      ) : list.length === 0 ? (
+        <p style={{ textAlign:'center', color:'var(--t3)' }}>Plans couldn’t be loaded. Please try again later.</p>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))', gap:'16px', marginBottom:'72px' }}>
+          {list.map(([key, plan]) => {
+            const action = cta(key, plan);
+            const featured = key === 'pro';
+            return (
+              <div key={key} style={{ background:'var(--s1)', border:`1px solid ${featured ? 'var(--t1)' : 'var(--b1)'}`, borderRadius:'12px', padding:'28px', display:'flex', flexDirection:'column' }}>
+                <div style={{ fontSize:'13px', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:'10px' }}>{plan.name}</div>
+                <div style={{ display:'flex', alignItems:'baseline', gap:'4px', marginBottom:'6px' }}>
+                  <span style={{ fontFamily:'Georgia, serif', fontSize:'44px', lineHeight:1 }}>{plan.amount ? money(shown(plan).amount, shown(plan).currency) : 'Free'}</span>
+                  {plan.amount > 0 && <span style={{ fontSize:'14px', color:'var(--t3)' }}>/ {shown(plan).interval}</span>}
+                </div>
+                {yearly && plan.yearly && yearlySaving(plan) > 0 && (
+                  <div style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'6px' }}>
+                    {money(Math.round(plan.yearly.amount / 12), plan.yearly.currency)} a month, {yearlySaving(plan)}% less than monthly
+                  </div>
+                )}
+                <div style={{ fontSize:'13px', fontWeight:'600', marginBottom:'6px' }}>
+                  {plan.scan_limit == null ? 'Unlimited scans' : `${plan.scan_limit} scans per month`}
+                </div>
+                {plan.trial_days > 0 && trialEligible && <div style={{ fontSize:'12px', color:'#16a34a', marginBottom:'6px' }}>{plan.trial_days}-day free trial</div>}
+                <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:1.5, paddingBottom:'18px', borderBottom:'1px solid var(--b1)', marginBottom:'18px' }}>{DESCRIPTIONS[key]}</p>
+                <ul style={{ listStyle:'none', padding:0, margin:'0 0 24px', display:'grid', gap:'8px', flex:1, alignContent:'start' }}>
+                  {plan.features.map(f => <li key={f} style={{ fontSize:'14px', color:'var(--t2)' }}>✓ {f}</li>)}
+                </ul>
+                {action && (
+                  <button onClick={action.onClick} disabled={action.disabled || busy === key}
+                    className={featured && !action.disabled ? 'btn-primary' : 'btn-outline'}
+                    style={{ width:'100%', justifyContent:'center', padding:'12px' }}>
+                    {busy === key ? 'Opening checkout…' : action.label}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
-        {FAQS.map((item, i) => <FAQ key={i} {...item} />)}
+      )}
+
+      <div style={{ maxWidth:'680px', margin:'0 auto 72px' }}>
+        <h2 style={{ fontFamily:'Georgia, serif', fontSize:'30px', fontWeight:600, textAlign:'center', marginBottom:'24px' }}>Questions</h2>
+        {FAQS.map(item => <FAQ key={item.q} {...item} />)}
       </div>
 
-      {/* ── Bottom CTA ──────────────────────────── */}
-      <div style={{
-        background  : 'var(--s1)',
-        border      : '1px solid var(--b1)',
-        borderRadius: '20px',
-        padding     : '64px 48px',
-        textAlign   : 'center',
-        marginBottom: '56px',
-        position    : 'relative',
-        overflow    : 'hidden',
-      }}>
-        <div style={{ position:'absolute', inset:0, background:'radial-gradient(ellipse 60% 60% at 50% 0%, rgba(37,99,235,0.06) 0%, transparent 60%)', pointerEvents:'none' }} />
-        <h2 style={{ fontSize:'40px', fontWeight:'900', letterSpacing:'-2px', lineHeight:'1.1', marginBottom:'14px' }}>
-          Ready to secure your<br />AI application?
-        </h2>
-        <p style={{ fontSize:'16px', color:'var(--t2)', marginBottom:'36px', maxWidth:'400px', margin:'0 auto 36px', lineHeight:'1.65' }}>
-          Start for free. Full report on your first scan. No credit card needed.
-        </p>
-        <div style={{ display:'flex', gap:'12px', justifyContent:'center', flexWrap:'wrap' }}>
-          <Link to="/register" className="btn-hero btn-hero-primary" style={{ fontSize:'15px', padding:'13px 32px' }}>
-            Start free today →
-          </Link>
-          <Link to="/login" className="btn-hero btn-hero-ghost" style={{ fontSize:'15px', padding:'13px 32px' }}>
-            Sign in
-          </Link>
+      {!user && (
+        <div style={{ textAlign:'center', marginBottom:'56px' }}>
+          <Link to="/register" className="btn-hero btn-hero-primary" style={{ fontSize:'15px', padding:'13px 32px' }}>Create a free account</Link>
         </div>
-      </div>
-
+      )}
     </div>
   );
 }

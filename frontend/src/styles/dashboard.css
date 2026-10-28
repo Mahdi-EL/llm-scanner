@@ -46,7 +46,7 @@
 .sidebar-section-label {
   font-size:9px; font-weight:700;
   text-transform:uppercase; letter-spacing:1px;
-  color:var(--t3); opacity:0.5;
+  color:var(--t3);
   padding:8px 10px 4px;
 }
 
@@ -156,11 +156,13 @@
   min-height     : 100vh;
   display        : flex;
   flex-direction : column;
+  min-width      : 0;      /* let wide tables scroll instead of stretching the page */
 }
 .app-with-sidebar .main-content {
   padding   : 36px 52px;
   max-width : 1200px;
   flex      : 1;
+  min-width : 0;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -242,7 +244,7 @@
 .marquee-pill:hover { border-color:var(--b2); color:var(--t2); }
 .marquee-pill.accent { color:var(--blue); border-color:rgba(37,99,235,0.2); background:rgba(37,99,235,0.06); }
 .marquee-pill.warn   { color:var(--orange); border-color:rgba(251,146,60,0.2); background:rgba(251,146,60,0.06); }
-.marquee-pill.danger { color:#fb7185; border-color:rgba(240,68,56,0.2); background:rgba(240,68,56,0.06); }
+.marquee-pill.danger { color:#b42318; border-color:rgba(240,68,56,0.2); background:rgba(240,68,56,0.06); }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    TESTIMONIALS
@@ -996,6 +998,16 @@
   display    : flex;
   align-items: center;
   gap        : 10px;
+  min-width  : 0;             /* lets the workspace name shorten instead of widening the page */
+}
+.topbar-right { flex-shrink:0; }
+.topbar-workspace {
+  font-size    : 12px;
+  color        : var(--t3);
+  white-space  : nowrap;
+  overflow     : hidden;
+  text-overflow: ellipsis;
+  min-width    : 0;
 }
 .topbar-page-icon {
   font-size  : 14px;
@@ -1175,6 +1187,11 @@
   position     : relative;
 }
 .notif-item:hover { background:var(--s2); }
+.notif-open {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start;
+  padding: 0; border: none; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer;
+}
+.notif-open .notif-item-title, .notif-open .notif-item-time { display: block; max-width: 100%; }
 .notif-item.unread {
   background: rgba(37,99,235,0.05);
 }
@@ -1196,6 +1213,7 @@
 .notif-item-title {
   font-size  : 12px; font-weight:700; color:var(--t1);
   margin-bottom:2px;
+  overflow-wrap: anywhere;
 }
 .notif-item-body {
   font-size  : 11px; color:var(--t3);
@@ -1207,7 +1225,7 @@
   -webkit-box-orient: vertical;
 }
 .notif-item-time {
-  font-size  : 10px; color:var(--t3); opacity:0.6;
+  font-size  : 10px; color:var(--t3);
 }
 .notif-dismiss {
   background : none; border:none;
@@ -1219,7 +1237,7 @@
   flex-shrink: 0;
   margin-top : 2px;
 }
-.notif-item:hover .notif-dismiss { opacity:1; }
+.notif-item:hover .notif-dismiss, .notif-item:focus-within .notif-dismiss { opacity:1; }
 .notif-dismiss:hover { color:var(--t1); background:var(--s3); }
 
 .notif-footer {
@@ -1467,3 +1485,121 @@
 }
 button:focus:not(:focus-visible) { outline: none; }
 
+
+/* ── Findings: raw attack / reply text ─────────────────────── */
+.finding-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  font: 12px/1.6 ui-monospace, Menlo, Consolas, monospace;
+  color: var(--t2);
+  background: var(--s3, rgba(17, 24, 39, 0.03));
+  border: 1px solid var(--b1);
+  border-radius: 6px;
+  padding: 10px 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+/* ── Mobile nav drawer (the sidebar is hidden under 900px) ── */
+.topbar-menu-btn {
+  display:none; align-items:center; justify-content:center;
+  width:32px; height:32px; margin-right:2px;
+  background:none; border:1px solid var(--b1); border-radius:7px;
+  color:var(--t2); cursor:pointer;
+}
+.sidebar-backdrop { display:none; }
+@media (max-width:900px) {
+  .topbar-menu-btn { display:inline-flex; }
+  .topbar { padding:0 16px; }
+  .topbar-cmd-label, .topbar-kbd { display:none; }
+  .sidebar.mobile-open { display:flex; width:264px; box-shadow:0 0 40px rgba(16,24,40,0.25); z-index:310; }
+  .sidebar.collapsed ~ .app-main { margin-left:0; }
+  .sidebar-backdrop { display:block; position:fixed; inset:0; background:rgba(17,24,39,0.35); z-index:300; }
+  .sidebar.mobile-open .sidebar-collapse-btn { display:none; }
+}
+@media (max-width:480px) {
+  .topbar-new-scan-btn { display:none; }      /* the drawer and the page itself both offer New Scan */
+  .topbar-page-icon { display:none; }
+  /* the bell isn't at the screen's edge: a 340 px panel under it would start off-screen */
+  .notif-panel { position:fixed; top:60px; left:12px; right:12px; width:auto; }
+}
+
+/* Wide grid "tables" scroll sideways inside their card on narrow screens */
+.table-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+/* Dashboard: posture gauge beside the score history, stacked on phones */
+.posture-grid { display:grid; grid-template-columns:210px minmax(0,1fr); gap:12px; margin-bottom:14px; }
+@media (max-width:700px) {
+  .posture-grid { grid-template-columns:1fr; }
+}
+
+/* Analytics: two-card rows, stacked below tablet width */
+.an-row { display:grid; gap:16px; margin-bottom:16px; }
+.an-row > * { min-width:0; }
+.an-row-wide-left  { grid-template-columns:minmax(0,2fr) minmax(0,1fr); }
+.an-row-wide-right { grid-template-columns:minmax(0,1fr) minmax(0,2fr); }
+@media (max-width:900px) {
+  .an-row-wide-left, .an-row-wide-right { grid-template-columns:1fr; }
+}
+
+/* Results: the score beside the failed attacks by category, stacked below tablet width */
+.results-summary { display:grid; grid-template-columns:minmax(260px, 1fr) minmax(0, 2fr); gap:32px; margin-bottom:16px; padding:28px 32px; }
+.results-summary > * { min-width:0; }
+@media (max-width:900px) {
+  .results-summary { grid-template-columns:1fr; gap:24px; padding:22px 20px; }
+}
+
+/* Targets: the add / edit form's paired fields, stacked on phones */
+.tg-form-row { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:12px; }
+@media (max-width:640px) {
+  .tg-form-row { grid-template-columns:1fr; }
+}
+
+/* Attack library: the summary numbers wrap on phones */
+@media (max-width:640px) {
+  .ti-summary-strip { grid-template-columns:repeat(6, 1fr); }
+  .ti-stat { padding:14px 8px; grid-column:span 2; }
+  .ti-stat:nth-child(n+4) { grid-column:span 3; }       /* three on the first row, two filling the second */
+  .ti-stat-val { font-size:22px; }
+}
+
+/* Attack library: custom prompt form, stacked on phones */
+.custom-prompt-form { display:grid; grid-template-columns:180px minmax(0,1fr) auto; gap:8px; align-items:start; }
+@media (max-width:640px) {
+  .custom-prompt-form { grid-template-columns:1fr; }
+}
+
+/* Confirm dialog: asks before deleting, revoking or leaving (instead of the browser's confirm()) */
+.confirm-backdrop {
+  position       : fixed;
+  inset          : 0;
+  z-index        : 1000;
+  display        : flex;
+  align-items    : center;
+  justify-content: center;
+  padding        : 16px;
+  background     : rgba(17,24,39,0.38);
+}
+.confirm-dialog {
+  width        : 100%;
+  max-width    : 420px;
+  padding      : 22px 22px 18px;
+  background   : var(--s1);
+  border-radius: 12px;
+  box-shadow   : var(--sh-lg);
+}
+.confirm-title { margin:0 0 8px; font-size:16px; font-weight:700; color:var(--t1); }
+.confirm-body  { margin:0 0 20px; font-size:14px; line-height:1.55; color:var(--t2); }
+.confirm-actions { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.btn-confirm-danger {
+  padding      : 8px 16px;
+  border       : 1px solid var(--red);
+  border-radius: var(--r-sm);
+  background   : var(--red);
+  color        : #fff;
+  font         : 600 13px/1.2 inherit;
+  cursor       : pointer;
+}
+.btn-confirm-danger:hover { background:#b91c1c; border-color:#b91c1c; }
+.btn-confirm-danger:focus-visible { outline:2px solid var(--red); outline-offset:2px; }

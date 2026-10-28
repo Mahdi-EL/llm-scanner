@@ -1,41 +1,7 @@
-venv/
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-.env
-.env.*
-!.env.example
-
-# Frontend (built separately)
-frontend/node_modules/
-frontend/build/
-frontend/.env*
-
-# Results / generated files
-results/*.pdf
-results/*.html
-results/*.md
-results/*.db
-
-# Dev / test
-.pytest_cache/
-*.pytest_cache/
-tests/
-.github/
-.claude/
-.vscode/
-vscode-llm-scanner/
-
-# Git
-.git/
-.gitignore
-
-# Docs
-*.md
+# The API image only needs requirements.txt and backend/ (see Dockerfile).
+**
 !requirements.txt
-
-# Python eggs
-*.egg-info/
-dist/
-build/
+!backend/
+backend/tests/
+backend/**/__pycache__/
+backend/**/*.pyc

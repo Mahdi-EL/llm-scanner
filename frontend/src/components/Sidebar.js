@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
@@ -80,9 +80,9 @@ const NAV_MAIN = [
   { path:'/',              icon:<IcoDashboard />,    label:'Dashboard' },
   { path:'/new-scan',      icon:<IcoScan />,         label:'New Scan' },
   { path:'/reports',       icon:<IcoReports />,      label:'Reports' },
-  { path:'/integrations',  icon:<IcoIntegrations />, label:'Integrations' },
+  { path:'/targets',       icon:<IcoIntegrations />, label:'Targets & CI' },
   { path:'/analytics',     icon:<IcoAnalytics />,    label:'Analytics' },
-  { path:'/threat-intel',  icon:<IcoThreatIntel />,  label:'Threat Intel' },
+  { path:'/threat-intel',  icon:<IcoThreatIntel />,  label:'Attack library' },
 ];
 
 const NAV_BOTTOM = [
@@ -91,26 +91,43 @@ const NAV_BOTTOM = [
 ];
 
 const PLAN_STYLE = {
-  free      : { bg:'rgba(17,24,39,0.06)',  color:'rgba(17,24,39,0.38)', border:'rgba(17,24,39,0.1)' },
-  pro       : { bg:'rgba(37,99,235,0.15)',   color:'#2563eb',               border:'rgba(37,99,235,0.3)' },
-  enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#16a34a',               border:'rgba(34,197,94,0.3)' },
+  free      : { bg:'rgba(17,24,39,0.06)',  color:'#545b68', border:'rgba(17,24,39,0.1)' },
+  pro       : { bg:'rgba(37,99,235,0.15)',   color:'#1d4ed8',               border:'rgba(37,99,235,0.3)' },
+  enterprise: { bg:'rgba(34,197,94,0.12)',    color:'#166534',               border:'rgba(34,197,94,0.3)' },
 };
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onClose }) {
   const location  = useLocation();
   const navigate  = useNavigate();
-  const { user, logout } = useAuth();
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem('sidebar_collapsed') === '1'
-  );
+  const { user, logout, switchWorkspace, canEdit } = useAuth();
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebar_collapsed') === '1'; } catch { return false; }
+  });
 
   const toggle = () => {
     setCollapsed(c => {
       const next = !c;
-      localStorage.setItem('sidebar_collapsed', next ? '1' : '0');
+      try { localStorage.setItem('sidebar_collapsed', next ? '1' : '0'); } catch { /* storage off */ }
       return next;
     });
   };
+
+  // The phone drawer: focus moves into it when it opens and back to the menu button when it closes,
+  // so keyboard users land in the menu they just opened. onClose is a new function on every render.
+  const asideRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const opener = document.activeElement;
+    asideRef.current?.querySelector('a[href], button')?.focus();
+    const onKey = e => { if (e.key === 'Escape') closeRef.current?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (opener && document.contains(opener)) opener.focus?.();
+    };
+  }, [mobileOpen]);
 
   const isActive = path =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
@@ -120,7 +137,9 @@ export default function Sidebar() {
   const isFree  = !user?.plan || user.plan === 'free';
 
   return (
-    <aside className={`sidebar${collapsed ? ' collapsed' : ''}`}>
+    <>
+    {mobileOpen && <div className="sidebar-backdrop" onClick={onClose} />}
+    <aside ref={asideRef} className={`sidebar${collapsed && !mobileOpen ? ' collapsed' : ''}${mobileOpen ? ' mobile-open' : ''}`}>
 
       {/* ── Logo ──────────────────────────── */}
       <Link to="/" className="sidebar-logo" style={{ textDecoration:'none' }}>
@@ -130,8 +149,8 @@ export default function Sidebar() {
         </span>
       </Link>
 
-      {/* ── New Scan quick button ─────────── */}
-      <div style={{ padding:'10px 10px 0' }}>
+      {/* ── New Scan quick button (not for viewers: they can't start scans) ── */}
+      {canEdit && <div style={{ padding:'10px 10px 0' }}>
         <button
           onClick={() => navigate('/new-scan')}
           className="sidebar-new-scan"
@@ -151,16 +170,17 @@ export default function Sidebar() {
           <IcoPlus />
           <span className="sidebar-new-scan-text">New Scan</span>
         </button>
-      </div>
+      </div>}
 
       {/* ── Nav ───────────────────────────── */}
       <nav className="sidebar-nav">
         <div className="sidebar-section-label">Menu</div>
-        {NAV_MAIN.map(item => (
+        {NAV_MAIN.filter(item => canEdit || item.path !== '/new-scan').map(item => (
           <Link
             key={item.path}
             to={item.path}
             className={`sidebar-link${isActive(item.path) ? ' active' : ''}`}
+            aria-current={isActive(item.path) ? 'page' : undefined}
           >
             <span className="sidebar-link-icon">{item.icon}</span>
             <span className="sidebar-link-label">{item.label}</span>
@@ -173,6 +193,7 @@ export default function Sidebar() {
             key={item.path}
             to={item.path}
             className={`sidebar-link${isActive(item.path) ? ' active' : ''}`}
+            aria-current={isActive(item.path) ? 'page' : undefined}
           >
             <span className="sidebar-link-icon">{item.icon}</span>
             <span className="sidebar-link-label">{item.label}</span>
@@ -188,14 +209,15 @@ export default function Sidebar() {
             Upgrade
           </div>
           <div className="sidebar-upgrade-title">Unlock Pro features</div>
-          <div className="sidebar-upgrade-sub">50 scans/mo, API access, priority queue &amp; more.</div>
+          <div className="sidebar-upgrade-sub">200 scans a month, scheduled scans and regression alerts.</div>
           <Link to="/pricing" className="sidebar-upgrade-cta">View Plans →</Link>
         </div>
       )}
 
       {/* ── Collapse button ────────────────── */}
       <div style={{ padding:'0 10px 4px' }}>
-        <button className="sidebar-collapse-btn" onClick={toggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+        <button className="sidebar-collapse-btn" onClick={toggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed}>
           {collapsed ? <IcoChevronRight /> : <IcoChevronLeft />}
         </button>
       </div>
@@ -218,10 +240,24 @@ export default function Sidebar() {
             </span>
           </div>
         </div>
+        {user?.workspaces?.length > 1 && (
+          <label className="sidebar-workspace" style={{ display:'block', padding:'8px 2px 0', fontSize:'11px', color:'var(--t3)' }}>
+            Workspace
+            <select value={user.workspace?.id || user.id} onChange={e => switchWorkspace(e.target.value)}
+              style={{ display:'block', width:'100%', marginTop:'4px', fontSize:'12px' }}>
+              {user.workspaces.map(w => (
+                <option key={w.id} value={w.id} disabled={w.active === false}>
+                  {w.name}{w.active === false ? ' (paused: no seat)' : w.role !== 'owner' ? ` (${w.role})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button className="sidebar-sign-out" onClick={() => { logout(); navigate('/login'); }}>
           <IcoSignOut /> <span>Sign out</span>
         </button>
       </div>
     </aside>
+    </>
   );
 }
