@@ -47,7 +47,7 @@ describe('shortDate / fmtNum', () => {
     expect(shortDate('2026-10-19T08:00:00Z')).toBe('Oct 19');
     expect(shortDate('2026-10-19T08:00:00Z', true)).toBe('Oct 19, 2026');
     expect(shortDate(null)).toBe('—');
-    expect(fmtNum(1090)).toBe('1,090');
+    expect(fmtNum(12345)).toBe('12,345');
   });
 });
 

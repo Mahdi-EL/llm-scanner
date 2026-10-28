@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { plansAPI, errorMessage } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useLibrary } from '../utils/hooks';
+import { fmtNum } from '../utils/format';
 
 const ORDER = ['free', 'pro', 'enterprise'];
 const RANK = { free: 0, pro: 1, enterprise: 2 };
@@ -13,9 +15,11 @@ const DESCRIPTIONS = {
   enterprise: 'For security teams scanning many applications.',
 };
 
-const FAQS = [
-  { q:'What counts as one scan?', a:'One scan sends every selected attack prompt (about 1,090 when you pick all 22 categories) to one target and produces a full report. A scan that fails or is cancelled before its first attack doesn’t count toward your monthly limit. A quick scan (about 110 attacks) and a re-test of the failed attacks also count as one scan each, and deleting a scan doesn’t give it back.' },
-  { q:'How long does a scan take?', a:'It depends on how fast your target answers. Each attack is one call to your target plus one grading call. A quick scan (about 110 attacks) takes a few minutes; you can also pick fewer categories.' },
+/* lib: the attack library's counts (useLibrary), null until they load */
+const quickScan = lib => `A quick scan${lib?.quick ? ` (about ${fmtNum(lib.quick)} attacks)` : ''}`;
+const FAQS = lib => [
+  { q:'What counts as one scan?', a:`One scan sends every selected attack prompt${lib ? ` (about ${fmtNum(lib.attacks)} when you pick all ${lib.categories} categories)` : ''} to one target and produces a full report. A scan that fails or is cancelled before its first attack doesn’t count toward your monthly limit. ${quickScan(lib)} and a re-test of the failed attacks also count as one scan each, and deleting a scan doesn’t give it back.` },
+  { q:'How long does a scan take?', a:`It depends on how fast your target answers. Each attack is one call to your target plus one grading call. ${quickScan(lib)} takes a few minutes; you can also pick fewer categories.` },
   { q:'Which AI apps can I scan?', a:'Any OpenAI-compatible API (OpenAI, Azure OpenAI, Together, Groq and others), your own Groq models, custom REST endpoints, and a simulation mode that tests a system prompt without a live API.' },
   { q:'Can I scan production apps?', a:'Only apps you own or are explicitly authorized to test. Scans send real adversarial prompts and use your target’s API quota.' },
   { q:'How do I cancel?', a:'From Settings → Manage billing. Stripe handles the subscription; your plan returns to Free when it ends.' },
@@ -47,6 +51,7 @@ export default function Pricing() {
   const [plans, setPlans] = useState(null);
   const [busy, setBusy] = useState('');
   const [yearly, setYearly] = useState(false);
+  const lib = useLibrary();
 
   // a yearly subscriber sees yearly prices first
   useEffect(() => { if (user?.billing_interval === 'year') setYearly(true); }, [user?.billing_interval]);
@@ -102,7 +107,7 @@ export default function Pricing() {
           {hasYearly ? 'Simple pricing' : 'Simple, monthly pricing'}
         </h1>
         <p style={{ fontSize:'16px', color:'var(--t2)', maxWidth:'520px', margin:'0 auto', lineHeight:1.6 }}>
-          Every plan tests all 22 attack categories and produces PDF, HTML and Markdown reports. Paid plans add more scans, team seats, scheduled scans, evidence reports, your brand on reports and the AI firewall.
+          Every plan tests {lib ? `all ${lib.categories} attack categories` : 'every attack category'} and produces PDF, HTML and Markdown reports. Paid plans add more scans, team seats, scheduled scans, evidence reports, your brand on reports and the AI firewall.
         </p>
         {hasYearly && (
           <div role="group" aria-label="Billing period" style={{ display:'inline-flex', marginTop:'24px', border:'1px solid var(--b1)', borderRadius:'8px', padding:'3px' }}>
@@ -161,7 +166,7 @@ export default function Pricing() {
 
       <div style={{ maxWidth:'680px', margin:'0 auto 72px' }}>
         <h2 style={{ fontFamily:'Georgia, serif', fontSize:'30px', fontWeight:600, textAlign:'center', marginBottom:'24px' }}>Questions</h2>
-        {FAQS.map(item => <FAQ key={item.q} {...item} />)}
+        {FAQS(lib).map(item => <FAQ key={item.q} {...item} />)}
       </div>
 
       {!user && (

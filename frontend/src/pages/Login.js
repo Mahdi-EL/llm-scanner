@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { safeNext } from '../utils/format';
+import { fmtNum, safeNext } from '../utils/format';
+import { useLibrary } from '../utils/hooks';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/Logo';
 import { errorMessage } from '../services/api';
@@ -12,9 +13,10 @@ const SCAN_ATTACKS = [
   { name:'Policy Bypass',     val:12, accent:'#16a34a' },
 ];
 
-const TRUST = [
-  { value:'1,000+', label:'Attack prompts' },
-  { value:'22',    label:'Attack categories' },
+/* lib: the attack library's counts (useLibrary), null until they load */
+const TRUST = lib => [
+  ...(lib ? [{ value: fmtNum(lib.attacks), label:'Attack prompts' },
+             { value: String(lib.categories), label:'Attack categories' }] : []),
   { value:'OWASP', label:'LLM Top 10 mapped' },
 ];
 
@@ -33,6 +35,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [params] = useSearchParams();
+  const lib = useLibrary();
 
   const handle = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -60,8 +63,8 @@ export default function Login() {
         <div className="pw-aside-mid">
           <h2 className="pw-aside-title">Security testing for your AI, on autopilot.</h2>
           <p className="pw-aside-sub">
-            Fire 1,000+ adversarial prompts across 22 attack categories and get a full
-            security report in minutes.
+            Fire {lib ? `${fmtNum(lib.attacks)} adversarial prompts across ${lib.categories} attack categories`
+              : 'adversarial prompts from every attack category'} and get a full security report in minutes.
           </p>
 
           {/* Product card */}
@@ -92,7 +95,7 @@ export default function Login() {
         </div>
 
         <div className="pw-trust">
-          {TRUST.map(t => (
+          {TRUST(lib).map(t => (
             <div key={t.label} className="pw-trust-item">
               <strong>{t.value}</strong>
               <span>{t.label}</span>

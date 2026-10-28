@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { scansAPI, saveBlob, errorMessage } from '../services/api';
-import { usePolling } from '../utils/hooks';
-import { relTime, toCSV, isActive, scoreColor, riskLabel } from '../utils/format';
+import { usePolling, useLibrary } from '../utils/hooks';
+import { fmtNum, relTime, toCSV, isActive, scoreColor, riskLabel } from '../utils/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -157,12 +157,13 @@ function SkeletonRows() {
 
 /* ── Empty hero ────────────────────────────────────────── */
 function EmptyHero({ onStart, onLibrary }) {
+  const lib = useLibrary();
   return (
     <div style={{ textAlign:'center', padding:'72px 40px', maxWidth:'480px', margin:'0 auto' }}>
       <div style={{ width:'80px', height:'80px', margin:'0 auto 24px', borderRadius:'22px', background:'linear-gradient(135deg,rgba(37,99,235,0.12),rgba(155,110,243,0.12))', border:'1px solid rgba(37,99,235,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'36px', boxShadow:'0 0 50px rgba(37,99,235,0.1), 0 0 0 12px rgba(37,99,235,0.04)' }}>🛡</div>
       <h2 style={{ fontSize:'22px', fontWeight:'800', letterSpacing:'-0.5px', marginBottom:'10px' }}>{onStart ? 'Ready to secure your AI?' : 'No scans in this workspace yet'}</h2>
       <p style={{ fontSize:'14px', color:'var(--t2)', lineHeight:'1.7', marginBottom:'28px' }}>
-        {onStart ? 'Launch your first adversarial scan: over 1,000 attack prompts across 22 categories. No API key required in Simulation mode.'
+        {onStart ? `Launch your first adversarial scan: ${lib ? `${fmtNum(lib.attacks)} attack prompts across ${lib.categories} categories` : 'attack prompts from every category'}. No API key required in Simulation mode.`
                  : 'You can read this workspace’s scans and reports. When a member runs a scan, it shows up here.'}
       </p>
       <div style={{ display:'flex', gap:'10px', justifyContent:'center', flexWrap:'wrap' }}>
@@ -175,7 +176,7 @@ function EmptyHero({ onStart, onLibrary }) {
         </button>
       </div>
       <div style={{ marginTop:'36px', display:'flex', gap:'28px', justifyContent:'center' }}>
-        {[['22','Attack categories'],['1K+','Prompts per scan'],['100','Max score']].map(([n,l])=>(
+        {[[lib?.categories,'Attack categories'],[lib && fmtNum(lib.attacks),'Prompts per scan'],['100','Max score']].filter(([n])=>n).map(([n,l])=>(
           <div key={l} style={{ textAlign:'center' }}>
             <div style={{ fontSize:'20px', fontWeight:'900', color:'var(--t1)', letterSpacing:'-0.5px' }}>{n}</div>
             <div style={{ fontSize:'11px', color:'var(--t3)', marginTop:'2px' }}>{l}</div>

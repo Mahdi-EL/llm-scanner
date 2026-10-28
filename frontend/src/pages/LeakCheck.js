@@ -2,16 +2,20 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { publicAPI, errorMessage, CHECKED_PROMPT_KEY } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useLibrary } from '../utils/hooks';
+import { fmtNum } from '../utils/format';
 
 const MIN = 20, MAX = 4000;
 
-/* Free, no account: does this system prompt come out under 20 common attacks? */
+/* Free, no account: does this system prompt come out under a sample of common attacks? */
 export default function LeakCheck() {
   const { user } = useAuth();
   const [prompt, setPrompt] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const lib = useLibrary();
+  const sample = lib?.leakCheck ? `${lib.leakCheck} attacks` : 'the attacks';
 
   const run = async e => {
     e.preventDefault();
@@ -32,8 +36,8 @@ export default function LeakCheck() {
         Is your system prompt leaking?
       </h1>
       <p style={{ fontSize:'15px', color:'var(--t2)', lineHeight:1.7, marginBottom:'24px' }}>
-        Paste your system prompt. We give it to a demo model and send 20 extraction and override attacks from our
-        library, then tell you how many got it out. Nothing is stored, and the model’s replies aren’t shown.
+        Paste your system prompt. We give it to a demo model and send {lib?.leakCheck ? lib.leakCheck : 'a sample of'} extraction
+        and override attacks from our library, then tell you how many got it out. Nothing is stored, and the model’s replies aren’t shown.
       </p>
 
       <form onSubmit={run}>
@@ -44,7 +48,7 @@ export default function LeakCheck() {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', marginTop:'10px', flexWrap:'wrap' }}>
           <span style={{ fontSize:'12px', color:'var(--t3)' }}>{prompt.length.toLocaleString('en-US')} / {MAX.toLocaleString('en-US')} characters</span>
           <button type="submit" className="btn-primary" disabled={busy} style={{ padding:'11px 22px' }}>
-            {busy ? 'Running 20 attacks… about 20 seconds' : 'Run the free check'}
+            {busy ? `Running ${sample}… about 20 seconds` : 'Run the free check'}
           </button>
         </div>
       </form>
@@ -53,7 +57,7 @@ export default function LeakCheck() {
 
       {/* on the page from the start, so screen readers announce the check starting and its outcome */}
       <p className="sr-only" role="status">
-        {busy ? 'Running 20 attacks, about 20 seconds.' : result ? (result.leaked
+        {busy ? `Running ${sample}, about 20 seconds.` : result ? (result.leaked
           ? `${result.leaked} of ${result.attacks} attacks got your prompt out.`
           : `None of ${result.attacks} attacks got your prompt out word for word.`) : ''}
       </p>
@@ -78,8 +82,8 @@ export default function LeakCheck() {
           )}
           <p style={{ fontSize:'13px', color:'var(--t3)', lineHeight:1.7, marginTop:'18px' }}>
             This quick check runs on a demo model and only counts word-for-word leaks (including a password or code your
-            prompt states). A full scan sends 1,090 attacks
-            to your real app, grades every reply (paraphrased leaks too) and writes a hardened prompt for you.
+            prompt states). A full scan sends {lib ? `${fmtNum(lib.attacks)} attacks` : 'every attack in the library'}
+            {' '}to your real app, grades every reply (paraphrased leaks too) and writes a hardened prompt for you.
           </p>
           <Link to={next} onClick={carryPrompt} className="btn-primary" style={{ display:'inline-flex', marginTop:'8px', padding:'11px 22px' }}>
             {user ? 'Run a full scan' : 'Run a full scan, free'}
