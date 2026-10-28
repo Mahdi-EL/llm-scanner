@@ -47,7 +47,9 @@ export default function FirewallPanel({ Snippet }) {
 
   return (
     <section style={{ marginTop:'32px' }}>
-      <h2 style={{ fontSize:'15px', fontWeight:'700', marginBottom:'4px' }}>Runtime AI firewall</h2>
+      <h2 style={{ fontSize:'15px', fontWeight:'700', marginBottom:'4px' }}>
+        Runtime AI firewall <span className="badge badge-beta" style={{ marginLeft:'6px', verticalAlign:'middle' }}>Beta</span>
+      </h2>
       <p style={{ fontSize:'12px', color:'var(--t3)', marginBottom:'14px' }}>
         Screen each user message before it reaches your model (prompt injection, jailbreaks, hidden instructions),
         and each reply before it reaches your user (leaked secrets, the system prompt).

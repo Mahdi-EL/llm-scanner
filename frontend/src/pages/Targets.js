@@ -223,6 +223,7 @@ const client = new OpenAI({
   return (
     <div style={{ padding:'4px 20px 18px', borderBottom:'1px solid var(--b1)', background:'var(--s2)' }}>
       <p style={{ fontSize:'13px', color:'var(--t2)', lineHeight:1.6, margin:'12px 0' }}>
+        <span className="badge badge-beta" style={{ marginRight:'8px' }}>Beta</span>
         Send this app's chat requests through the AI firewall: change only the base URL and the API key of your
         OpenAI client. Injections are blocked before they reach the model (the caller gets a refusal), and leaked
         secrets or system-prompt text are removed from replies and from the arguments of tool calls. Each request

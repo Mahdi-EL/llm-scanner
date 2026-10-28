@@ -107,7 +107,7 @@ export default function Pricing() {
           {hasYearly ? 'Simple pricing' : 'Simple, monthly pricing'}
         </h1>
         <p style={{ fontSize:'16px', color:'var(--t2)', maxWidth:'520px', margin:'0 auto', lineHeight:1.6 }}>
-          Every plan tests {lib ? `all ${lib.categories} attack categories` : 'every attack category'} and produces PDF, HTML and Markdown reports. Paid plans add more scans, team seats, scheduled scans, evidence reports, your brand on reports and the AI firewall.
+          Every plan tests {lib ? `all ${lib.categories} attack categories` : 'every attack category'} and produces PDF, HTML and Markdown reports. Paid plans add more scans, team seats, scheduled scans, evidence reports, your brand on reports and the AI firewall (beta).
         </p>
         {hasYearly && (
           <div role="group" aria-label="Billing period" style={{ display:'inline-flex', marginTop:'24px', border:'1px solid var(--b1)', borderRadius:'8px', padding:'3px' }}>

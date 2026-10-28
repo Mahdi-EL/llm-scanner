@@ -44,7 +44,7 @@ _REMEDIATION_DAILY = {"free": _limit("FREE_REMEDIATION_DAILY", 10), "pro": _limi
 
 
 def _firewall_feature(checks: int, prefix: str) -> list:
-    return [f"{prefix} ({checks:,} checks a day)"] if checks else []
+    return [f"{prefix} (beta, {checks:,} checks a day)"] if checks else []
 
 
 PLANS = {

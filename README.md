@@ -38,8 +38,8 @@ process runs a scan at a time). A scan that is cancelled or stops early still sh
 - Saved targets (keys stored encrypted), daily or weekly scheduled scans, regression alerts
 - Scan comparison: score change, failures introduced and fixed
 - API keys for CI, signed webhooks (`scan.completed`, `scan.failed`, `scan.regression`)
-- Runtime AI firewall API: screen user messages before your model sees them and replies before your users do
-- Firewall gateway: put the firewall in front of any OpenAI-compatible API by changing only the base URL
+- Runtime AI firewall API (beta): screen user messages before your model sees them and replies before your users do
+- Firewall gateway (beta): put the firewall in front of any OpenAI-compatible API by changing only the base URL
 - Plans and billing with Stripe (Checkout, customer portal, webhooks)
 - Triage (false positive / accepted risk, kept per target) and evidence reports for audits: scope, method,
   OWASP LLM Top 10 coverage, triage decisions, re-test proof and a sign-off block (paid plans)
@@ -123,7 +123,7 @@ def verify(secret: str, body: bytes, header: str) -> bool:
     return hmac.compare_digest(expected, parts["v1"])
 ```
 
-## Runtime AI firewall
+## Runtime AI firewall (beta)
 
 Call it from your application with an API key (Settings → API keys). It is part of
 every plan with a daily allowance (`GET /api/firewall/usage`); Targets & CI in the app
@@ -149,7 +149,7 @@ checked = client.check_output(reply, system_prompt=SYSTEM_PROMPT)
 safe_reply = checked["redacted"] if checked["verdict"] != "block" else "Sorry, I can't help with that."
 ```
 
-### Gateway: no code changes
+### Gateway (beta): no code changes
 
 Save the app as an OpenAI-compatible (or Groq) target with its key, then point your OpenAI client
 at the gateway and use an LLM Scanner key as the `api_key`. Targets & CI shows the URL per target.
