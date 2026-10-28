@@ -212,7 +212,6 @@ frontend/       React + Vite web app
 sdk/            Python SDK and `llmscanner` CLI
 vscode-llm-scanner/   VS Code extension
 .github/        CI workflows and the reusable scan action
-archive/        old modules that the product no longer uses
 docs/           extra documentation
 ```
 
