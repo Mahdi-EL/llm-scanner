@@ -1448,6 +1448,30 @@ def test_quick_scans_sample_every_category_and_can_be_required_on_free(client, m
     assert f"run all {total:,}." in r.json()["detail"]
 
 
+def _fresh(expr: str, tmp_path, **env) -> str:
+    """`expr` evaluated in a new Python process with this environment: settings are read once, at import.
+    It runs in tmp_path, so no .env file is picked up."""
+    import subprocess
+    backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base = {k: v for k, v in os.environ.items()
+            if k not in ("ENV", "RAILWAY_ENVIRONMENT", "FREE_QUICK_SCANS_ONLY", "ENTERPRISE_SCAN_LIMIT")}
+    return subprocess.run([sys.executable, "-c", f"import config, payment; print({expr})"], cwd=tmp_path,
+                          env={**base, "PYTHONPATH": backend, **env}, capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def test_free_accounts_run_quick_scans_only_by_default_in_production(tmp_path):
+    """A full scan makes many times a quick scan's model calls, on the server's key. In production Free accounts
+    run quick scans unless FREE_QUICK_SCANS_ONLY says otherwise; an empty value keeps the default."""
+    def quick_only(**env):
+        return _fresh("config.FREE_QUICK_SCANS_ONLY", tmp_path, **env)
+
+    assert quick_only(ENV="production") == quick_only(RAILWAY_ENVIRONMENT="production") == "True"
+    assert quick_only(ENV="production", FREE_QUICK_SCANS_ONLY="") == "True"
+    assert quick_only(ENV="production", FREE_QUICK_SCANS_ONLY="0") == "False"
+    assert quick_only(ENV="development") == "False"
+
+
 class _FakeStripeAccount:
     """Just enough of the stripe module for stripe_setup: products, prices, webhook endpoints."""
     def __init__(self):

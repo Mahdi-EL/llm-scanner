@@ -23,7 +23,7 @@ def _int(name: str, default: int) -> int:
 
 def _bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
-    if raw is None:
+    if raw is None or not raw.strip():      # unset or empty: the default, as _int does
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
@@ -92,8 +92,9 @@ MAX_CONSECUTIVE_ERRORS = _int("MAX_CONSECUTIVE_ERRORS", 25)
 MAX_ERROR_PERCENT    = _int("MAX_ERROR_PERCENT", 50)
 # A quick scan runs this many attacks per category, spread from basic to advanced.
 QUICK_SCAN_PER_CATEGORY = _int("QUICK_SCAN_PER_CATEGORY", 5)
-# Free accounts run quick scans only (full scans cost ~10x the model calls). Off by default.
-FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", False)
+# Free accounts run quick scans only (a full scan makes many times the model calls). On by default in
+# production, where those calls are paid for; FREE_QUICK_SCANS_ONLY=0 turns it off.
+FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", IS_PROD)
 # Finished scans older than this many days are deleted with their findings (a full scan keeps ~1.5 MB of
 # results). 0 keeps them until their owner deletes them. Deleted scans still count toward the month's quota.
 SCAN_RETENTION_DAYS  = _int("SCAN_RETENTION_DAYS", 0)
