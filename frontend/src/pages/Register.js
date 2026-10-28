@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { safeNext } from '../utils/format';
+import { fmtNum, safeNext } from '../utils/format';
+import { useLibrary } from '../utils/hooks';
 import { useAuth } from '../context/AuthContext';
 import Logo from '../components/Logo';
 import { errorMessage } from '../services/api';
@@ -66,6 +67,7 @@ export default function Register() {
   const [form, setForm] = useState({ username:'', email:'', password:'', confirm:'' });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
+  const lib = useLibrary();
 
   const handle = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -120,7 +122,9 @@ export default function Register() {
             </div>
             <div className="auth-scan-body">
               <div>
-                <div className="auth-scan-prog-label">820 / 1,090 prompts tested</div>
+                <div className="auth-scan-prog-label">
+                  {lib ? `${fmtNum(Math.round(lib.attacks * 0.75))} / ${fmtNum(lib.attacks)} prompts tested` : 'Testing prompts…'}
+                </div>
                 <div className="auth-scan-prog-track">
                   <div className="auth-scan-prog-fill" />
                 </div>
@@ -138,7 +142,8 @@ export default function Register() {
 
           <div className="auth-left-features">
             {[
-              '1,000+ attack prompts across 22 vulnerability categories',
+              lib ? `${fmtNum(lib.attacks)} attack prompts across ${lib.categories} vulnerability categories`
+                : 'Attack prompts across every vulnerability category',
               'Free plan — no credit card required to start',
               'PDF, HTML, Markdown and JSON reports',
               'Works with any OpenAI-compatible API or your own REST endpoint',

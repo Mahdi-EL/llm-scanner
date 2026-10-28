@@ -51,8 +51,10 @@ def check_can_scan(user: dict, *, already_inserted: bool = False) -> None:
     over = 1 if already_inserted else 0
     q = quota(user)
     if q["limit"] is not None and q["used"] - over >= q["limit"]:
-        raise ScanRejected(402, f"You've used all {q['limit']} scans of the {str(q['plan']).title()} plan "
-                                "this month. Upgrade your plan to run more scans.")
+        more = ("It's the plan's fair-use limit and resets on the 1st (UTC)." if q["plan"] == "enterprise"
+                else "Upgrade your plan to run more scans.")
+        raise ScanRejected(402, f"You've used all {q['limit']:,} scans of the {str(q['plan']).title()} plan "
+                                f"this month. {more}")
     if scan_db.count_running_scans() - over >= MAX_QUEUED_TOTAL:
         raise ScanRejected(429, "The scanner is at capacity right now. Please retry in a few minutes.")
     with_user = scan_db.count_active_for_user(user["id"]) - over

@@ -53,6 +53,7 @@ export default function NewScan() {
   const [testing, setTesting]   = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [perCategory, setPerCategory] = useState(null);   // a quick scan's attacks per category
   const [catsError, setCatsError] = useState(false);
   const [chosen, setChosen]     = useState(null);        // null = all categories
   const [targets, setTargets]   = useState([]);
@@ -67,7 +68,7 @@ export default function NewScan() {
   const savedOnce = useRef(null);   // {key, id} of a target saved by an earlier attempt that then failed
 
   const loadCategories = () => scansAPI.categories()
-    .then(r => { setCategories(r.data.categories); setCatsError(false); })
+    .then(r => { setCategories(r.data.categories); setPerCategory(r.data.quick_per_category ?? null); setCatsError(false); })
     .catch(() => setCatsError(true));
 
   useEffect(() => {
@@ -162,7 +163,7 @@ export default function NewScan() {
     });
   };
 
-  const quota = user?.scan_limit == null ? null : `${user.scans_this_month ?? 0} of ${user.scan_limit} scans used this month`;
+  const quota = user?.scan_limit == null ? null : `${fmtNum(user.scans_this_month ?? 0)} of ${fmtNum(user.scan_limit)} scans used this month`;
   const outOfScans = user?.scan_limit != null && (user.scans_this_month ?? 0) >= user.scan_limit;
 
   if (!canEdit) return (
@@ -188,7 +189,7 @@ export default function NewScan() {
 
       {outOfScans && (
         <div className="alert-error" role="status" style={{ marginBottom:'20px' }}>
-          You’ve used all {user.scan_limit} scans of your plan this month. <Link to="/pricing">See plans</Link> to run more,
+          You’ve used all {fmtNum(user.scan_limit)} scans of your plan this month. <Link to="/pricing">See plans</Link> to run more,
           or wait until the 1st.
         </div>
       )}
@@ -306,8 +307,8 @@ export default function NewScan() {
       <Section title="Depth" subtitle="A quick scan samples every category, from basic to advanced attacks. Run a full scan before you ship.">
         <div role="group" aria-label="Scan depth" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))', gap:'10px' }}>
           {[
-            { id:true,  label:'Quick scan', desc:`About ${quickTotal ? fmtNum(quickTotal) : '110'} attacks, 5 per category. Done in a few minutes.` },
-            { id:false, label:'Full scan',  desc:`All ${fullTotal ? fmtNum(fullTotal) : '1,090'} attacks.`, locked: !fullAllowed },
+            { id:true,  label:'Quick scan', desc:`${quickTotal ? `About ${fmtNum(quickTotal)} attacks, ${perCategory ? `${perCategory} per category` : 'a few per category'}` : 'A few attacks from every category'}. Done in a few minutes.` },
+            { id:false, label:'Full scan',  desc: fullTotal ? `All ${fmtNum(fullTotal)} attacks.` : 'Every attack in the library.', locked: !fullAllowed },
           ].map(o => {
             const active = quick === o.id;
             return (

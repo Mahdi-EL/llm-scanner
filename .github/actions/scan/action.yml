@@ -44,10 +44,10 @@ inputs:
     description: A harmless question for this app, used as the normal-behavior baseline.
     required: false
   categories:
-    description: Space-separated attack categories. Empty means all 22.
+    description: Space-separated attack categories. Empty means all of them.
     required: false
   quick:
-    description: "true runs about 5 attacks per category (~110) instead of all ~1,090: faster and cheaper, for pull requests."
+    description: "true runs a few attacks from every category instead of the whole library: faster and cheaper, for pull requests."
     default: "false"
   fail-on:
     description: Fail when any finding is at or above this severity (low, medium, high, critical); findings marked as false positives or accepted risks don't count. Empty disables.

@@ -1,8 +1,8 @@
 # LLM Scanner
 
-Automated red-teaming for AI applications. LLM Scanner fires over 1,000 adversarial prompts at an
+Automated red-teaming for AI applications. LLM Scanner fires a library of adversarial prompts at an
 AI app (prompt injection, jailbreaks, system-prompt extraction, data exfiltration, multi-turn
-conversations and 17 more categories), grades every reply, and produces a report with a 0–100 score, a letter grade, the
+conversations and many more categories), grades every reply, and produces a report with a 0–100 score, a letter grade, the
 OWASP Top 10 for LLM Applications risk behind each finding, and what to fix first.
 
 It comes as a web app, an HTTP API, a Python SDK and CLI, a GitHub Action and a VS Code extension.
@@ -28,16 +28,18 @@ process runs a scan at a time). A scan that is cancelled or stops early still sh
 
 ## Features
 
-- 1,090 attack prompts in 22 categories (including 15 multi-turn conversations), each mapped to the OWASP LLM Top 10 (2025)
-- Quick scans: about 110 attacks spread across every category, for a check on each change
-- A free, no-signup leak check at /check: 20 attacks on a pasted system prompt, rule-graded, nothing stored
+- An attack library of single prompts and multi-turn conversations, each category mapped to the OWASP LLM Top 10
+  (2025); [docs/attack-categories.md](docs/attack-categories.md) lists every category with its exact count
+- Quick scans: a few attacks from every category (`QUICK_SCAN_PER_CATEGORY`), basic to advanced, for a check on each change
+- A free, no-signup leak check at /check: a sample of extraction and override attacks on a pasted system prompt,
+  rule-graded, nothing stored
 - Your own custom attack prompts, run with every scan
 - Reports in PDF, HTML, Markdown and JSON; read-only share links that expire
 - Saved targets (keys stored encrypted), daily or weekly scheduled scans, regression alerts
 - Scan comparison: score change, failures introduced and fixed
 - API keys for CI, signed webhooks (`scan.completed`, `scan.failed`, `scan.regression`)
-- Runtime AI firewall API: screen user messages before your model sees them and replies before your users do
-- Firewall gateway: put the firewall in front of any OpenAI-compatible API by changing only the base URL
+- Runtime AI firewall API (beta): screen user messages before your model sees them and replies before your users do
+- Firewall gateway (beta): put the firewall in front of any OpenAI-compatible API by changing only the base URL
 - Plans and billing with Stripe (Checkout, customer portal, webhooks)
 - Triage (false positive / accepted risk, kept per target) and evidence reports for audits: scope, method,
   OWASP LLM Top 10 coverage, triage decisions, re-test proof and a sign-off block (paid plans)
@@ -96,7 +98,7 @@ llmscanner scan --name "Support bot" --type openai_compatible --url https://api.
     target-key: ${{ secrets.OPENAI_API_KEY }}
     model: gpt-4o-mini
     fail-on: high
-    quick: "true"        # ~110 attacks on every PR; drop it for a full scan
+    quick: "true"        # a few attacks per category on every PR; drop it for a full scan
 ```
 
 **Engine only, no server:** `python backend/scanner.py --target "Demo" --categories extraction`
@@ -121,7 +123,7 @@ def verify(secret: str, body: bytes, header: str) -> bool:
     return hmac.compare_digest(expected, parts["v1"])
 ```
 
-## Runtime AI firewall
+## Runtime AI firewall (beta)
 
 Call it from your application with an API key (Settings → API keys). It is part of
 every plan with a daily allowance (`GET /api/firewall/usage`); Targets & CI in the app
@@ -147,7 +149,7 @@ checked = client.check_output(reply, system_prompt=SYSTEM_PROMPT)
 safe_reply = checked["redacted"] if checked["verdict"] != "block" else "Sorry, I can't help with that."
 ```
 
-### Gateway: no code changes
+### Gateway (beta): no code changes
 
 Save the app as an OpenAI-compatible (or Groq) target with its key, then point your OpenAI client
 at the gateway and use an LLM Scanner key as the `api_key`. Targets & CI shows the URL per target.
@@ -163,9 +165,13 @@ secrets are masked, and a reply that leaks the system prompt, or leaks anything 
 request, is replaced by the refusal. Tool-call arguments are checked the same way (an email body or a
 URL the model wants your app to send is a leak too): secrets are masked inside them, and calls that
 leak more are dropped in favour of the refusal. Streaming works (the reply is checked whole, then streamed).
-`X-LLMScanner-Input` / `X-LLMScanner-Output` headers give the verdicts. When the day's allowance is
-used up, requests pass unscreened with `X-LLMScanner-Firewall: quota-exceeded`. Only verdicts and
-timings are stored, never messages; `GET /api/gateway/stats` sums them up.
+`X-LLMScanner-Input` / `X-LLMScanner-Output` headers give the verdicts. When the day's firewall allowance
+runs out, requests pass unscreened with `X-LLMScanner-Firewall: quota-exceeded`; set
+`GATEWAY_FAIL_MODE=closed` on the server to answer them with the refusal instead (any value other than
+`open` or `closed` stops the API from starting). Closed mode covers only the allowance running out: when
+Prompt Guard is unavailable (a rate limit or a retired model), the firewall still falls back to rules-only
+screening (`X-LLMScanner-Firewall: rules-only`), in either mode. Only verdicts and timings are stored,
+never messages; `GET /api/gateway/stats` sums them up.
 
 ## Deploying
 
@@ -212,7 +218,6 @@ frontend/       React + Vite web app
 sdk/            Python SDK and `llmscanner` CLI
 vscode-llm-scanner/   VS Code extension
 .github/        CI workflows and the reusable scan action
-archive/        old modules that the product no longer uses
 docs/           extra documentation
 ```
 

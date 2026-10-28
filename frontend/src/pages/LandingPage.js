@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useInView, useCountUp } from '../utils/hooks';
+import { useInView, useCountUp, useLibrary } from '../utils/hooks';
 import { fmtNum } from '../utils/format';
 
 /* ── Data ─────────────────────────────────────────────────── */
@@ -30,14 +30,15 @@ const PILLS_DOUBLED = [...ATTACK_PILLS, ...ATTACK_PILLS];
 
 const INTEGRATIONS = ['OpenAI', 'Groq', 'Mistral', 'Together AI', 'OpenRouter', 'Custom REST', 'Simulation'];
 
-const STEPS = [
+/* lib: the attack library's counts (useLibrary), null until they load */
+const STEPS = lib => [
   { step:'01', title:'Connect your target',  desc:'Enter a name and choose your AI target — simulation mode works instantly, or point to any LLM API.' },
-  { step:'02', title:'We run the gauntlet',  desc:'Over 1,000 adversarial prompts across 22 attack categories, including multi-turn conversations, graded one by one. You can watch the progress live.' },
+  { step:'02', title:'We run the gauntlet',  desc:`${lib ? `${fmtNum(lib.attacks)} adversarial prompts across ${lib.categories} attack categories` : 'Adversarial prompts from every attack category'}, including multi-turn conversations, graded one by one. You can watch the progress live.` },
   { step:'03', title:'Get your full report', desc:'A score and grade, every finding with the model’s reply, and what to fix first. Download it as PDF, HTML, Markdown or JSON.' },
 ];
 
-const COMPARE = [
-  { feature:'Attack coverage',       manual:'Limited by analyst hours', scanner:'1,000+ prompts, 22 categories' },
+const COMPARE = lib => [
+  { feature:'Attack coverage',       manual:'Limited by analyst hours', scanner: lib ? `${fmtNum(lib.attacks)} prompts, ${lib.categories} categories` : 'Every attack category' },
   { feature:'Time to first result',  manual:'Weeks to schedule',        scanner:'Same day, from your browser'   },
   { feature:'Report generation',     manual:'Manual write-up',          scanner:'PDF, HTML, Markdown and JSON'  },
   { feature:'Re-testing',            manual:'A new engagement',         scanner:'Re-scan any time, or on a schedule' },
@@ -45,9 +46,9 @@ const COMPARE = [
   { feature:'Depth',                 manual:'Creative, multi-step attacks', scanner:'Broad automated coverage; use both' },
 ];
 
-const FAQ = [
+const FAQ = lib => [
   { q:'Do I need an API key to start?', a:'No. Simulation mode tests a system prompt on a hosted model without any key. When you are ready, point the scanner at any OpenAI-compatible API or custom REST endpoint.' },
-  { q:'How long does a scan take?', a:'It depends on how fast your target answers. A full scan sends about 1,090 attacks; a quick scan (about 110, a few per category) takes a few minutes, and you can also pick fewer categories. You watch the progress live.' },
+  { q:'How long does a scan take?', a:`It depends on how fast your target answers. A full scan sends ${lib ? `about ${fmtNum(lib.attacks)} attacks` : 'every attack in the library'}; a quick scan (${lib?.quick ? `about ${fmtNum(lib.quick)}, ` : ''}a few per category) takes a few minutes, and you can also pick fewer categories. You watch the progress live.` },
   { q:'What do I get at the end?', a:'A 0–100 score and a letter grade, every finding with the model’s reply and why it failed, the OWASP LLM Top 10 risk it maps to, and fixes for each failed category.' },
   { q:'What happens to my data?', a:'Your target’s API key is encrypted while a scan runs and deleted when it ends, unless you save the target. Attack replies are kept with your scan so you can read the report. Delete the scan, or your account, to remove them.' },
 ];
@@ -87,6 +88,7 @@ const Eyebrow = ({ index, children, light }) => (
 
 /* ── Component ────────────────────────────────────────────── */
 export default function LandingPage() {
+  const lib = useLibrary();
   return (
     <div className="landing landing-editorial">
 
@@ -113,8 +115,10 @@ export default function LandingPage() {
               <Link to="/check" className="ed-btn ed-btn-line">Test your prompt free</Link>
             </div>
             <div className="ed-hero-meta">
-              <div className="ed-meta-item"><strong>1,000+</strong><span>attack prompts / scan</span></div>
-              <div className="ed-meta-item"><strong>22</strong><span>attack categories</span></div>
+              {lib && <>
+                <div className="ed-meta-item"><strong>{fmtNum(lib.attacks)}</strong><span>attack prompts / scan</span></div>
+                <div className="ed-meta-item"><strong>{lib.categories}</strong><span>attack categories</span></div>
+              </>}
               <div className="ed-meta-item"><strong>OWASP</strong><span>LLM Top 10 mapping</span></div>
             </div>
           </div>
@@ -201,7 +205,7 @@ export default function LandingPage() {
         </Reveal>
         <Reveal>
           <div className="ed-steps">
-            {STEPS.map(s => (
+            {STEPS(lib).map(s => (
               <article key={s.step} className="ed-step">
                 <span className="ed-step-num">{s.step}</span>
                 <h3 className="ed-feature-title">{s.title}</h3>
@@ -221,8 +225,10 @@ export default function LandingPage() {
           </div>
         </Reveal>
         <div className="ed-stats">
-          <CountStat target={1000} suffix="+" label="Adversarial attack prompts across 22 attack categories" />
-          <div className="ed-stat"><div className="ed-stat-num">22</div><div className="ed-stat-label">Attack categories, each mapped to the OWASP Top 10 for LLM Applications</div></div>
+          {lib && <>
+            <CountStat target={lib.attacks} label={`Adversarial attack prompts across ${lib.categories} attack categories`} />
+            <div className="ed-stat"><div className="ed-stat-num">{lib.categories}</div><div className="ed-stat-label">Attack categories, each mapped to the OWASP Top 10 for LLM Applications</div></div>
+          </>}
           <div className="ed-stat"><div className="ed-stat-num">4</div><div className="ed-stat-label">Report formats: PDF, HTML, Markdown and JSON</div></div>
         </div>
       </section>
@@ -243,7 +249,7 @@ export default function LandingPage() {
               <div>Manual Pen Testing</div>
               <div className="ed-compare-win-col">LLM Scanner</div>
             </div>
-            {COMPARE.map((row, i) => (
+            {COMPARE(lib).map((row, i) => (
               <div key={i} className="ed-compare-row">
                 <div className="ed-compare-feat">{row.feature}</div>
                 <div className="ed-compare-manual">{row.manual}</div>
@@ -264,7 +270,7 @@ export default function LandingPage() {
         </Reveal>
         <Reveal>
           <div className="ed-faq">
-            {FAQ.map((item, i) => (
+            {FAQ(lib).map((item, i) => (
               <details key={i} className="ed-faq-item" open={i === 0}>
                 <summary>
                   <span className="ed-faq-q">{item.q}</span>

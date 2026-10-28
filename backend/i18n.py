@@ -34,7 +34,7 @@ TRANSLATIONS = {
         "simulation"         : "Simulation (safe for development)",
         "custom_prompt"      : "Custom System Prompt (optional)",
         "launch_scan"        : "🚀 Launch Security Scan",
-        "scan_info"          : "The scan will fire {count}+ attack prompts across 14 categories",
+        "scan_info"          : "The scan will fire {count}+ attack prompts",
         "estimated_time"     : "Estimated time: 10-15 minutes",
 
         # Results
@@ -96,7 +96,7 @@ TRANSLATIONS = {
         "simulation"         : "Simulation (sûr pour le développement)",
         "custom_prompt"      : "Prompt système personnalisé (optionnel)",
         "launch_scan"        : "🚀 Lancer le scan de sécurité",
-        "scan_info"          : "Le scan lancera {count}+ prompts d'attaque sur 14 catégories",
+        "scan_info"          : "Le scan lancera {count}+ prompts d'attaque",
         "estimated_time"     : "Durée estimée : 10-15 minutes",
 
         # Results
@@ -158,7 +158,7 @@ TRANSLATIONS = {
         "simulation"         : "محاكاة (آمنة للتطوير)",
         "custom_prompt"      : "موجه النظام المخصص (اختياري)",
         "launch_scan"        : "🚀 إطلاق الفحص الأمني",
-        "scan_info"          : "سيطلق الفحص {count}+ موجه هجوم عبر 14 فئة",
+        "scan_info"          : "سيطلق الفحص {count}+ موجه هجوم",
         "estimated_time"     : "الوقت المقدر: 10-15 دقيقة",
 
         # Results

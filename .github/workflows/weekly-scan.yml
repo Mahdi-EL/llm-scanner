@@ -2,7 +2,7 @@ name: Weekly demo scan
 
 # Runs the full attack library against the demo assistant every Monday, so
 # changes to prompts, the judge or the Groq models show up as a score change.
-# Needs the GROQ_API_KEY secret. A full scan makes about 2,150 Groq calls.
+# Needs the GROQ_API_KEY secret. A full scan makes up to two Groq calls per attack (the target's and the judge's).
 
 on:
   schedule:

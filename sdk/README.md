@@ -21,7 +21,7 @@ scan = client.scan(
     api_url="https://api.openai.com/v1",
     api_key="sk-...",            # the target's key: encrypted while the scan runs, then deleted
     model="gpt-4o-mini",
-    categories=["extraction", "direct_override"],   # omit for all 22 categories
+    categories=["extraction", "direct_override"],   # omit for every category
 )
 report = client.wait(scan.scan_id, on_progress=lambda s: print(s.progress, "%"))
 print(report.security_score, report.grade)
@@ -55,8 +55,8 @@ llmscanner scan --name "Help desk" --type custom_rest --url https://api.example.
   --input-field question --output-field answer --wait --fail-on high
 ```
 
-`--quick` runs about 5 attacks per category (~110) instead of all ~1,090: a fast check for every pull
-request, with a full scan before a release.
+`--quick` runs a few attacks from every category instead of the whole library (`llmscanner categories`
+lists each category's count): a fast check for every pull request, with a full scan before a release.
 
 Exit codes: `0` passed, `1` a finding at or above `--fail-on` (or a score below `--min-score`), `2` error,
 `130` interrupted. With `--wait`, the scan belongs to the command: when `--timeout` passes or the command is

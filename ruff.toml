@@ -1,6 +1,6 @@
 target-version = "py311"
 line-length = 120
-extend-exclude = ["archive", "frontend", "vscode-llm-scanner", "results"]
+extend-exclude = ["frontend", "vscode-llm-scanner", "results"]
 
 [lint]
 # Ruff's defaults (syntax errors, pyflakes, the most useful pycodestyle rules)

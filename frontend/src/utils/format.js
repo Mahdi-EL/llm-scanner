@@ -20,7 +20,7 @@ export function shortDate(dateStr, withYear = false) {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(withYear && { year: 'numeric' }) });
 }
 
-/** 1,090 rather than the browser locale's "1 090". */
+/** 12,345 rather than the browser locale's "12 345". */
 export const fmtNum = n => Number(n).toLocaleString('en-US');
 
 /** Where to go after signing in: a path on this site only (never "//evil.com" or a full URL). */

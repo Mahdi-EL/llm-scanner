@@ -23,7 +23,7 @@ def _int(name: str, default: int) -> int:
 
 def _bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
-    if raw is None:
+    if raw is None or not raw.strip():      # unset or empty: the default, as _int does
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
@@ -90,17 +90,18 @@ MAX_CONSECUTIVE_ERRORS = _int("MAX_CONSECUTIVE_ERRORS", 25)
 # A scan where more than this share of attacks couldn't be completed fails instead of
 # reporting a score built from the few that worked.
 MAX_ERROR_PERCENT    = _int("MAX_ERROR_PERCENT", 50)
-# A quick scan runs this many attacks per category, spread from basic to advanced (22 x 5 = 110).
+# A quick scan runs this many attacks per category, spread from basic to advanced.
 QUICK_SCAN_PER_CATEGORY = _int("QUICK_SCAN_PER_CATEGORY", 5)
-# Free accounts run quick scans only (full scans cost ~10x the model calls). Off by default.
-FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", False)
+# Free accounts run quick scans only (a full scan makes many times the model calls). On by default in
+# production, where those calls are paid for; FREE_QUICK_SCANS_ONLY=0 turns it off.
+FREE_QUICK_SCANS_ONLY = _bool("FREE_QUICK_SCANS_ONLY", IS_PROD)
 # Finished scans older than this many days are deleted with their findings (a full scan keeps ~1.5 MB of
 # results). 0 keeps them until their owner deletes them. Deleted scans still count toward the month's quota.
 SCAN_RETENTION_DAYS  = _int("SCAN_RETENTION_DAYS", 0)
 
 # People per workspace on Pro, owner included (Free: 1, Enterprise: no limit).
 PRO_SEATS            = _int("PRO_SEATS", 5)
-# Free no-signup leak checks (20 attacks each on the server's model key) across all visitors per day.
+# Free no-signup leak checks (a fixed sample of attacks each, on the server's model key) across all visitors per day.
 LEAK_CHECKS_PER_DAY  = _int("LEAK_CHECKS_PER_DAY", 300)
 
 # ── Firewall gateway (/gateway/<target id>/v1) ────────────────
@@ -108,6 +109,12 @@ GATEWAY_TIMEOUT      = _int("GATEWAY_TIMEOUT", 120)      # seconds for the model
 GATEWAY_CONCURRENCY  = _int("GATEWAY_CONCURRENCY", 16)   # gateway requests in flight; the rest queue
 GATEWAY_BLOCK_SCORE  = float(os.getenv("GATEWAY_BLOCK_SCORE", "0.8"))   # Prompt Guard score that blocks
 GATEWAY_BLOCK_MESSAGE = os.getenv("GATEWAY_BLOCK_MESSAGE") or "I can't help with that request."
+# When the day's firewall allowance is used up: "open" (unset) forwards gateway requests unscreened, so the
+# customer's app keeps working; "closed" answers them with GATEWAY_BLOCK_MESSAGE instead. Any other value stops
+# the API from starting, like a placeholder SECRET_KEY: a typo must not quietly fail open.
+GATEWAY_FAIL_MODE = (os.getenv("GATEWAY_FAIL_MODE") or "").strip().lower() or "open"
+if GATEWAY_FAIL_MODE not in ("open", "closed"):
+    raise RuntimeError(f"GATEWAY_FAIL_MODE must be open or closed, not {GATEWAY_FAIL_MODE!r}.")
 # Lets local development scan http://localhost targets. Never enable in production.
 ALLOW_PRIVATE_TARGETS = _bool("ALLOW_PRIVATE_TARGETS", False) and not IS_PROD
 

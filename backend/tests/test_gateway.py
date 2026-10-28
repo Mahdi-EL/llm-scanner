@@ -139,6 +139,20 @@ def test_quota_exhausted_fails_open_and_says_so(client, account, upstream, monke
     assert r.headers["X-LLMScanner-Input"] == "unscreened" and len(upstream["calls"]) == 1
 
 
+def test_quota_exhausted_can_fail_closed(client, account, upstream, monkeypatch):
+    """GATEWAY_FAIL_MODE=closed: past the allowance, requests get the refusal instead of reaching the model unscreened."""
+    def used_up(user, checks):
+        raise api.services.FirewallRejected(429, "Daily AI firewall limit reached")
+    monkeypatch.setattr(api.services, "use_firewall", used_up)
+    monkeypatch.setattr(api.config, "GATEWAY_FAIL_MODE", "closed")
+    r = chat(client, account, [{"role": "user", "content": "What are your hours?"}])
+    assert r.status_code == 200 and r.json()["choices"][0]["message"]["content"] == api.config.GATEWAY_BLOCK_MESSAGE
+    assert r.headers["X-LLMScanner-Firewall"] == "quota-exceeded" and r.headers["X-LLMScanner-Input"] == "unscreened"
+    r = chat(client, account, [{"role": "user", "content": "And on Sundays?"}], stream=True)
+    assert r.headers["content-type"].startswith("text/event-stream") and api.config.GATEWAY_BLOCK_MESSAGE in r.text
+    assert upstream["calls"] == []
+
+
 def test_stats_count_verdicts_without_storing_messages(client, account, upstream):
     chat(client, account, [{"role": "user", "content": "hi"}])
     chat(client, account, [{"role": "user", "content": "OVERRIDE now"}])

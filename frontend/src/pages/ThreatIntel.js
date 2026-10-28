@@ -522,7 +522,8 @@ export default function ThreatIntel() {
         <div>
           <div style={{ fontSize:'13px', fontWeight:'600', color:'var(--t1)', marginBottom:'4px' }}>About this data</div>
           <div style={{ fontSize:'12px', color:'var(--t3)', lineHeight:'1.7' }}>
-            LLMScanner tests against <strong style={{ color:'var(--t2)' }}>{totalAttacks ? fmtNum(totalAttacks) : 'over 1,000'} curated attack prompts</strong> across {CATEGORIES.length} categories, including multi-turn conversations for chat-style targets.
+            LLMScanner tests against <strong style={{ color:'var(--t2)' }}>{totalAttacks ? `${fmtNum(totalAttacks)} curated attack prompts` : 'a curated library of attack prompts'}</strong>
+            {totalAttacks ? ` across ${Object.keys(live).length} categories` : ''}, including multi-turn conversations for chat-style targets.
             Severity ratings reflect the typical impact on deployed production systems.
             New categories and prompts are added continuously as the threat landscape evolves.
           </div>

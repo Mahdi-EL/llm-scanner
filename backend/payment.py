@@ -16,6 +16,7 @@ import time
 from typing import Optional
 
 import config
+from attacks.prompts import ATTACK_PROMPTS
 from db import transaction, utcnow
 
 log = logging.getLogger("llmscanner.billing")
@@ -30,6 +31,8 @@ def _limit(env_name: str, default: int) -> int:
 
 _FREE_SCANS   = _limit("FREE_SCAN_LIMIT", 10)
 _PRO_SCANS    = _limit("PRO_SCAN_LIMIT", 200)
+# Enterprise isn't unlimited: every scan uses the server's judge model, so it has a fair-use cap.
+_ENTERPRISE_SCANS = _limit("ENTERPRISE_SCAN_LIMIT", 1000)
 # AI firewall checks per day. Each check uses the server's Groq quota (14,400 requests a day per guard
 # model on Groq's free tier), so keep these well under it.
 _FREE_FIREWALL       = _limit("FREE_FIREWALL_DAILY", 20)
@@ -41,7 +44,7 @@ _REMEDIATION_DAILY = {"free": _limit("FREE_REMEDIATION_DAILY", 10), "pro": _limi
 
 
 def _firewall_feature(checks: int, prefix: str) -> list:
-    return [f"{prefix} ({checks:,} checks a day)"] if checks else []
+    return [f"{prefix} (beta, {checks:,} checks a day)"] if checks else []
 
 
 PLANS = {
@@ -54,8 +57,8 @@ PLANS = {
         "scan_limit"    : _FREE_SCANS,
         "firewall_daily": _FREE_FIREWALL,
         "features"      : [f"{_FREE_SCANS:,} scans per month",
-                           "Quick scans across all 22 attack categories" if config.FREE_QUICK_SCANS_ONLY
-                           else "All 22 attack categories",
+                           f"{'Quick scans across all' if config.FREE_QUICK_SCANS_ONLY else 'All'} "
+                           f"{len(ATTACK_PROMPTS)} attack categories",
                            "PDF, HTML and Markdown reports", "API keys for CI, the SDK and VS Code",
                            *_firewall_feature(_FREE_FIREWALL, "Try the AI firewall")],
     },
@@ -82,9 +85,10 @@ PLANS = {
         "interval"      : "month",
         "price_id"      : os.getenv("STRIPE_ENTERPRISE_PRICE_ID", ""),
         "yearly_price_id": os.getenv("STRIPE_ENTERPRISE_YEARLY_PRICE_ID", ""),
-        "scan_limit"    : None,     # unlimited
+        "scan_limit"    : _ENTERPRISE_SCANS,
         "firewall_daily": _ENTERPRISE_FIREWALL,
-        "features"      : ["Unlimited scans", "Everything in Pro", "Unlimited people per workspace",
+        "features"      : [f"{_ENTERPRISE_SCANS:,} scans per month (fair use)", "Everything in Pro",
+                           "Unlimited people per workspace",
                            *_firewall_feature(_ENTERPRISE_FIREWALL, "AI firewall API"), "Priority support"],
     },
 }

@@ -471,7 +471,7 @@ class ScanRequest(TargetConfig):
     categories            : Categories = None
     target_id             : Optional[str] = Field(None, max_length=64)
     include_custom_prompts: bool = True
-    quick                 : bool = False      # ~5 attacks per category instead of all of them
+    quick                 : bool = False      # QUICK_SCAN_PER_CATEGORY attacks per category instead of all of them
 
     @field_validator("target_name")
     @classmethod
@@ -640,7 +640,8 @@ def health_check():
 def list_categories():
     """The built-in attack categories, with what they test and their OWASP mapping. The *_without_history
     counts are what runs against a target that doesn't keep the conversation (a custom REST endpoint):
-    multi-turn attacks are left out there."""
+    multi-turn attacks are left out there. The totals (attacks, categories, a quick scan's attacks and
+    per category, the free leak check's attacks) are what copy quotes, so it never goes stale."""
     from attacks.multi_turn import is_multi_turn
     from scanner import spread
     out = []
@@ -651,7 +652,9 @@ def list_categories():
                     "quick_attacks": len(spread(prompts, config.QUICK_SCAN_PER_CATEGORY)),
                     "attacks_without_history": len(single),
                     "quick_attacks_without_history": len(spread(single, config.QUICK_SCAN_PER_CATEGORY))})
-    return {"categories": out, "total_attacks": sum(len(p) for p in ATTACK_PROMPTS.values())}
+    return {"categories": out, "total_attacks": sum(c["attacks"] for c in out), "total_categories": len(out),
+            "total_quick_attacks": sum(c["quick_attacks"] for c in out),
+            "quick_per_category": config.QUICK_SCAN_PER_CATEGORY, "leak_check_attacks": len(leakcheck.attacks())}
 
 
 def _can_run_full_scans(user: dict) -> bool:
@@ -894,8 +897,10 @@ def start_scan(request: Request, body: ScanRequest, user: dict = Depends(require
     if body.categories:
         cfg["categories"] = body.categories
     if not body.quick and not _can_run_full_scans(user):
-        raise HTTPException(status_code=402, detail="Full scans need a paid plan. Run a quick scan "
-                                                    "(about 110 attacks), or upgrade to run all 1,090.")
+        library = list_categories()
+        raise HTTPException(status_code=402, detail=f"Full scans need a paid plan. Run a quick scan (about "
+                                                    f"{library['total_quick_attacks']:,} attacks), or upgrade "
+                                                    f"to run all {library['total_attacks']:,}.")
     cfg["quick"] = body.quick
     try:
         scan_id = services.queue_scan(user, cfg, api_key, target_name=body.target_name,
@@ -1436,9 +1441,9 @@ class LeakCheckRequest(BaseModel):
 @app.post("/public/leak-check")
 @limiter.limit("5/hour")
 def public_leak_check(request: Request, body: LeakCheckRequest):
-    """Free, no account: sends 20 extraction and override attacks at a system prompt on the demo model and says
-    how many got it out. Graded by rules (the canary, verbatim copies, a password or code the prompt states); replies
-    are never returned or stored."""
+    """Free, no account: sends a fixed sample of extraction and override attacks (`leak_check_attacks` in
+    /categories) at a system prompt on the demo model and says how many got it out. Graded by rules (the canary,
+    verbatim copies, a password or code the prompt states); replies are never returned or stored."""
     try:
         return leakcheck.run(body.system_prompt.strip())
     except leakcheck.CheckUnavailable as e:

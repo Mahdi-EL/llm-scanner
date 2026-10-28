@@ -1,4 +1,27 @@
 import { useState, useEffect, useRef } from 'react';
+import { scansAPI } from '../services/api';
+
+/* ── The attack library's counts, from GET /categories ─────────
+   { attacks, categories, quick, leakCheck }, or null until they load (or if they can't). Copy quotes
+   these instead of numbers typed into it, which go stale when the library changes, and is worded
+   without a number while they're null. */
+export function useLibrary() {
+  const [counts, setCounts] = useState(null);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve().then(() => scansAPI.categories()).then(({ data }) => {
+      const cats = data.categories || [];
+      if (live && cats.length) setCounts({
+        attacks   : data.total_attacks ?? cats.reduce((n, c) => n + c.attacks, 0),
+        categories: data.total_categories ?? cats.length,
+        quick     : data.total_quick_attacks ?? null,
+        leakCheck : data.leak_check_attacks ?? null,
+      });
+    }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  return counts;
+}
 
 /* ── Animated counter (easeOut cubic) ──────────────────────── */
 export function useCountUp(target, duration = 1100, delay = 0) {

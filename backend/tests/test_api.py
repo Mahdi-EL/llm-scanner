@@ -550,10 +550,18 @@ def test_export_and_delete_account(client):
 
 # ── Public info ───────────────────────────────────────────────
 def test_categories_and_plans_are_public(client):
+    import leakcheck
+    from attacks.prompts import ATTACK_PROMPTS
     cats = client.get("/categories").json()
-    assert cats["total_attacks"] > 1000 and cats["categories"][0]["owasp"]
+    assert cats["total_attacks"] == sum(len(p) for p in ATTACK_PROMPTS.values()) and cats["categories"][0]["owasp"]
+    # the totals the web app quotes come from the library, never from a number typed into copy
+    assert cats["total_categories"] == len(ATTACK_PROMPTS) == len(cats["categories"])
+    assert cats["total_quick_attacks"] == sum(c["quick_attacks"] for c in cats["categories"])
+    assert cats["quick_per_category"] == api.config.QUICK_SCAN_PER_CATEGORY
+    assert cats["leak_check_attacks"] == len(leakcheck.attacks())
     plans = client.get("/api/plans").json()["plans"]
     assert plans["free"]["scan_limit"] == 2 and plans["pro"]["purchasable"] is False
+    assert f"All {len(ATTACK_PROMPTS)} attack categories" in plans["free"]["features"]
 
 
 def test_waitlist_join_never_lists_entries(client):
@@ -1435,7 +1443,65 @@ def test_quick_scans_sample_every_category_and_can_be_required_on_free(client, m
     monkeypatch.setattr(config, "FREE_QUICK_SCANS_ONLY", True)
     assert client.get("/auth/me", headers=headers).json()["full_scans"] is False
     r = client.post("/scan", headers=headers, json={"target_name": "full"})
-    assert r.status_code == 402 and "quick scan" in r.json()["detail"]
+    total = sum(c["attacks"] for c in cats)
+    assert r.status_code == 402 and f"quick scan (about {expected:,} attacks)" in r.json()["detail"]
+    assert f"run all {total:,}." in r.json()["detail"]
+
+
+def _python(code: str, tmp_path, **env):
+    """Runs `code` in a new Python process with this environment: settings are read once, at import.
+    It runs in tmp_path, so no .env file is picked up."""
+    import subprocess
+    backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base = {k: v for k, v in os.environ.items() if k not in
+            ("ENV", "RAILWAY_ENVIRONMENT", "FREE_QUICK_SCANS_ONLY", "ENTERPRISE_SCAN_LIMIT", "GATEWAY_FAIL_MODE")}
+    return subprocess.run([sys.executable, "-c", code], cwd=tmp_path, env={**base, "PYTHONPATH": backend, **env},
+                          capture_output=True, text=True)
+
+
+def _fresh(expr: str, tmp_path, **env) -> str:
+    """`expr` as a new process with this environment sees it."""
+    run = _python(f"import config, payment; print({expr})", tmp_path, **env)
+    assert run.returncode == 0, run.stderr
+    return run.stdout.strip()
+
+
+def test_free_accounts_run_quick_scans_only_by_default_in_production(tmp_path):
+    """A full scan makes many times a quick scan's model calls, on the server's key. In production Free accounts
+    run quick scans unless FREE_QUICK_SCANS_ONLY says otherwise; an empty value keeps the default."""
+    def quick_only(**env):
+        return _fresh("config.FREE_QUICK_SCANS_ONLY", tmp_path, **env)
+
+    assert quick_only(ENV="production") == quick_only(RAILWAY_ENVIRONMENT="production") == "True"
+    assert quick_only(ENV="production", FREE_QUICK_SCANS_ONLY="") == "True"
+    assert quick_only(ENV="production", FREE_QUICK_SCANS_ONLY="0") == "False"
+    assert quick_only(ENV="development") == "False"
+
+
+def test_enterprise_scans_have_a_fair_use_cap(client, monkeypatch, tmp_path):
+    import payment
+    assert _fresh("payment.PLANS['enterprise']['scan_limit']", tmp_path) == "1000"         # the default
+    plans = client.get("/api/plans").json()["plans"]
+    limit = plans["enterprise"]["scan_limit"]
+    assert limit is not None and f"{limit:,} scans per month (fair use)" in plans["enterprise"]["features"]
+
+    user_id, headers = _register(client)
+    with auth_db.transaction() as conn:
+        conn.execute("UPDATE users SET plan = 'enterprise' WHERE id = ?", (user_id,))
+    monkeypatch.setitem(payment.PLANS["enterprise"], "scan_limit", 1)
+    _seed_complete_scan(user_id)
+    r = client.post("/scan", headers=headers, json={"target_name": "over the cap"})
+    # there's no bigger plan to upgrade to
+    assert r.status_code == 402 and "fair-use limit" in r.json()["detail"] and "Upgrade" not in r.json()["detail"]
+
+
+def test_an_unknown_gateway_fail_mode_stops_the_api_from_starting(tmp_path):
+    """A typo must not quietly fail open: like a placeholder SECRET_KEY, it stops the API before it serves anything."""
+    assert _fresh("config.GATEWAY_FAIL_MODE", tmp_path) == "open"                              # unset
+    assert _fresh("config.GATEWAY_FAIL_MODE", tmp_path, GATEWAY_FAIL_MODE="") == "open"
+    assert _fresh("config.GATEWAY_FAIL_MODE", tmp_path, GATEWAY_FAIL_MODE=" Closed ") == "closed"
+    run = _python("import api", tmp_path, GATEWAY_FAIL_MODE="close")
+    assert run.returncode != 0 and "GATEWAY_FAIL_MODE must be open or closed, not 'close'" in run.stderr
 
 
 class _FakeStripeAccount:
